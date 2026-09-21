@@ -33,27 +33,39 @@ def standardize_string(string_: str) -> str:
 
     return result
 
-def create_folder(location: Path, name: str, date_prefix: str | None) -> Path:
+def build_folder_name(name: str, date_prefix: str | None = None) -> str:
+    """Builds a folder name from a date prefix and a name.
+
+    Args:
+        name: Base name to be used.
+        date_prefix: Optional date prefix. If not given, uses current
+            date in `yymmdd` format.
+
+    Returns:
+        The formatted folder name.
+    """
+    if not date_prefix:
+        date_prefix = datetime.datetime.now().strftime("%y%m%d")
+
+    name = f"{date_prefix} - {name}"
+    return name
+
+def create_folder(location: Path, name: str) -> Path:
     """Creates a folder with the given name at the given location.
 
     Args:
         location: path where the folder will be created
         name: name to give the folder
-        date_prefix: optional date prefix in string format
 
     Returns:
-        the path of the created folder or None if failed
+        the path of the created folder
     """
-    if not date_prefix:
-        date_prefix = datetime.datetime.now().strftime("%y%m%d")
-    standardized_name = standardize_string(name)
-    final_name = f"{date_prefix} - {standardized_name}" 
-    folder_to_create = location / final_name
+    folder_to_create = location / name
 
     try:
         folder_to_create.mkdir(parents=True, exist_ok=True)
 
     except OSError as error:
-        raise Exception("Failed to create folder")
+        raise Exception("Failed to create folder") from error
     
     return folder_to_create
