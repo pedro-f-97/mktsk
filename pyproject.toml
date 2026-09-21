@@ -9,3 +9,6 @@ requires-python = ">=3.12"
 
 [tool.setuptools.packages.find]
 include = ["geta*"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=geta --cov-report=term-missing"
