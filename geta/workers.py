@@ -80,3 +80,12 @@ def create_md_file(location: Path, name: str) -> Path:
     file_to_create.touch()
 
     return file_to_create
+
+def sign_md_file(file: Path, folder: Path) -> None:
+    """Writes given folder's name in the first line of the given .md file
+
+    Args:
+        file: file to be signed
+        folder: folder to use for signing
+    """
+    file.write_text(f"# {folder.name}\n", encoding="utf-8")

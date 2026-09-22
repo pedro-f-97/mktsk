@@ -1,6 +1,12 @@
 from freezegun import freeze_time
 
-from geta.workers import build_folder_name, create_folder, create_md_file, standardize_string
+from geta.workers import (
+    build_folder_name,
+    create_folder,
+    create_md_file,
+    sign_md_file,
+    standardize_string,
+)
 
 
 def test_standardize_string():
@@ -50,3 +56,14 @@ def test_create_md_file(tmp_path):
 
     assert create_md_file(folder, name) == created
     assert created.exists()
+
+def test_sign_md_file(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
+    folder.mkdir()
+
+    file = folder / "ThisTest.md"
+    file.touch()
+
+    sign_md_file(file, folder)
+
+    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
