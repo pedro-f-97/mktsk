@@ -1,6 +1,6 @@
 from freezegun import freeze_time
 
-from geta.main import main
+from mktsk.main import main
 
 
 def test_main(monkeypatch, tmp_path):

@@ -3,15 +3,15 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "geta"
+name = "mktsk"
 version = "0.1.0"
 requires-python = ">=3.12"
 
 [tool.setuptools.packages.find]
-include = ["geta*"]
+include = ["mktsk*"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=geta --cov-report=term-missing"
+addopts = "--cov=mktsk --cov-report=term-missing"
 
 [project.scripts]
-geta = "geta.main:main"
+mktsk = "mktsk.main:main"
