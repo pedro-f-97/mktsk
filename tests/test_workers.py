@@ -49,6 +49,13 @@ def test_create_folder_existing(tmp_path):
     create_folder(tmp_path, "exists")
     assert (tmp_path / "exists").is_dir()
 
+def test_create_folder_error(tmp_path):
+    folder = (tmp_path / "my_folder")
+    folder.mkdir()
+
+    with pytest.raises(ValueError):
+        create_folder(folder, "/etc")
+
 def test_create_md_file(tmp_path):
     folder = (tmp_path / "my_folder")
     folder.mkdir()
@@ -97,3 +104,11 @@ def test_sign_md_file_existing_not_ok(tmp_path):
         sign_md_file(file, folder)
 
     assert file.read_text(encoding="utf-8") == "# This is some other text\n"
+
+def test_create_md_file_path_error(tmp_path):
+    folder = (tmp_path / "my_folder")
+    folder.mkdir()
+    name = "/etc"
+
+    with pytest.raises(ValueError):
+        create_md_file(folder, name)

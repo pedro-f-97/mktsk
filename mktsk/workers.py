@@ -3,6 +3,8 @@ import re  #regular expression operations
 import unicodedata
 from pathlib import Path
 
+from . import helpers
+
 
 def standardize_string(string_: str) -> str:
     """Normalize a string by removing accents, special characters and spacing.
@@ -60,6 +62,8 @@ def create_folder(location: Path, name: str) -> Path:
     Returns:
         the path of the created folder
     """
+    helpers.validate_name(name)
+
     folder_to_create = location / name
 
     folder_to_create.mkdir(parents=True, exist_ok=True)
@@ -76,6 +80,7 @@ def create_md_file(location: Path, name: str) -> Path:
     Returns:
         the path of the created .md file
     """
+    helpers.validate_name(name)
     file_to_create = location / f"{name}.md"
     file_to_create.touch()
 
