@@ -1,6 +1,3 @@
-from pathlib import Path
-
-import pytest
 from freezegun import freeze_time
 
 from geta.workers import build_folder_name, create_folder, standardize_string
@@ -44,10 +41,3 @@ def test_create_folder_existing(tmp_path):
     (tmp_path / "exists").mkdir()
     create_folder(tmp_path, "exists")
     assert (tmp_path / "exists").is_dir()
-
-def test_create_folder_raises_on_error(tmp_path, monkeypatch):
-    def error(*a, **kw):
-        raise OSError("error")
-    monkeypatch.setattr(Path, "mkdir", error)
-    with pytest.raises(Exception, match="Failed to create folder"):
-        create_folder(tmp_path, "x")

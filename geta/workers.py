@@ -45,7 +45,7 @@ def build_folder_name(name: str, date_prefix: str | None = None) -> str:
         The formatted folder name.
     """
     if not date_prefix:
-        date_prefix = datetime.datetime.now().strftime("%y%m%d")
+        date_prefix = datetime.datetime.now(tz=datetime.UTC).strftime("%y%m%d")
 
     name = f"{date_prefix} - {name}"
     return name
@@ -62,10 +62,6 @@ def create_folder(location: Path, name: str) -> Path:
     """
     folder_to_create = location / name
 
-    try:
-        folder_to_create.mkdir(parents=True, exist_ok=True)
-
-    except OSError as error:
-        raise Exception("Failed to create folder") from error
+    folder_to_create.mkdir(parents=True, exist_ok=True)
     
     return folder_to_create
