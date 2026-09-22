@@ -65,3 +65,18 @@ def create_folder(location: Path, name: str) -> Path:
     folder_to_create.mkdir(parents=True, exist_ok=True)
     
     return folder_to_create
+
+def create_md_file(location: Path, name: str) -> Path:
+    """Creates an .md file with the given name at the given location
+
+    Args:
+        location: path where the file will be created
+        name: name to give the file
+
+    Returns:
+        the path of the created .md file
+    """
+    file_to_create = location / f"{name}.md"
+    file_to_create.touch()
+
+    return file_to_create

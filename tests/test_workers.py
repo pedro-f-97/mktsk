@@ -1,6 +1,6 @@
 from freezegun import freeze_time
 
-from geta.workers import build_folder_name, create_folder, standardize_string
+from geta.workers import build_folder_name, create_folder, create_md_file, standardize_string
 
 
 def test_standardize_string():
@@ -41,3 +41,12 @@ def test_create_folder_existing(tmp_path):
     (tmp_path / "exists").mkdir()
     create_folder(tmp_path, "exists")
     assert (tmp_path / "exists").is_dir()
+
+def test_create_md_file(tmp_path):
+    folder = (tmp_path / "my_folder")
+    folder.mkdir()
+    name = "EmDiFile"
+    created = folder / f"{name}.md"
+
+    assert create_md_file(folder, name) == created
+    assert created.exists()
