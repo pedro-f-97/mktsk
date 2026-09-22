@@ -12,3 +12,6 @@ include = ["geta*"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=geta --cov-report=term-missing"
+
+[project.scripts]
+geta = "geta.main:main"
