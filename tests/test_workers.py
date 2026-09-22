@@ -1,7 +1,7 @@
 import pytest
 from freezegun import freeze_time
 
-from geta.workers import (
+from mktsk.workers import (
     build_folder_name,
     create_folder,
     create_md_file,
