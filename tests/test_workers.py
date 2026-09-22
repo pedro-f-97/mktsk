@@ -65,6 +65,14 @@ def test_create_md_file(tmp_path):
     assert create_md_file(folder, name) == created
     assert created.exists()
 
+def test_create_md_file_path_error(tmp_path):
+    folder = (tmp_path / "my_folder")
+    folder.mkdir()
+    name = "/etc"
+
+    with pytest.raises(ValueError):
+        create_md_file(folder, name)
+
 def test_sign_md_file(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
@@ -105,10 +113,14 @@ def test_sign_md_file_existing_not_ok(tmp_path):
 
     assert file.read_text(encoding="utf-8") == "# This is some other text\n"
 
-def test_create_md_file_path_error(tmp_path):
-    folder = (tmp_path / "my_folder")
+def test_sign_md_file_existing_space(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
-    name = "/etc"
 
-    with pytest.raises(ValueError):
-        create_md_file(folder, name)
+    file = folder / "ThisTest.md"
+
+    file.write_text(" \n", encoding="utf-8")
+
+    sign_md_file(file, folder)
+
+    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"

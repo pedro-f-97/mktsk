@@ -94,6 +94,11 @@ def sign_md_file(file: Path, folder: Path) -> None:
         folder: folder to use for signing
     """
     content = file.read_text(encoding="utf-8")
+
+    if not content.strip():
+        file.write_text(f"# {folder.name}\n", encoding="utf-8")
+        return
+
     lines = content.splitlines()
 
     if lines:
@@ -101,5 +106,3 @@ def sign_md_file(file: Path, folder: Path) -> None:
             return
 
         raise ValueError("Markdown file already contains content.")
-
-    file.write_text(f"# {folder.name}\n", encoding="utf-8")
