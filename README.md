@@ -1,4 +1,4 @@
-# geta
+# mktsk
 
 CLI tool for quickly setting up task folders.
 
@@ -28,7 +28,7 @@ python -m pip install -e .
 Run:
 
 ```bash
-geta
+mktsk
 ```
 
 Enter the task description when prompted.
@@ -53,4 +53,4 @@ The Markdown file contains:
 # 260922 - AlterarFormularioDeEmbalagem
 ```
 
-The task folder is created in the directory from which `geta` is executed.
+The task folder is created in the directory from which `mktsk` is executed.
