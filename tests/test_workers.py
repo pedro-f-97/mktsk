@@ -1,3 +1,4 @@
+import pytest
 from freezegun import freeze_time
 
 from geta.workers import (
@@ -67,3 +68,32 @@ def test_sign_md_file(tmp_path):
     sign_md_file(file, folder)
 
     assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
+
+def test_sign_md_file_existing_ok(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
+    folder.mkdir()
+
+    file = folder / "ThisTest.md"
+    file.touch()
+
+    file.write_text(f"# {folder.name}\n", encoding="utf-8")
+
+    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
+
+    sign_md_file(file, folder)
+
+    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
+
+def test_sign_md_file_existing_not_ok(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
+    folder.mkdir()
+
+    file = folder / "ThisTest.md"
+    file.touch()
+
+    file.write_text("# This is some other text\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        sign_md_file(file, folder)
+
+    assert file.read_text(encoding="utf-8") == "# This is some other text\n"
