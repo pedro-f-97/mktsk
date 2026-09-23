@@ -21,3 +21,6 @@ def main():
     created_file = workers.create_md_file(created_folder, standardized_title)
 
     workers.sign_md_file(created_file, folder_name)
+
+if __name__ == "__main__": # pragma: no cover
+    raise SystemExit(main())
