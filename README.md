@@ -36,21 +36,31 @@ Enter the task description when prompted.
 For example:
 
 ```text
-Task description:
-Alterar formulário de embalagem
+Task: 
+It's Alive!
 ```
 
 Creates:
 
 ```text
-260922 - AlterarFormularioDeEmbalagem/
-└── AlterarFormularioDeEmbalagem.md
+260923 - ItSAlive/
+└── ItSAlive.md
 ```
 
 The Markdown file contains:
 
 ```markdown
-# 260922 - AlterarFormularioDeEmbalagem
+# 260923 - ItSAlive
 ```
 
 The task folder is created in the directory from which `mktsk` is executed.
+
+## Tests
+
+Run with:
+
+```bash
+pytest
+```
+
+The project maintains high test coverage (95%+ enforced in CI).
