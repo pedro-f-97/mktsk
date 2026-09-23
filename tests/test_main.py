@@ -34,3 +34,17 @@ def test_main_invalid_title(monkeypatch, tmp_path):
     main()
 
     assert list(tmp_path.iterdir()) == []
+
+def test_main_error(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _: "Test Main Error")
+
+    def raise_error(*args):
+        raise OSError("test error")
+
+    monkeypatch.setattr("mktsk.workers.create_folder", raise_error)
+
+    result = main()
+
+    assert result == 1
+    assert "Error: test error" in capsys.readouterr().out
