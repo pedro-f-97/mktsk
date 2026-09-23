@@ -86,23 +86,23 @@ def create_md_file(location: Path, name: str) -> Path:
 
     return file_to_create
 
-def sign_md_file(file: Path, folder: Path) -> None:
-    """Writes given folder's name in the first line of the given .md file
+def sign_md_file(file: Path, title: str) -> None:
+    """Writes given title in the first line of the given .md file
 
     Args:
         file: file to be signed
-        folder: folder to use for signing
+        title: string to use for signing
     """
     content = file.read_text(encoding="utf-8")
 
     if not content.strip():
-        file.write_text(f"# {folder.name}\n", encoding="utf-8")
+        file.write_text(f"# {title}\n", encoding="utf-8")
         return
 
     lines = content.splitlines()
 
     if lines:
-        if lines[0] == f"# {folder.name}":
+        if lines[0] == f"# {title}":
             return
 
         raise ValueError("Markdown file already contains content.")

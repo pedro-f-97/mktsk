@@ -7,7 +7,7 @@ def main():
     location = Path.cwd()
 
     raw_title = input("Task description: \n")
-    if not raw_title:
+    if not raw_title.strip():
         return
 
     standardized_title = workers.standardize_string(raw_title)
@@ -18,4 +18,4 @@ def main():
 
     created_file = workers.create_md_file(created_folder, standardized_title)
 
-    workers.sign_md_file(created_file, created_folder)
+    workers.sign_md_file(created_file, folder_name)

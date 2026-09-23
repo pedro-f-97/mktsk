@@ -80,7 +80,7 @@ def test_sign_md_file(tmp_path):
     file = folder / "ThisTest.md"
     file.touch()
 
-    sign_md_file(file, folder)
+    sign_md_file(file, "260922 - ThisTest")
 
     assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
 
@@ -95,7 +95,7 @@ def test_sign_md_file_existing_ok(tmp_path):
 
     assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
 
-    sign_md_file(file, folder)
+    sign_md_file(file, "260922 - ThisTest")
 
     assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
 
@@ -109,7 +109,7 @@ def test_sign_md_file_existing_not_ok(tmp_path):
     file.write_text("# This is some other text\n", encoding="utf-8")
 
     with pytest.raises(ValueError):
-        sign_md_file(file, folder)
+        sign_md_file(file, "260922 - ThisTest")
 
     assert file.read_text(encoding="utf-8") == "# This is some other text\n"
 
@@ -121,6 +121,6 @@ def test_sign_md_file_existing_space(tmp_path):
 
     file.write_text(" \n", encoding="utf-8")
 
-    sign_md_file(file, folder)
+    sign_md_file(file, "260922 - ThisTest")
 
     assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
