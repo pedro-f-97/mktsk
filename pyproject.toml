@@ -22,3 +22,6 @@ pythonPlatform = "All"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "freezegun", "ruff", "pyright"]
+
+[tool.coverage.run]
+branch = true

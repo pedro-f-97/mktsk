@@ -101,8 +101,8 @@ def sign_md_file(file: Path, title: str) -> None:
 
     lines = content.splitlines()
 
-    if lines:
-        if lines[0] == f"# {title}":
-            return
 
-        raise ValueError("Markdown file already contains content.")
+    if lines[0] == f"# {title}":
+        return
+
+    raise ValueError("Markdown file already contains content.")
