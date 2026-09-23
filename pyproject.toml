@@ -12,7 +12,7 @@ readme = "README.md"
 include = ["mktsk*"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=mktsk --cov-report=term-missing"
+addopts = "--cov=mktsk --cov-report=term-missing --cov-fail-under=95"
 
 [project.scripts]
 mktsk = "mktsk.main:main"
