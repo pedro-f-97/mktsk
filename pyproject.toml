@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mktsk"
 version = "0.1.0"
 requires-python = ">=3.12"
+readme = "README.md"
 
 [tool.setuptools.packages.find]
 include = ["mktsk*"]
@@ -18,3 +19,6 @@ mktsk = "mktsk.main:main"
 
 [tool.pyright]
 pythonPlatform = "All"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "freezegun", "ruff", "pyright"]
