@@ -15,7 +15,7 @@ def test_open_file_windows(monkeypatch, tmp_path):
         called_with.append(path)
 
     monkeypatch.setattr("sys.platform", "win32")
-    monkeypatch.setattr("os.startfile", fake_startfile)
+    monkeypatch.setattr("os.startfile", fake_startfile, raising=False)
 
     helpers.open_file(file)
 
