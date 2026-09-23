@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from . import workers
+from . import helpers, workers
 
 
 def main() -> int:
@@ -22,11 +22,12 @@ def main() -> int:
         created_folder = workers.create_folder(location, folder_name)
         created_file = workers.create_md_file(created_folder, standardized_title)
         workers.sign_md_file(created_file, folder_name)
+        print(f"Created: {folder_name}")
+        helpers.open_file(created_file)
     except (OSError, ValueError) as error:
         print(f"Error: {error}")
         return 1
 
-    print(f"Created: {folder_name}")
     return 0
 
 if __name__ == "__main__":  # pragma: no cover

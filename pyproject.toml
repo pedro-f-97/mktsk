@@ -15,3 +15,6 @@ addopts = "--cov=mktsk --cov-report=term-missing"
 
 [project.scripts]
 mktsk = "mktsk.main:main"
+
+[tool.pyright]
+pythonPlatform = "All"

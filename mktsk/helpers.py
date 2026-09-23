@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -13,3 +16,20 @@ def validate_name(name: str) -> None:
     """
     if Path(name).name != name:
         raise ValueError(f"Name must be a single path component, got: {name!r}")
+
+def open_file(file: Path) -> None:
+    """Opens a file with the operating system's default application.
+
+    Args:
+        file: File to open.
+
+    Raises:
+        OSError: If the file cannot be opened.
+    """
+    try:
+        if sys.platform == "win32":
+            os.startfile(file)
+        else:
+            subprocess.run(["xdg-open", file], check=True)
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise OSError(f"Could not open file: {file}") from error
