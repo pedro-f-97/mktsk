@@ -1,12 +1,19 @@
+import argparse
 from pathlib import Path
 
 from . import helpers, workers
 
 
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("title", nargs="+")
+    return parser.parse_args()
+
 def main() -> int:
+    args = parse_arguments()
     location = Path.cwd()
 
-    raw_title = input("Task: \n")
+    raw_title = " ".join(args.title)
     if not raw_title.strip():
         print("Error: invalid task description.")
         return 1

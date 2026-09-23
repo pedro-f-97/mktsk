@@ -1,13 +1,14 @@
+import pytest
 from freezegun import freeze_time
 
-from mktsk.main import main
+from mktsk.main import main, parse_arguments
 
 
 def test_main(monkeypatch, tmp_path):
     folder = tmp_path / "my_folder"
     folder.mkdir()
     monkeypatch.chdir(folder)
-    monkeypatch.setattr("builtins.input", lambda _: "Test Main")
+    monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main"],)
 
     opened_files = []
 
@@ -29,27 +30,25 @@ def test_main(monkeypatch, tmp_path):
 
 def test_main_empty_title(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("builtins.input", lambda _: "")
+    monkeypatch.setattr("sys.argv", ["mktsk", "   "])
 
     result = main()
 
     assert result == 1
-
     assert list(tmp_path.iterdir()) == []
 
 def test_main_invalid_title(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("builtins.input", lambda _: "!!!")
+    monkeypatch.setattr("sys.argv", ["mktsk", "!!!"])
 
     result = main()
 
     assert result == 1
-
     assert list(tmp_path.iterdir()) == []
 
 def test_main_error(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("builtins.input", lambda _: "Test Main Error")
+    monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main", "Error"],)
 
     def raise_error(*args):
         raise OSError("test error")
@@ -60,3 +59,19 @@ def test_main_error(monkeypatch, tmp_path, capsys):
 
     assert result == 1
     assert "Error: test error" in capsys.readouterr().out
+
+def test_parse_arguments(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv",
+        ["mktsk", "Alterar", "formulário", "de", "embalagem"],
+    )
+
+    args = parse_arguments()
+
+    assert args.title == ["Alterar", "formulário", "de", "embalagem"]
+
+def test_parse_arguments_without_title(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk"])
+
+    with pytest.raises(SystemExit):
+        parse_arguments()
