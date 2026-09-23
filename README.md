@@ -28,16 +28,7 @@ python -m pip install -e .
 Run:
 
 ```bash
-mktsk
-```
-
-Enter the task description when prompted.
-
-For example:
-
-```text
-Task: 
-It's Alive!
+mktsk It's Alive!
 ```
 
 Creates:
@@ -54,6 +45,9 @@ The Markdown file contains:
 ```
 
 The task folder is created in the directory from which `mktsk` is executed.
+
+The Markdown file is then automatically opened with the system's default application.
+
 
 ## Tests
 
