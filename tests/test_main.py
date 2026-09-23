@@ -31,7 +31,9 @@ def test_main_empty_title(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda _: "")
 
-    main()
+    result = main()
+
+    assert result == 1
 
     assert list(tmp_path.iterdir()) == []
 
@@ -39,7 +41,9 @@ def test_main_invalid_title(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("builtins.input", lambda _: "!!!")
 
-    main()
+    result = main()
+
+    assert result == 1
 
     assert list(tmp_path.iterdir()) == []
 
