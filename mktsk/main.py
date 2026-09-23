@@ -11,6 +11,8 @@ def main():
         return
 
     standardized_title = workers.standardize_string(raw_title)
+    if not standardized_title.strip():
+        return
 
     folder_name = workers.build_folder_name(standardized_title)
 
