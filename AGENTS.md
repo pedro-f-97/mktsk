@@ -5,11 +5,13 @@ Instructions for AI agents (and humans) working in this repository.
 ## Project
 
 `mktsk` is a small Python CLI that creates task folders with a `YYMMDD - TaskName`
-naming convention and an associated Markdown file, opened automatically.
+naming convention and an associated Markdown file, opened automatically. An optional
+PySide6 desktop GUI (`mktsk-gui`) offers the same workflow interactively.
 
 ## Structure
 
 - `mktsk/main.py` — CLI entry point (`argparse`), orchestrates the flow.
+- `mktsk/gui.py` — PySide6 desktop interface over the same logic.
 - `mktsk/helpers.py` — OS helpers: name validation, reserved Windows names, opening files.
 - `mktsk/workers.py` — task logic: title standardization, folder/file creation, signing.
 - `tests/` — pytest test suite.
@@ -18,13 +20,17 @@ naming convention and an associated Markdown file, opened automatically.
 ## Commands
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,gui]"
 ruff check .
 pyright mktsk/
 pytest
 ```
 
-CI runs `ruff check .`, `pyright mktsk/` and `pytest` (coverage ≥ 95% enforced).
+The `gui` extra (PySide6) is required so `pyright mktsk/` resolves the Qt imports. GUI
+tests run headless: `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen`.
+
+CI installs `.[dev,gui]` and runs `ruff check .`, `pyright mktsk/` and `pytest`
+(coverage ≥ 95% enforced).
 
 ## Domain rules (do not break)
 
@@ -69,7 +75,7 @@ period:
 
 ## GUI (`mktsk.gui`)
 
-Planned desktop interface (PySide6) over the same `helpers`/`workers` logic. The CLI
+Optional desktop interface (PySide6) over the same `helpers`/`workers` logic. The CLI
 (`mktsk`) and the business logic stay free of Qt imports.
 
 Requirements:
@@ -86,3 +92,5 @@ Requirements:
   but never delete what was created.
 - UI text, code and symbols in English.
 - Entry point: `mktsk-gui`; PySide6 declared as an optional `gui` extra.
+- Tests in `tests/test_gui.py` with pytest-qt; `tests/conftest.py` forces
+  `QT_QPA_PLATFORM=offscreen` so the suite runs headless.
