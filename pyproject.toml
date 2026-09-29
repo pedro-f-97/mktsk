@@ -16,12 +16,14 @@ addopts = "--cov=mktsk --cov-report=term-missing --cov-fail-under=95"
 
 [project.scripts]
 mktsk = "mktsk.main:main"
+mktsk-gui = "mktsk.gui:main"
 
 [tool.pyright]
 pythonPlatform = "All"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "freezegun", "ruff", "pyright"]
+dev = ["pytest", "pytest-cov", "freezegun", "ruff", "pyright", "pytest-qt"]
+gui = ["PySide6>=6.10,<7"]
 
 [tool.coverage.run]
 branch = true

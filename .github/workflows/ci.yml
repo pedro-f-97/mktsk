@@ -10,6 +10,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
 
@@ -21,7 +22,14 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,gui]"
+
+      - name: Install Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libegl1 libxkbcommon0 libxkbcommon-x11-0 \
+            libdbus-1-3 libfontconfig1 libfreetype6
 
       - name: Ruff
         run: ruff check .
