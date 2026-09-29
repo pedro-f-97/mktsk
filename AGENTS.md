@@ -12,6 +12,9 @@ PySide6 desktop GUI (`mktsk-gui`) offers the same workflow interactively.
 
 - `mktsk/main.py` — CLI entry point (`argparse`), orchestrates the flow.
 - `mktsk/gui.py` — PySide6 desktop interface over the same logic.
+- `mktsk/__main__.py` — module entry point (`python -m mktsk`); delegates to the GUI and
+  is the script PyInstaller freezes. Uses an absolute import on purpose, since relative
+  imports do not resolve once the package is frozen.
 - `mktsk/helpers.py` — OS helpers: name validation, reserved Windows names, opening files.
 - `mktsk/workers.py` — task logic: title standardization, folder/file creation, signing.
 - `tests/` — pytest test suite.
@@ -31,6 +34,15 @@ tests run headless: `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen`.
 
 CI installs `.[dev,gui]` and runs `ruff check .`, `pyright mktsk/` and `pytest`
 (coverage ≥ 95% enforced).
+
+Release tooling lives in the `release` extra (`build`, `twine`, `pyinstaller`); the
+`dev` extra deliberately stays light because CI installs it on every run:
+
+```bash
+python -m pip install -e ".[release,gui]"
+python -m build
+python -m twine check dist/*
+```
 
 ## Domain rules (do not break)
 
@@ -72,6 +84,22 @@ period:
 - Commit in the `<type>: <description>` style above.
 - Never push without explicit request.
 - Line endings normalized to LF (`* text=auto eol=lf` in `.gitattributes`).
+
+## Releases
+
+- Bump `version` in `pyproject.toml` in its own branch, then merge before tagging.
+- Tag only commits already in `main`, annotated, message `Release <version>`
+  (e.g. `Release v0.2.0`), and push the tag explicitly with `git push origin <tag>`.
+- `.github/workflows/release.yml` builds on a `v*` tag push and attaches the
+  artifacts to the release. For a tag that predates the workflow, run it manually
+  from the Actions tab and fill in the `tag` input.
+- Three jobs: `package` builds the sdist and wheel once, `bundle` builds the
+  onefile executable per OS, and `release` uploads everything in a single pass, so
+  no two jobs touch the same release.
+- The Linux executable is named with the glibc detected at build time, because
+  PyInstaller does not bundle it and the binary will not run on older systems.
+- GPL-3.0 section 6 requires the corresponding source to travel with a bundled
+  executable. The sdist is that source, so never attach an executable without it.
 
 ## GUI (`mktsk.gui`)
 

@@ -75,6 +75,12 @@ Launch with:
 mktsk-gui
 ```
 
+Or as a module:
+
+```bash
+python -m mktsk
+```
+
 Opens a window where you can:
 
 * pick a base folder with the native file dialog or navigate inside the window;
@@ -84,7 +90,21 @@ Opens a window where you can:
 
 The last visited folder is remembered between sessions.
 
+## Standalone executable
 
+Release builds include a single-file executable of the GUI, for people who do not
+want to install Python:
+
+* `mktsk-gui-windows-x64.exe` for Windows;
+* `mktsk-gui-linux-x86_64-glibc<version>` for Linux, named after the glibc it was
+  built against.
+
+The first launch unpacks the executable to a temporary folder, so it takes a
+few seconds. The executables are not code signed, so antivirus software may
+report them.
+
+The source distribution (`mktsk-*.tar.gz`) attached to the same release is the
+corresponding source for these executables, as required by GPL-3.0 section 6.
 
 ## Tests
 
@@ -95,3 +115,8 @@ pytest
 ```
 
 The project maintains high test coverage (95%+ enforced in CI).
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE).
+
