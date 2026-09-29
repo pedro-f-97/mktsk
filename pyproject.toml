@@ -1,12 +1,38 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mktsk"
 version = "0.2.0"
-requires-python = ">=3.12"
+description = "CLI and desktop GUI for quickly setting up task folders."
 readme = "README.md"
+requires-python = ">=3.12"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Pedro F." }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Repository = "https://github.com/pedro-f-97/mktsk"
+Issues = "https://github.com/pedro-f-97/mktsk/issues"
+
+[project.scripts]
+mktsk = "mktsk.main:main"
+mktsk-gui = "mktsk.gui:main"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "freezegun", "ruff", "pyright", "pytest-qt"]
+gui = ["PySide6>=6.10,<7"]
+release = ["build", "twine", "pyinstaller"]
 
 [tool.setuptools.packages.find]
 include = ["mktsk*"]
@@ -14,16 +40,8 @@ include = ["mktsk*"]
 [tool.pytest.ini_options]
 addopts = "--cov=mktsk --cov-report=term-missing --cov-fail-under=95"
 
-[project.scripts]
-mktsk = "mktsk.main:main"
-mktsk-gui = "mktsk.gui:main"
-
 [tool.pyright]
 pythonPlatform = "All"
-
-[project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "freezegun", "ruff", "pyright", "pytest-qt"]
-gui = ["PySide6>=6.10,<7"]
 
 [tool.coverage.run]
 branch = true

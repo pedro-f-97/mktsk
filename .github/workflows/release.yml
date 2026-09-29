@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach artifacts to
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  QT_DEPS: >-
+    libgl1 libegl1 libxkbcommon0 libxkbcommon-x11-0 libdbus-1-3
+    libfontconfig1 libfreetype6
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install ".[release,gui]"
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Check distributions
+        run: python -m twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/*
+
+  bundle:
+    name: bundle (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install ".[release,gui]"
+
+      - name: Install Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $QT_DEPS
+
+      - name: Build executable
+        run: >-
+          pyinstaller --onefile --windowed --noupx --paths .
+          --name mktsk-gui mktsk/__main__.py
+
+      - name: Detect glibc requirement
+        id: glibc
+        if: runner.os == 'Linux'
+        run: |
+          version=$(ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$')
+          if [ -z "$version" ]; then
+            echo "Could not detect the glibc version; refusing to label the asset."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Bundled against glibc $version; needs glibc >= $version"
+
+      - name: Name executable
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            mv dist/mktsk-gui "dist/mktsk-gui-linux-x86_64-glibc${{ steps.glibc.outputs.version }}"
+          else
+            mv dist/mktsk-gui.exe dist/mktsk-gui-windows-x64.exe
+          fi
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.os }}
+          path: dist/mktsk-gui-*
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [package, bundle]
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          pattern: distributions
+          merge-multiple: true
+          path: dist
+
+      - name: Download executables
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          merge-multiple: true
+          path: dist
+
+      - name: List artifacts
+        run: ls -l dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## License
+
+          `mktsk` is licensed under GPL-3.0-or-later. The `mktsk-*.tar.gz` source
+          distribution attached to this release is the corresponding source for the
+          executables below, as required by GPL-3.0 section 6.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "$TAG" \
+              --notes-file notes.md --generate-notes
+          fi
