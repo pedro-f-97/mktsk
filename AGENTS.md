@@ -96,6 +96,9 @@ period:
 - Three jobs: `package` builds the sdist and wheel once, `bundle` builds the
   onefile executable per OS, and `release` uploads everything in a single pass, so
   no two jobs touch the same release.
+- To fix or republish assets on an existing release, re-run the workflow with the
+  same `tag` input. The `release` job uses `--clobber`, so an asset of the same
+  name is replaced instead of duplicated.
 - The Linux executable is named with the glibc detected at build time, because
   PyInstaller does not bundle it and the binary will not run on older systems.
 - GPL-3.0 section 6 requires the corresponding source to travel with a bundled

@@ -1,6 +1,6 @@
 # mktsk
 
-CLI tool for quickly setting up task folders.
+CLI tool and desktop GUI for quickly setting up task folders.
 
 ## Features
 
