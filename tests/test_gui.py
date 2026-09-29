@@ -6,6 +6,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtWidgets import QMessageBox
 
 from mktsk.gui import MainWindow
+from mktsk.gui import main as gui_main
 
 
 @pytest.fixture
@@ -219,3 +220,8 @@ def test_close_saves_last_path(window, tmp_path):
     window.close()
 
     assert window.settings.value("last_path") == str(tmp_path.resolve())
+
+def test_module_entry_point_uses_gui_main():
+    from mktsk import __main__ as module
+
+    assert module.main is gui_main
