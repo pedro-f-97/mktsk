@@ -189,6 +189,24 @@ def test_choose_directory_cancelled(window, monkeypatch, qtbot):
 
     assert window.current_directory == before
 
+def test_up_button_navigates_up(window, tmp_path, qtbot):
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    window.navigate_to(sub)
+
+    qtbot.mouseClick(window.up_button, Qt.MouseButton.LeftButton)
+
+    assert window.current_directory == tmp_path.resolve()
+
+def test_refresh_button_reloads(window, tmp_path, qtbot):
+    window.navigate_to(tmp_path)
+    (tmp_path / "new.md").touch()
+
+    qtbot.mouseClick(window.refresh_button, Qt.MouseButton.LeftButton)
+
+    labels = [window.file_list.item(i).text() for i in range(window.file_list.count())]
+    assert labels == ["new.md"]
+
 def test_refresh_missing_directory(window, tmp_path):
     window.current_directory = tmp_path / "a.md"
 

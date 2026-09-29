@@ -148,7 +148,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 
-def main() -> int:
+def main() -> int:  # pragma: no cover
     """Runs the desktop interface."""
     app = QApplication([])
     window = MainWindow()
