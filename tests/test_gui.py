@@ -65,7 +65,7 @@ def test_go_up(window, tmp_path):
     assert window.current_directory == tmp_path.resolve()
 
 def test_go_up_at_root_stays(window):
-    root = Path("/")
+    root = Path(Path.cwd().anchor)
     window.navigate_to(root)
 
     window.go_up()
