@@ -23,7 +23,7 @@ def main() -> int:
         print("Error: invalid task description.")
         return 1
 
-    if workers.is_reserved_name(standardized_title):
+    if helpers.is_reserved_name(standardized_title):
         print(f"Error: '{standardized_title}' is a reserved name.")
         return 1
 

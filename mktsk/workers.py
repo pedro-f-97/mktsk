@@ -5,25 +5,6 @@ from pathlib import Path
 
 from . import helpers
 
-WINDOWS_RESERVED_NAMES = {
-    "CON",
-    "PRN",
-    "AUX",
-    "NUL",
-    *{f"COM{i}" for i in range(1, 10)},
-    *{f"LPT{i}" for i in range(1, 10)},
-}
-
-def is_reserved_name(name: str) -> bool:
-    """Checks if the given name is reserved by Windows.
-
-    Args:
-        name: Name to be checked.
-
-    Returns:
-        True if the name is a Windows reserved name.
-    """
-    return name.upper() in WINDOWS_RESERVED_NAMES
 
 def standardize_string(string_: str) -> str:
     """Normalize a string by removing accents, special characters and spacing.

@@ -5,7 +5,6 @@ from mktsk.workers import (
     build_folder_name,
     create_folder,
     create_md_file,
-    is_reserved_name,
     sign_md_file,
     standardize_string,
 )
@@ -22,25 +21,6 @@ def test_standardize_string_spacing():
     standardized_string = standardize_string(test_string)
 
     assert standardized_string == "PiramideAVolta"
-
-def test_is_reserved_name_true():
-    assert is_reserved_name("con")
-    assert is_reserved_name("CON")
-    assert is_reserved_name("Prn")
-    assert is_reserved_name("aux")
-    assert is_reserved_name("nul")
-    assert is_reserved_name("com1")
-    assert is_reserved_name("COM9")
-    assert is_reserved_name("lpt1")
-    assert is_reserved_name("LPT9")
-
-def test_is_reserved_name_false():
-    assert not is_reserved_name("conta")
-    assert not is_reserved_name("comarca")
-    assert not is_reserved_name("nome")
-    assert not is_reserved_name("com0")
-    assert not is_reserved_name("com10")
-    assert not is_reserved_name("lpt10")
 
 def test_build_folder_name():
     name = "CoolFolder"

@@ -5,6 +5,25 @@ import pytest
 from mktsk import helpers
 
 
+def test_is_reserved_name_true():
+    assert helpers.is_reserved_name("con")
+    assert helpers.is_reserved_name("CON")
+    assert helpers.is_reserved_name("Prn")
+    assert helpers.is_reserved_name("aux")
+    assert helpers.is_reserved_name("nul")
+    assert helpers.is_reserved_name("com1")
+    assert helpers.is_reserved_name("COM9")
+    assert helpers.is_reserved_name("lpt1")
+    assert helpers.is_reserved_name("LPT9")
+
+def test_is_reserved_name_false():
+    assert not helpers.is_reserved_name("conta")
+    assert not helpers.is_reserved_name("comarca")
+    assert not helpers.is_reserved_name("nome")
+    assert not helpers.is_reserved_name("com0")
+    assert not helpers.is_reserved_name("com10")
+    assert not helpers.is_reserved_name("lpt10")
+
 def test_open_file_windows(monkeypatch, tmp_path):
     file = tmp_path / "test.md"
     file.touch()
