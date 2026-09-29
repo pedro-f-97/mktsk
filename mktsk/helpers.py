@@ -23,6 +23,9 @@ def is_reserved_name(name: str) -> bool:
     """
     return name.upper() in WINDOWS_RESERVED_NAMES
 
+class TaskError(Exception):
+    """Error raised when a task domain rule is violated."""
+
 def validate_name(name: str) -> None:
     """Validates that the given name is a single path component.
 
@@ -30,11 +33,11 @@ def validate_name(name: str) -> None:
         name: Name to be validated.
 
     Raises:
-        ValueError: If the name contains path separators or is otherwise
+        TaskError: If the name contains path separators or is otherwise
             not a single path component.
     """
     if Path(name).name != name:
-        raise ValueError(f"Name must be a single path component, got: {name!r}")
+        raise TaskError(f"Name must be a single path component, got: {name!r}")
 
 def open_file(file: Path) -> None:
     """Opens a file with the operating system's default application.
