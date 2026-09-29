@@ -87,7 +87,9 @@ def create_md_file(location: Path, name: str) -> Path:
     return file_to_create
 
 def sign_md_file(file: Path, title: str) -> None:
-    """Writes given title in the first line of the given .md file
+    """Writes given title in the first line of the given .md file.
+
+    If the file already contains content, it is left untouched.
 
     Args:
         file: file to be signed
@@ -97,12 +99,3 @@ def sign_md_file(file: Path, title: str) -> None:
 
     if not content.strip():
         file.write_text(f"# {title}\n", encoding="utf-8")
-        return
-
-    lines = content.splitlines()
-
-
-    if lines[0] == f"# {title}":
-        return
-
-    raise ValueError("Markdown file already contains content.")

@@ -14,26 +14,31 @@ def main() -> int:
     location = Path.cwd()
 
     raw_title = " ".join(args.title)
-    if not raw_title.strip():
-        print("Error: invalid task description.")
-        return 1
-
-    standardized_title = workers.standardize_string(raw_title)
-    if not standardized_title.strip():
-        print("Error: invalid task description.")
-        return 1
-
-    folder_name = workers.build_folder_name(standardized_title)
 
     try:
+        if not raw_title.strip():
+            raise helpers.TaskError("invalid task description")
+
+        standardized_title = workers.standardize_string(raw_title)
+        if not standardized_title.strip():
+            raise helpers.TaskError("invalid task description")
+
+        if helpers.is_reserved_name(standardized_title):
+            raise helpers.TaskError(f"'{standardized_title}' is a reserved name")
+
+        folder_name = workers.build_folder_name(standardized_title)
         created_folder = workers.create_folder(location, folder_name)
         created_file = workers.create_md_file(created_folder, standardized_title)
-        workers.sign_md_file(created_file, folder_name)
+        workers.sign_md_file(created_file, raw_title)
         print(f"Created: {folder_name}")
-        helpers.open_file(created_file)
-    except (OSError, ValueError) as error:
+    except (OSError, helpers.TaskError) as error:
         print(f"Error: {error}")
         return 1
+
+    try:
+        helpers.open_file(created_file)
+    except OSError as error:
+        print(f"Warning: {error}")
 
     return 0
 

@@ -1,6 +1,7 @@
 import pytest
 from freezegun import freeze_time
 
+from mktsk.helpers import TaskError
 from mktsk.workers import (
     build_folder_name,
     create_folder,
@@ -53,7 +54,7 @@ def test_create_folder_error(tmp_path):
     folder = (tmp_path / "my_folder")
     folder.mkdir()
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TaskError):
         create_folder(folder, "/etc")
 
 def test_create_md_file(tmp_path):
@@ -70,7 +71,7 @@ def test_create_md_file_path_error(tmp_path):
     folder.mkdir()
     name = "/etc"
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TaskError):
         create_md_file(folder, name)
 
 def test_sign_md_file(tmp_path):
@@ -99,7 +100,7 @@ def test_sign_md_file_existing_ok(tmp_path):
 
     assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
 
-def test_sign_md_file_existing_not_ok(tmp_path):
+def test_sign_md_file_existing_untouched(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
 
@@ -108,8 +109,7 @@ def test_sign_md_file_existing_not_ok(tmp_path):
 
     file.write_text("# This is some other text\n", encoding="utf-8")
 
-    with pytest.raises(ValueError):
-        sign_md_file(file, "260922 - ThisTest")
+    sign_md_file(file, "260922 - ThisTest")
 
     assert file.read_text(encoding="utf-8") == "# This is some other text\n"
 
