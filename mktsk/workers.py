@@ -5,6 +5,25 @@ from pathlib import Path
 
 from . import helpers
 
+WINDOWS_RESERVED_NAMES = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *{f"COM{i}" for i in range(1, 10)},
+    *{f"LPT{i}" for i in range(1, 10)},
+}
+
+def is_reserved_name(name: str) -> bool:
+    """Checks if the given name is reserved by Windows.
+
+    Args:
+        name: Name to be checked.
+
+    Returns:
+        True if the name is a Windows reserved name.
+    """
+    return name.upper() in WINDOWS_RESERVED_NAMES
 
 def standardize_string(string_: str) -> str:
     """Normalize a string by removing accents, special characters and spacing.
@@ -87,7 +106,9 @@ def create_md_file(location: Path, name: str) -> Path:
     return file_to_create
 
 def sign_md_file(file: Path, title: str) -> None:
-    """Writes given title in the first line of the given .md file
+    """Writes given title in the first line of the given .md file.
+
+    If the file already contains content, it is left untouched.
 
     Args:
         file: file to be signed
@@ -97,12 +118,3 @@ def sign_md_file(file: Path, title: str) -> None:
 
     if not content.strip():
         file.write_text(f"# {title}\n", encoding="utf-8")
-        return
-
-    lines = content.splitlines()
-
-
-    if lines[0] == f"# {title}":
-        return
-
-    raise ValueError("Markdown file already contains content.")

@@ -25,7 +25,7 @@ def test_main(monkeypatch, tmp_path):
 
     assert result == 0
     assert final_file.is_file()
-    assert final_file.read_text(encoding="utf-8") == "# 260922 - TestMain\n"
+    assert final_file.read_text(encoding="utf-8") == "# Test Main\n"
     assert opened_files == [final_file]
 
 def test_main_empty_title(monkeypatch, tmp_path):
@@ -45,6 +45,41 @@ def test_main_invalid_title(monkeypatch, tmp_path):
 
     assert result == 1
     assert list(tmp_path.iterdir()) == []
+
+def test_main_reserved_name(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "con"])
+
+    result = main()
+
+    assert result == 1
+    assert "reserved" in capsys.readouterr().out
+    assert list(tmp_path.iterdir()) == []
+
+def test_main_collision_opens_existing(monkeypatch, tmp_path):
+    folder = tmp_path / "my_folder"
+    folder.mkdir()
+    monkeypatch.chdir(folder)
+    monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main"])
+
+    existing_folder = folder / "260922 - TestMain"
+    existing_folder.mkdir()
+    existing_file = existing_folder / "TestMain.md"
+    existing_file.write_text("# existing notes\n", encoding="utf-8")
+
+    opened_files = []
+
+    def fake_open_file(file):
+        opened_files.append(file)
+
+    monkeypatch.setattr("mktsk.helpers.open_file", fake_open_file)
+
+    with freeze_time("2026-09-22"):
+        result = main()
+
+    assert result == 0
+    assert existing_file.read_text(encoding="utf-8") == "# existing notes\n"
+    assert opened_files == [existing_file]
 
 def test_main_error(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)

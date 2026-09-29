@@ -23,12 +23,16 @@ def main() -> int:
         print("Error: invalid task description.")
         return 1
 
+    if workers.is_reserved_name(standardized_title):
+        print(f"Error: '{standardized_title}' is a reserved name.")
+        return 1
+
     folder_name = workers.build_folder_name(standardized_title)
 
     try:
         created_folder = workers.create_folder(location, folder_name)
         created_file = workers.create_md_file(created_folder, standardized_title)
-        workers.sign_md_file(created_file, folder_name)
+        workers.sign_md_file(created_file, raw_title)
         print(f"Created: {folder_name}")
         helpers.open_file(created_file)
     except (OSError, ValueError) as error:
