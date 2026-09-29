@@ -87,13 +87,13 @@ def create_md_file(location: Path, name: str) -> Path:
     return file_to_create
 
 def sign_md_file(file: Path, title: str) -> None:
-    """Writes given title in the first line of the given .md file.
+    """Writes given title as a heading in the first line of the given .md file.
 
     If the file already contains content, it is left untouched.
 
     Args:
         file: file to be signed
-        title: string to use for signing
+        title: string to use as the heading, e.g. the created folder name
     """
     content = file.read_text(encoding="utf-8")
 

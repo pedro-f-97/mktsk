@@ -38,7 +38,7 @@ CI installs `.[dev,gui]` and runs `ruff check .`, `pyright mktsk/` and `pytest`
 - Standardize titles: NFKD + strip accents, keep only alphanumerics, join words in
   CamelCase with the first letter uppercase.
 - Folder: `<date> - <StandardizedTitle>`; file: `<StandardizedTitle>.md`.
-- Sign the `.md` with the raw title exactly as typed (`# It's Alive!`).
+- Sign the `.md` heading with the created folder name (`# 260923 - ItsAlive`).
 - Reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) are rejected.
 - Collision: never duplicate or overwrite — open the existing `.md`.
 - Open the file with the OS default application (`os.startfile` / `xdg-open`).
