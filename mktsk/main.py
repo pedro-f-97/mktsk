@@ -34,10 +34,14 @@ def main() -> int:
         created_file = workers.create_md_file(created_folder, standardized_title)
         workers.sign_md_file(created_file, raw_title)
         print(f"Created: {folder_name}")
-        helpers.open_file(created_file)
     except (OSError, ValueError) as error:
         print(f"Error: {error}")
         return 1
+
+    try:
+        helpers.open_file(created_file)
+    except OSError as error:
+        print(f"Warning: {error}")
 
     return 0
 

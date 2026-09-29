@@ -81,6 +81,26 @@ def test_main_collision_opens_existing(monkeypatch, tmp_path):
     assert existing_file.read_text(encoding="utf-8") == "# existing notes\n"
     assert opened_files == [existing_file]
 
+def test_main_open_failure_warns(monkeypatch, tmp_path, capsys):
+    folder = tmp_path / "my_folder"
+    folder.mkdir()
+    monkeypatch.chdir(folder)
+    monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main"])
+
+    def raise_error(file):
+        raise OSError("test open error")
+
+    monkeypatch.setattr("mktsk.helpers.open_file", raise_error)
+
+    with freeze_time("2026-09-22"):
+        result = main()
+
+    final_file = folder / "260922 - TestMain" / "TestMain.md"
+
+    assert result == 0
+    assert final_file.is_file()
+    assert "Warning" in capsys.readouterr().out
+
 def test_main_error(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main", "Error"],)
