@@ -64,8 +64,7 @@ Your notes go here.
 
 The task folder is created in the directory from which `mktsk` is executed.
 
-The Markdown file is then automatically opened with the system's default application,
-with the cursor on the empty line after the date heading.
+The Markdown file is then automatically opened with the system's default application.
 
 Titles that normalize to an empty name, or to a Windows reserved name (`CON`, `PRN`, `AUX`,
 `NUL`, `COM1-9`, `LPT1-9`), are rejected with an error.
@@ -112,7 +111,7 @@ tasks/
     └── 260924 - Everbind/
 ```
 
-`mktsk It's Alive!` from `tasks/` picks up `260923 - ItsAlive`, while `mktsk "F Society"`
+`mktsk It's Alive!` from `tasks/` picks up `260923 - ItsAlive`, while `mktsk F Society`
 from there creates `tasks/260930 - FSociety`, because the Veritas one lives in another
 directory. To resume a task, run the command from the directory that holds it.
 
