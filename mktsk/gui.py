@@ -13,6 +13,10 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSplitter,
+    QTabWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -20,7 +24,8 @@ from PySide6.QtWidgets import (
 from . import helpers, workers
 
 _PATH_ROLE = Qt.ItemDataRole.UserRole
-_IS_DIR_ROLE = Qt.ItemDataRole.UserRole + 1
+
+_ALL_TAB = "All"
 
 
 class MainWindow(QMainWindow):
@@ -32,7 +37,7 @@ class MainWindow(QMainWindow):
         last_path = self.settings.value("last_path", str(Path.cwd()))
         self.current_directory = Path(str(last_path))
         self.setWindowTitle("mktsk")
-        self.setMinimumSize(480, 360)
+        self.setMinimumSize(640, 420)
         self._build_ui()
         self.navigate_to(self.current_directory)
 
@@ -52,8 +57,17 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.refresh_button)
         layout.addLayout(bar)
 
-        self.file_list = QListWidget()
-        layout.addWidget(self.file_list)
+        self.directory_tree = QTreeWidget()
+        self.directory_tree.setHeaderLabel("Directory")
+        self.directory_tree.setMinimumWidth(140)
+
+        self.tabs = QTabWidget()
+
+        splitter = QSplitter()
+        splitter.addWidget(self.directory_tree)
+        splitter.addWidget(self.tabs)
+        splitter.setStretchFactor(1, 2)
+        layout.addWidget(splitter)
 
         form = QHBoxLayout()
         self.title_input = QLineEdit()
@@ -66,7 +80,7 @@ class MainWindow(QMainWindow):
         self.choose_button.clicked.connect(self.choose_directory)
         self.up_button.clicked.connect(self.go_up)
         self.refresh_button.clicked.connect(self.refresh)
-        self.file_list.itemDoubleClicked.connect(self.open_item)
+        self.directory_tree.itemDoubleClicked.connect(self.open_directory)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
 
@@ -79,43 +93,95 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def refresh(self) -> None:
-        self.file_list.clear()
+        self.directory_tree.clear()
         if not self.current_directory.is_dir():
+            self.tabs.clear()
             return
 
-        tasks = []
-        other = []
-        for entry in self.current_directory.iterdir():
-            if entry.is_dir() and workers.is_task_folder(entry.name):
-                tasks.append(entry)
-            else:
-                other.append(entry)
+        self._reload_tree()
+        self._reload_tasks()
 
-        for heading, group in (("Tasks", tasks), ("Other", other)):
-            if not group:
-                continue
+    def _reload_tree(self) -> None:
+        name = self.current_directory.name or str(self.current_directory)
+        root = QTreeWidgetItem([name])
+        for subdirectory in workers.list_subdirectories(self.current_directory):
+            child = QTreeWidgetItem([subdirectory.name])
+            child.setData(0, _PATH_ROLE, str(subdirectory))
+            root.addChild(child)
 
-            self._add_heading(heading)
-            for entry in sorted(group, key=self._sort_key):
-                self._add_entry(entry)
+        self.directory_tree.addTopLevelItem(root)
+        root.setExpanded(True)
 
-    def _add_heading(self, text: str) -> None:
+    def _reload_tasks(self) -> None:
+        sections = self._sections()
+        active = self.tabs.tabText(self.tabs.currentIndex()) if self.tabs.count() else ""
+
+        self.tabs.clear()
+
+        every = self._new_listing()
+        for title, group in sections:
+            self._add_heading(every, title)
+            for entry in group.entries:
+                self._add_task(every, entry)
+        self._add_tab(_ALL_TAB, every)
+
+        for title, group in sections:
+            listing = self._new_listing()
+            for entry in group.entries:
+                self._add_task(listing, entry)
+            self._add_tab(title, listing)
+
+        self._select_tab(active)
+
+    def _sections(self) -> list[tuple[str, workers.TaskGroup]]:
+        """Pairs every task group with the title of its tab.
+
+        Returns:
+            The tasks of the current directory first, named after the directory
+            itself, then the tasks of each subdirectory in alphabetical order.
+        """
+        return [
+            (
+                self._base_title() if group.category is None else group.category.name,
+                group,
+            )
+            for group in workers.find_task_groups(self.current_directory)
+        ]
+
+    def _base_title(self) -> str:
+        """Returns the title of the tab for the tasks of the current directory."""
+        return self.current_directory.name or str(self.current_directory)
+
+    def _new_listing(self) -> QListWidget:
+        listing = QListWidget()
+        listing.itemDoubleClicked.connect(self.open_item)
+        return listing
+
+    def _add_tab(self, title: str, listing: QListWidget) -> None:
+        self.tabs.addTab(listing, title)
+
+    def _select_tab(self, title: str) -> None:
+        for index in range(self.tabs.count()):
+            if self.tabs.tabText(index) == title:
+                self.tabs.setCurrentIndex(index)
+                return
+
+        self.tabs.setCurrentIndex(0)
+
+    def _add_heading(self, listing: QListWidget, text: str) -> None:
         item = QListWidgetItem(text)
         font = item.font()
         font.setBold(True)
         item.setFont(font)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
-        self.file_list.addItem(item)
+        listing.addItem(item)
 
-    def _add_entry(self, entry: Path) -> None:
-        label = f"{entry.name}/" if entry.is_dir() else entry.name
-        item = QListWidgetItem(label)
-        item.setData(_PATH_ROLE, str(entry))
-        item.setData(_IS_DIR_ROLE, entry.is_dir())
-        self.file_list.addItem(item)
-
-    def _sort_key(self, path: Path) -> tuple[bool, str]:
-        return (not path.is_dir(), path.name.lower())
+    def _add_task(self, listing: QListWidget, entry: workers.TaskEntry) -> None:
+        date = entry.date.strftime(workers.DATE_FORMAT)
+        item = QListWidgetItem(f"{date}  {helpers.readable_title(entry.title)}")
+        item.setData(_PATH_ROLE, str(entry.file))
+        item.setToolTip(str(entry.file))
+        listing.addItem(item)
 
     def choose_directory(self) -> None:
         selected = QFileDialog.getExistingDirectory(
@@ -129,12 +195,15 @@ class MainWindow(QMainWindow):
         if parent != self.current_directory:
             self.navigate_to(parent)
 
+    def open_directory(self, item: QTreeWidgetItem, _column: int) -> None:
+        path = item.data(0, _PATH_ROLE)
+        if path:
+            self.navigate_to(Path(path))
+
     def open_item(self, item: QListWidgetItem) -> None:
-        path = Path(item.data(_PATH_ROLE))
-        if item.data(_IS_DIR_ROLE):
-            self.navigate_to(path)
-        else:
-            self.open_with_default_app(path)
+        path = item.data(_PATH_ROLE)
+        if path:
+            self.open_with_default_app(Path(path))
 
     def open_with_default_app(self, path: Path) -> None:
         try:

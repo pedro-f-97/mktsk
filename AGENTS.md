@@ -55,14 +55,35 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 - Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`)
 - Open files with the OS default application (`os.startfile` / `xdg-open`)
 - Folder and file names are ASCII only
+- Reading a title back for display (`readable_title`): every uppercase letter starts a
+  word and a digit starts one too, so `FSocietyEverbind` reads as `F Society Everbind`
+  and `Task2` as `Task 2`; consecutive digits stay together, so `2026` survives
 
 ## GUI
 
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
-- List the folder in `Tasks` and `Other` sections split by `is_task_folder`; omit empty
-  sections; headings bold and not selectable
+- Two panes in a `QSplitter`: a `QTreeWidget` on the left holding the current directory
+  and its immediate subdirectories, so it shows where new tasks are created; a
+  `QTabWidget` on the right holding one `QListWidget` per task category
+- The tree lists folders only, one level deep, and never task folders or hidden
+  directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
+  and the root does nothing
+- The task list comes from `find_task_groups`: one tab per category, the current
+  directory being a category named after itself, plus an `All` tab first; only
+  categories that hold tasks get a tab
+- `All` lists every task under a heading per category, headings bold and not
+  selectable; a category tab lists just its own tasks, with no heading
+- The active tab survives a refresh or a new task; when its category is gone, `All`
+  takes over again
+- Within a category, newest first, alphabetical for tasks of the same date
+- A task folder with no `.md` is not listed; a task two levels down is not found
+- A task label is `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as
+  tooltip
+- Browsing is read-only: clicking a task just opens its `.md`, it never creates a file
+  and never appends a date; only `create_task` resumes a task, and it still looks in
+  the current directory only
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
   what was created

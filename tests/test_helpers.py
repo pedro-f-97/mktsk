@@ -24,6 +24,27 @@ def test_is_reserved_name_false():
     assert not helpers.is_reserved_name("com10")
     assert not helpers.is_reserved_name("lpt10")
 
+def test_readable_title_separates_words():
+    assert helpers.readable_title("ItsAlive") == "Its Alive"
+    assert helpers.readable_title("FSocietyEverbind") == "F Society Everbind"
+    assert helpers.readable_title("Everbind") == "Everbind"
+    assert helpers.readable_title("Bigword") == "Bigword"
+
+def test_readable_title_separates_every_capital():
+    assert helpers.readable_title("HTMLParser") == "H T M L Parser"
+    assert helpers.readable_title("FSociety") == "F Society"
+
+def test_readable_title_starts_a_word_on_a_digit():
+    assert helpers.readable_title("Task2") == "Task 2"
+    assert helpers.readable_title("FSociety2") == "F Society 2"
+
+def test_readable_title_keeps_consecutive_digits_together():
+    assert helpers.readable_title("2026") == "2026"
+    assert helpers.readable_title("Q2026") == "Q 2026"
+
+def test_readable_title_empty():
+    assert helpers.readable_title("") == ""
+
 def test_open_file_windows(monkeypatch, tmp_path):
     file = tmp_path / "test.md"
     file.touch()

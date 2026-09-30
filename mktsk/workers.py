@@ -20,6 +20,21 @@ class TaskResult(NamedTuple):
     message: str
 
 
+class TaskEntry(NamedTuple):
+    """A task folder found under a base directory."""
+
+    date: datetime.date
+    title: str
+    file: Path
+
+
+class TaskGroup(NamedTuple):
+    """Tasks found in the base directory or in one of its subdirectories."""
+
+    category: Path | None
+    entries: list[TaskEntry]
+
+
 def standardize_string(string_: str) -> str:
     """Normalize a string by removing accents, special characters and spacing.
 
@@ -172,6 +187,117 @@ def find_task_folder(location: Path, title: str) -> Path | None:
             return entry
 
     return None
+
+def _task_date_and_title(name: str) -> tuple[datetime.date, str] | None:
+    """Splits a task folder name into its date and its standardized title.
+
+    Args:
+        name: the directory name to split.
+
+    Returns:
+        The date and the title, or None if the name is not a task folder.
+    """
+    if not is_task_folder(name):
+        return None
+
+    date_prefix, _separator, title = name.partition(_TASK_NAME_SEPARATOR)
+
+    # is_task_folder already parsed the prefix as a real date, so this cannot fail
+    parsed = datetime.datetime.strptime(date_prefix, _TASK_DATE_FORMAT)  # noqa: DTZ007
+
+    return parsed.date(), title
+
+def _tasks_in(directory: Path) -> list[TaskEntry]:
+    """Collects the task folders of a directory, newest first.
+
+    A task folder is listed only when it holds the .md file that goes with it,
+    so a folder left without one is never offered to open. A directory that
+    cannot be read holds no tasks, and is left out rather than raising.
+
+    Args:
+        directory: the directory to look in.
+
+    Returns:
+        One entry per task folder, newest first and alphabetical for tasks of
+        the same date.
+    """
+    try:
+        folders = list(directory.iterdir())
+    except OSError:
+        return []
+
+    entries = []
+
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+
+        parts = _task_date_and_title(folder.name)
+        if parts is None:
+            continue
+
+        date, title = parts
+        file = folder / f"{title}.md"
+        if file.is_file():
+            entries.append(TaskEntry(date, title, file))
+
+    return sorted(entries, key=lambda entry: (-entry.date.toordinal(), entry.title))
+
+def list_subdirectories(location: Path) -> list[Path]:
+    """Lists the immediate subdirectories that are not task folders.
+
+    Hidden directories are left out, so a listing does not walk into `.git` and
+    friends. The list stays one level deep, so a subdirectory of a
+    subdirectory is never a category.
+
+    Args:
+        location: the directory to look in.
+
+    Returns:
+        The subdirectories, in alphabetical order.
+    """
+    return sorted(
+        (
+            entry
+            for entry in location.iterdir()
+            if entry.is_dir()
+            and not entry.name.startswith(".")
+            and not is_task_folder(entry.name)
+        ),
+        key=lambda path: path.name.lower(),
+    )
+
+def find_task_groups(location: Path) -> list[TaskGroup]:
+    """Finds the tasks in a directory and in its immediate subdirectories.
+
+    Every subdirectory that is not a task folder becomes a category named after
+    it, so tasks kept apart in a subdirectory are still told apart in the list.
+    The search stops one level down, so a task inside a subdirectory of a
+    subdirectory is not found.
+
+    Args:
+        location: the directory to look in.
+
+    Returns:
+        The tasks of `location` first, with a category of None, then the tasks
+        of each subdirectory in alphabetical order. Groups without tasks are
+        left out.
+    """
+    if not location.is_dir():
+        return []
+
+    groups: list[TaskGroup] = []
+
+    root_entries = _tasks_in(location)
+    if root_entries:
+        groups.append(TaskGroup(None, root_entries))
+
+    for subdirectory in list_subdirectories(location):
+        entries = _tasks_in(subdirectory)
+        if entries:
+            groups.append(TaskGroup(subdirectory, entries))
+
+    return groups
 
 def append_date_section(file: Path, date: datetime.date) -> bool:
     """Adds a second level heading with the given date at the end of the .md file.
