@@ -8,6 +8,20 @@ from PySide6.QtWidgets import QMessageBox
 from mktsk.gui import MainWindow
 from mktsk.gui import main as gui_main
 
+_PATH_ROLE = Qt.ItemDataRole.UserRole
+
+
+def labels(window):
+    return [window.file_list.item(i).text() for i in range(window.file_list.count())]
+
+
+def find_item(window, path):
+    for index in range(window.file_list.count()):
+        item = window.file_list.item(index)
+        if item.data(_PATH_ROLE) == str(path):
+            return item
+    raise AssertionError(f"{path} is not listed")
+
 
 @pytest.fixture
 def window(qtbot, tmp_path):
@@ -48,8 +62,32 @@ def test_navigate_to_lists_contents(window, tmp_path):
 
     window.navigate_to(tmp_path)
 
-    labels = [window.file_list.item(i).text() for i in range(window.file_list.count())]
-    assert labels == ["play/", "a.md"]
+    assert labels(window) == ["Other", "play/", "a.md"]
+
+def test_navigate_to_sections_tasks_and_other(window, tmp_path):
+    (tmp_path / "260930 - ItsAlive").mkdir()
+    (tmp_path / "Veritas").mkdir()
+    (tmp_path / "a.md").touch()
+
+    window.navigate_to(tmp_path)
+
+    assert labels(window) == ["Tasks", "260930 - ItsAlive/", "Other", "Veritas/", "a.md"]
+
+def test_navigate_to_invalid_date_prefix_is_not_a_task(window, tmp_path):
+    (tmp_path / "999999 - ItsAlive").mkdir()
+
+    window.navigate_to(tmp_path)
+
+    assert labels(window) == ["Other", "999999 - ItsAlive/"]
+
+def test_section_headings_are_not_selectable(window, tmp_path):
+    (tmp_path / "a.md").touch()
+
+    window.navigate_to(tmp_path)
+
+    heading = window.file_list.item(0)
+    assert heading.text() == "Other"
+    assert heading.flags() == Qt.ItemFlag.NoItemFlags
 
 def test_navigate_to_invalid_directory_falls_back(window, tmp_path):
     window.navigate_to(tmp_path / "missing")
@@ -78,16 +116,16 @@ def test_double_click_enters_directory(qtbot, window, tmp_path):
     sub.mkdir()
     window.navigate_to(tmp_path)
 
-    window.file_list.itemDoubleClicked.emit(window.file_list.item(0))
+    window.file_list.itemDoubleClicked.emit(find_item(window, sub))
 
     assert window.current_directory == sub.resolve()
 
 def test_double_click_opens_md(qtbot, window, tmp_path, fake_open):
     (tmp_path / "a.md").touch()
     window.navigate_to(tmp_path)
-    assert [window.file_list.item(i).text() for i in range(window.file_list.count())] == ["a.md"]
+    assert labels(window) == ["Other", "a.md"]
 
-    window.file_list.itemDoubleClicked.emit(window.file_list.item(0))
+    window.file_list.itemDoubleClicked.emit(find_item(window, tmp_path / "a.md"))
 
     assert fake_open == [tmp_path / "a.md"]
 
@@ -244,8 +282,7 @@ def test_refresh_button_reloads(window, tmp_path, qtbot):
 
     qtbot.mouseClick(window.refresh_button, Qt.MouseButton.LeftButton)
 
-    labels = [window.file_list.item(i).text() for i in range(window.file_list.count())]
-    assert labels == ["new.md"]
+    assert labels(window) == ["Other", "new.md"]
 
 def test_refresh_missing_directory(window, tmp_path):
     window.current_directory = tmp_path / "a.md"

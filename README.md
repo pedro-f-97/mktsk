@@ -132,6 +132,8 @@ python -m mktsk
 Opens a window where you can:
 
 * pick a base folder with the native file dialog or navigate inside the window;
+* see the contents split into `Tasks` and `Other`, so a folder such as `260923 - ItsAlive`
+  is told apart from a plain folder at a glance;
 * create a task with the same rules as the CLI, opening the resulting Markdown file with
   the default application;
 * open existing `.md` files by double-clicking.

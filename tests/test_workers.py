@@ -10,6 +10,7 @@ from mktsk.workers import (
     create_folder,
     create_md_file,
     find_task_folder,
+    is_task_folder,
     open_or_create_task,
     sign_md_file,
     standardize_string,
@@ -132,6 +133,40 @@ def test_sign_md_file_existing_space(tmp_path):
 
     assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 22/09/2026\n\n"
 
+def test_is_task_folder():
+    assert is_task_folder("260930 - ItsAlive")
+    assert is_task_folder("260710 - BuildSearchResults")
+    assert is_task_folder("260709 - Everbind")
+
+def test_is_task_folder_numeric_title():
+    assert is_task_folder("260930 - 2026")
+
+def test_is_task_folder_invalid_calendar_date():
+    assert not is_task_folder("999999 - ItsAlive")
+    assert not is_task_folder("261301 - ItsAlive")
+    assert not is_task_folder("260230 - ItsAlive")
+    assert not is_task_folder("268231 - ItsAlive")
+
+def test_is_task_folder_bad_date_prefix_length():
+    assert not is_task_folder("26093 - ItsAlive")
+    assert not is_task_folder("2609301 - ItsAlive")
+    assert not is_task_folder("abcdef - ItsAlive")
+
+def test_is_task_folder_missing_separator_or_title():
+    assert not is_task_folder("260930ItsAlive")
+    assert not is_task_folder("260930 - ")
+    assert not is_task_folder("260930- ItsAlive")
+    assert not is_task_folder("ItsAlive")
+    assert not is_task_folder("")
+
+def test_is_task_folder_title_not_standardized():
+    assert not is_task_folder("260930 - Blá")
+    assert not is_task_folder("260930 - Its Alive")
+    assert not is_task_folder("260930 - itsAlive")
+    assert not is_task_folder("260930 - Its_Alive")
+    assert not is_task_folder("260930 - ItsAlive - Part2")
+    assert not is_task_folder("260930 - ItsAlive ")
+
 def test_find_task_folder_ignores_date(tmp_path):
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
@@ -156,6 +191,11 @@ def test_find_task_folder_ignores_files(tmp_path):
 def test_find_task_folder_ignores_non_date_prefixes(tmp_path):
     for name in ("Memos - Foo", "26091 - Foo", "2609181 - Foo", "260918 - FooBar"):
         (tmp_path / name).mkdir()
+
+    assert find_task_folder(tmp_path, "Foo") is None
+
+def test_find_task_folder_ignores_invalid_calendar_date(tmp_path):
+    (tmp_path / "999999 - Foo").mkdir()
 
     assert find_task_folder(tmp_path, "Foo") is None
 
@@ -185,15 +225,15 @@ def test_append_date_section_without_trailing_newline(tmp_path):
 def test_append_date_section_keeps_previous_sections(tmp_path):
     file = tmp_path / "Foo.md"
     file.write_text(
-        "# Foo\n\n## 18/09/2026\n\nprimeiro\n\n## 25/09/2026\n\nsegundo\n",
+        "# Foo\n\n## 18/09/2026\n\nfirst\n\n## 25/09/2026\n\nsecond\n",
         encoding="utf-8",
     )
 
     append_date_section(file, datetime.date(2026, 9, 30))
 
     assert file.read_text(encoding="utf-8") == (
-        "# Foo\n\n## 18/09/2026\n\nprimeiro\n\n"
-        "## 25/09/2026\n\nsegundo\n\n## 30/09/2026\n\n"
+        "# Foo\n\n## 18/09/2026\n\nfirst\n\n"
+        "## 25/09/2026\n\nsecond\n\n## 30/09/2026\n\n"
     )
 
 def test_append_date_section_existing_date(tmp_path):
@@ -215,7 +255,7 @@ def test_append_date_section_existing_date_with_stray_spacing(tmp_path):
 def test_append_date_section_ignores_date_in_body_text(tmp_path):
     file = tmp_path / "Foo.md"
     file.write_text(
-        "# Foo\n\n## 18/09/2026\n\ntrabalhei no dia 30/09/2026\n", encoding="utf-8"
+        "# Foo\n\n## 18/09/2026\n\nworked on 30/09/2026\n", encoding="utf-8"
     )
 
     assert append_date_section(file, datetime.date(2026, 9, 30)) is True
@@ -264,6 +304,28 @@ def test_open_or_create_task_ignores_task_in_subdirectory(tmp_path):
 
     assert result.file == tmp_path / "260930 - Foo" / "Foo.md"
     assert result.message == "Created: 260930 - Foo"
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_creates_when_date_prefix_is_not_a_date(tmp_path):
+    folder = tmp_path / "999999 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n\n## 30/09/2026\n\n", encoding="utf-8")
+
+    result = open_or_create_task(tmp_path, "Foo")
+
+    assert result.file == tmp_path / "260930 - Foo" / "Foo.md"
+    assert result.message == "Created: 260930 - Foo"
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_resumes_a_task_with_a_valid_date(tmp_path):
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n\n## 18/09/2026\n\n", encoding="utf-8")
+
+    result = open_or_create_task(tmp_path, "Foo")
+
+    assert result.file == folder / "Foo.md"
+    assert result.message == "Opened: 260918 - Foo (added ## 30/09/2026)"
 
 @freeze_time("2026-09-30")
 def test_open_or_create_task_same_day_only_once(tmp_path):

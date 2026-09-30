@@ -82,16 +82,40 @@ class MainWindow(QMainWindow):
         self.file_list.clear()
         if not self.current_directory.is_dir():
             return
-        entries = sorted(
-            self.current_directory.iterdir(),
-            key=lambda path: (not path.is_dir(), path.name.lower()),
-        )
-        for entry in entries:
-            label = f"{entry.name}/" if entry.is_dir() else entry.name
-            item = QListWidgetItem(label)
-            item.setData(_PATH_ROLE, str(entry))
-            item.setData(_IS_DIR_ROLE, entry.is_dir())
-            self.file_list.addItem(item)
+
+        tasks = []
+        other = []
+        for entry in self.current_directory.iterdir():
+            if entry.is_dir() and workers.is_task_folder(entry.name):
+                tasks.append(entry)
+            else:
+                other.append(entry)
+
+        for heading, group in (("Tasks", tasks), ("Other", other)):
+            if not group:
+                continue
+
+            self._add_heading(heading)
+            for entry in sorted(group, key=self._sort_key):
+                self._add_entry(entry)
+
+    def _add_heading(self, text: str) -> None:
+        item = QListWidgetItem(text)
+        font = item.font()
+        font.setBold(True)
+        item.setFont(font)
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        self.file_list.addItem(item)
+
+    def _add_entry(self, entry: Path) -> None:
+        label = f"{entry.name}/" if entry.is_dir() else entry.name
+        item = QListWidgetItem(label)
+        item.setData(_PATH_ROLE, str(entry))
+        item.setData(_IS_DIR_ROLE, entry.is_dir())
+        self.file_list.addItem(item)
+
+    def _sort_key(self, path: Path) -> tuple[bool, str]:
+        return (not path.is_dir(), path.name.lower())
 
     def choose_directory(self) -> None:
         selected = QFileDialog.getExistingDirectory(

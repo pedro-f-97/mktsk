@@ -10,6 +10,7 @@ DATE_FORMAT = "%d/%m/%Y"
 
 _TASK_NAME_SEPARATOR = " - "
 _TASK_DATE_PREFIX_LENGTH = 6
+_TASK_DATE_FORMAT = "%y%m%d"
 
 
 class TaskResult(NamedTuple):
@@ -118,11 +119,39 @@ def sign_md_file(file: Path, title: str) -> None:
         date = datetime.datetime.now().astimezone().strftime(DATE_FORMAT)
         file.write_text(f"# {title}\n\n## {date}\n\n", encoding="utf-8")
 
+def is_task_folder(name: str) -> bool:
+    """Tells whether a directory name is a task folder.
+
+    A task folder is named `<yymmdd> - <StandardizedTitle>`. The date prefix must
+    be a real calendar date, and the title must be ASCII alphanumeric and must
+    not start lowercase, which is exactly what `standardize_string` produces.
+
+    Args:
+        name: the directory name to check.
+
+    Returns:
+        True if the name identifies a task folder.
+    """
+    date_prefix, separator, title = name.partition(_TASK_NAME_SEPARATOR)
+
+    if not separator or not title:
+        return False
+
+    if len(date_prefix) != _TASK_DATE_PREFIX_LENGTH or not date_prefix.isdigit():
+        return False
+
+    try:
+        # only the calendar date matters here, no timezone arithmetic to do
+        datetime.datetime.strptime(date_prefix, _TASK_DATE_FORMAT)  # noqa: DTZ007
+    except ValueError:
+        return False
+
+    return title.isascii() and title.isalnum() and not title[0].islower()
+
 def find_task_folder(location: Path, title: str) -> Path | None:
     """Finds the task folder for a title in the given directory, on any date.
 
-    A folder matches when its name is a six digit date prefix, `" - "` and the
-    title. The search stays in `location`, so a task of the same name in another
+    The search stays in `location`, so a task of the same name in another
     directory is a different task and is not considered.
 
     Args:
@@ -136,19 +165,10 @@ def find_task_folder(location: Path, title: str) -> Path | None:
         return None
 
     for entry in sorted(location.iterdir()):
-        if not entry.is_dir():
+        if not entry.is_dir() or not is_task_folder(entry.name):
             continue
 
-        date_prefix, separator, folder_title = entry.name.partition(
-            _TASK_NAME_SEPARATOR
-        )
-
-        if (
-            separator
-            and folder_title == title
-            and len(date_prefix) == _TASK_DATE_PREFIX_LENGTH
-            and date_prefix.isdigit()
-        ):
+        if entry.name.partition(_TASK_NAME_SEPARATOR)[2] == title:
             return entry
 
     return None

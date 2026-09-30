@@ -16,8 +16,8 @@ PySide6 desktop GUI (`mktsk-gui`) offers the same workflow interactively.
   is the script PyInstaller freezes. Uses an absolute import on purpose, since relative
   imports do not resolve once the package is frozen.
 - `mktsk/helpers.py` — OS helpers: name validation, reserved Windows names, opening files.
-- `mktsk/workers.py` — task logic: title standardization, lookup, folder/file creation,
-  signing and resuming an existing task.
+- `mktsk/workers.py` — task logic: title standardization, task folder recognition, lookup,
+  folder/file creation, signing and resuming an existing task.
 - `tests/` — pytest test suite.
 - `pyproject.toml` — packaging, dependencies and tooling configuration.
 
@@ -63,6 +63,16 @@ python -m twine check dist/*
   that date is already there. Existing text is never rewritten — only trailing
   whitespace is dropped — and a heading is matched loosely, so `##  05/08/2026 ` counts
   as 05/08/2026.
+- `is_task_folder(name)` decides whether a directory is a task: the name must be
+  `<yymmdd> - <StandardizedTitle>`, where the date prefix is a real calendar date (`%y%m%d`
+  must parse) and the title is ASCII alphanumeric that does not start lowercase. A title
+  starts lowercase only when it is not a letter, so a numeric title such as `2026` still
+  counts. Note `standardize_string` is **not** idempotent (`BigWord` becomes
+  `Bigword`), so the test is a shape check, never
+  `standardize_string(title) == title`.
+- Lookup uses `is_task_folder`, so what the GUI lists as a task is exactly what a lookup
+  will resume. A folder that fails the check is never resumed, and the new task is created
+  beside it; nothing is overwritten or lost.
 - Reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) are rejected.
 - Open the file with the OS default application (`os.startfile` / `xdg-open`).
 - Keep folder/file names ASCII only.
@@ -125,6 +135,8 @@ Requirements:
 - Pick the base path with a native dialog (`QFileDialog`) or navigate inside the window.
 - Navigation: list the folder contents, an up button, a refresh button and
   double-click to enter subfolders or open `.md` files.
+- List the contents in two sections, `Tasks` and `Other`, split by `is_task_folder`; empty
+  sections are omitted and the headings are bold and not selectable.
 - Create the task with the same domain rules as the CLI (lookup on any date, folder/file
   creation, reserved name errors, resuming an existing task).
 - Open the created or resumed `.md` with the OS default application.
