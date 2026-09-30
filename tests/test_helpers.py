@@ -17,9 +17,9 @@ def test_is_reserved_name_true():
     assert helpers.is_reserved_name("LPT9")
 
 def test_is_reserved_name_false():
-    assert not helpers.is_reserved_name("conta")
-    assert not helpers.is_reserved_name("comarca")
-    assert not helpers.is_reserved_name("nome")
+    assert not helpers.is_reserved_name("conda")
+    assert not helpers.is_reserved_name("computer")
+    assert not helpers.is_reserved_name("ticket")
     assert not helpers.is_reserved_name("com0")
     assert not helpers.is_reserved_name("com10")
     assert not helpers.is_reserved_name("lpt10")

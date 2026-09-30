@@ -56,7 +56,7 @@ def test_main_reserved_name(monkeypatch, tmp_path, capsys):
     assert "reserved" in capsys.readouterr().out
     assert list(tmp_path.iterdir()) == []
 
-def test_main_collision_opens_existing(monkeypatch, tmp_path):
+def test_main_resumes_existing_task(monkeypatch, tmp_path):
     folder = tmp_path / "my_folder"
     folder.mkdir()
     monkeypatch.chdir(folder)
@@ -78,8 +78,54 @@ def test_main_collision_opens_existing(monkeypatch, tmp_path):
         result = main()
 
     assert result == 0
-    assert existing_file.read_text(encoding="utf-8") == "# existing notes\n"
+    assert existing_file.read_text(encoding="utf-8") == (
+        "# existing notes\n\n## 22/09/2026\n\n"
+    )
     assert opened_files == [existing_file]
+
+def test_main_finds_existing_task_by_title(monkeypatch, tmp_path, capsys):
+    folder = tmp_path / "260918 - TestMain"
+    folder.mkdir()
+    file = folder / "TestMain.md"
+    file.write_text("# TestMain\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main"])
+
+    opened_files = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened_files.append)
+
+    with freeze_time("2026-09-30"):
+        result = main()
+
+    assert result == 0
+    assert opened_files == [file]
+    assert file.read_text(encoding="utf-8") == (
+        "# TestMain\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+    )
+    assert "Opened: 260918 - TestMain" in capsys.readouterr().out
+    assert not (tmp_path / "260930 - TestMain").exists()
+
+def test_main_creates_when_task_is_in_a_subdirectory(monkeypatch, tmp_path):
+    subdirectory = tmp_path / "Veritas"
+    subdirectory.mkdir()
+    folder = subdirectory / "260918 - TestMain"
+    folder.mkdir()
+    existing = folder / "TestMain.md"
+    existing.write_text("# TestMain\n\n## 18/09/2026\n\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main"])
+
+    opened_files = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened_files.append)
+
+    with freeze_time("2026-09-30"):
+        result = main()
+
+    created = tmp_path / "260930 - TestMain" / "TestMain.md"
+
+    assert result == 0
+    assert opened_files == [created]
+    assert existing.read_text(encoding="utf-8") == "# TestMain\n\n## 18/09/2026\n\n"
 
 def test_main_open_failure_warns(monkeypatch, tmp_path, capsys):
     folder = tmp_path / "my_folder"
@@ -118,12 +164,12 @@ def test_main_error(monkeypatch, tmp_path, capsys):
 def test_parse_arguments(monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
-        ["mktsk", "Alterar", "formulário", "de", "embalagem"],
+        ["mktsk", "Back", "to", "the", "Future"],
     )
 
     args = parse_arguments()
 
-    assert args.title == ["Alterar", "formulário", "de", "embalagem"]
+    assert args.title == ["Back", "to", "the", "Future"]
 
 def test_parse_arguments_without_title(monkeypatch):
     monkeypatch.setattr("sys.argv", ["mktsk"])

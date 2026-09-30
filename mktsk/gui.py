@@ -125,21 +125,12 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            standardized_title = workers.standardize_string(raw_title)
-            if not standardized_title.strip():
-                raise helpers.TaskError("invalid task description")
-            if helpers.is_reserved_name(standardized_title):
-                raise helpers.TaskError(f"'{standardized_title}' is a reserved name")
-
-            folder_name = workers.build_folder_name(standardized_title)
-            created_folder = workers.create_folder(self.current_directory, folder_name)
-            created_file = workers.create_md_file(created_folder, standardized_title)
-            workers.sign_md_file(created_file, standardized_title)
+            result = workers.open_or_create_task(self.current_directory, raw_title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return
 
-        self.open_with_default_app(created_file)
+        self.open_with_default_app(result.file)
         self.refresh()
         self.title_input.clear()
 

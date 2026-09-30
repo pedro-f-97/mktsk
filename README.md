@@ -7,6 +7,7 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * Creates task folders using the `YYMMDD - TaskName` naming convention.
 * Creates an associated Markdown file.
 * Adds the task title to the Markdown file, as a heading, followed by the task date.
+* Finds an existing task by title on any date, and starts a new dated section in it.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
 
@@ -66,11 +67,54 @@ The task folder is created in the directory from which `mktsk` is executed.
 The Markdown file is then automatically opened with the system's default application,
 with the cursor on the empty line after the date heading.
 
-If the folder already exists, no duplicate is created and no content is overwritten: the
-existing Markdown file is opened instead.
-
 Titles that normalize to an empty name, or to a Windows reserved name (`CON`, `PRN`, `AUX`,
 `NUL`, `COM1-9`, `LPT1-9`), are rejected with an error.
+
+## Returning to a task
+
+The title is looked up before anything is created, on **any** date. Running the same
+command again days later picks up the task you already have:
+
+```bash
+mktsk It's Alive!
+```
+
+```text
+Opened: 260923 - ItsAlive (added ## 30/09/2026)
+```
+
+No new folder is created. A second level heading with today's date is appended as a new
+section at the end of the existing Markdown file, so each day you work on a task keeps
+its own notes:
+
+```markdown
+# ItsAlive
+
+## 23/09/2026
+
+Your notes go here.
+
+## 30/09/2026
+
+```
+
+Running it twice on the same day does not add a second heading for that date. Your text
+is never rewritten; only trailing whitespace is dropped.
+
+The search stays in the directory you run `mktsk` from, so with this layout:
+
+```text
+tasks/
+├── 260923 - ItsAlive/
+├── Veritas/
+│   └── 260925 - FSociety/
+└── SteelMountain/
+    └── 260924 - Everbind/
+```
+
+`mktsk It's Alive!` from `tasks/` picks up `260923 - ItsAlive`, while `mktsk "F Society"`
+from there creates `tasks/260930 - FSociety`, because the Veritas one lives in another
+directory. To resume a task, run the command from the directory that holds it.
 
 ## Desktop GUI
 

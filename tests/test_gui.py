@@ -142,7 +142,7 @@ def test_create_task_reserved_name(window, tmp_path, fake_messages):
     assert list(tmp_path.iterdir()) == []
 
 @freeze_time("2026-09-28")
-def test_create_task_collision_opens_existing(window, tmp_path, fake_open):
+def test_create_task_resumes_existing_task(window, tmp_path, fake_open):
     existing_folder = tmp_path / "260928 - TestTask"
     existing_folder.mkdir()
     existing_file = existing_folder / "TestTask.md"
@@ -152,8 +152,47 @@ def test_create_task_collision_opens_existing(window, tmp_path, fake_open):
 
     window.create_task()
 
-    assert existing_file.read_text(encoding="utf-8") == "# existing notes\n"
+    assert existing_file.read_text(encoding="utf-8") == (
+        "# existing notes\n\n## 28/09/2026\n\n"
+    )
     assert fake_open == [existing_file]
+
+@freeze_time("2026-09-30")
+def test_create_task_finds_existing_task_by_title(window, tmp_path, fake_open):
+    folder = tmp_path / "260918 - TestTask"
+    folder.mkdir()
+    file = folder / "TestTask.md"
+    file.write_text("# TestTask\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    window.navigate_to(tmp_path)
+    window.title_input.setText("Test Task")
+
+    window.create_task()
+
+    assert file.read_text(encoding="utf-8") == (
+        "# TestTask\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+    )
+    assert fake_open == [file]
+    assert window.title_input.text() == ""
+    assert not (tmp_path / "260930 - TestTask").exists()
+
+@freeze_time("2026-09-30")
+def test_create_task_creates_when_task_is_in_a_subdirectory(window, tmp_path, fake_open):
+    subdirectory = tmp_path / "Veritas"
+    subdirectory.mkdir()
+    folder = subdirectory / "260918 - TestTask"
+    folder.mkdir()
+    existing = folder / "TestTask.md"
+    existing.write_text("# TestTask\n\n## 18/09/2026\n\n", encoding="utf-8")
+    window.navigate_to(tmp_path)
+    window.title_input.setText("Test Task")
+
+    window.create_task()
+
+    created = tmp_path / "260930 - TestTask" / "TestTask.md"
+
+    assert created.is_file()
+    assert fake_open == [created]
+    assert existing.read_text(encoding="utf-8") == "# TestTask\n\n## 18/09/2026\n\n"
 
 @freeze_time("2026-09-28")
 def test_create_task_open_failure_warns(window, tmp_path, monkeypatch, fake_messages):
