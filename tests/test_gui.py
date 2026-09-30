@@ -111,7 +111,7 @@ def test_create_task(qtbot, window, tmp_path, fake_open):
     folder = tmp_path / "260928 - TestTask"
     file = folder / "TestTask.md"
     assert file.is_file()
-    assert file.read_text(encoding="utf-8") == "# 260928 - TestTask\n"
+    assert file.read_text(encoding="utf-8") == "# TestTask\n\n## 28/09/2026\n\n"
     assert fake_open == [file]
     assert window.title_input.text() == ""
     assert "260928 - TestTask/" in [window.file_list.item(i).text() for i in range(window.file_list.count())]

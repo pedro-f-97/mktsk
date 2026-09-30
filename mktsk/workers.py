@@ -87,15 +87,20 @@ def create_md_file(location: Path, name: str) -> Path:
     return file_to_create
 
 def sign_md_file(file: Path, title: str) -> None:
-    """Writes given title as a heading in the first line of the given .md file.
+    """Writes given title and the current date as headings in the given .md file.
+
+    The title becomes the first level heading and the date, in `dd/mm/yyyy`
+    format, the second level heading. A blank line follows, so the body can be
+    typed straight away.
 
     If the file already contains content, it is left untouched.
 
     Args:
         file: file to be signed
-        title: string to use as the heading, e.g. the created folder name
+        title: string to use as the heading, e.g. the standardized task title
     """
     content = file.read_text(encoding="utf-8")
 
     if not content.strip():
-        file.write_text(f"# {title}\n", encoding="utf-8")
+        date = datetime.datetime.now().astimezone().strftime("%d/%m/%Y")
+        file.write_text(f"# {title}\n\n## {date}\n\n", encoding="utf-8")

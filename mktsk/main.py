@@ -29,7 +29,7 @@ def main() -> int:
         folder_name = workers.build_folder_name(standardized_title)
         created_folder = workers.create_folder(location, folder_name)
         created_file = workers.create_md_file(created_folder, standardized_title)
-        workers.sign_md_file(created_file, created_folder.name)
+        workers.sign_md_file(created_file, standardized_title)
         print(f"Created: {folder_name}")
     except (OSError, helpers.TaskError) as error:
         print(f"Error: {error}")

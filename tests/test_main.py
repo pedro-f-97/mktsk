@@ -25,7 +25,7 @@ def test_main(monkeypatch, tmp_path):
 
     assert result == 0
     assert final_file.is_file()
-    assert final_file.read_text(encoding="utf-8") == "# 260922 - TestMain\n"
+    assert final_file.read_text(encoding="utf-8") == "# TestMain\n\n## 22/09/2026\n\n"
     assert opened_files == [final_file]
 
 def test_main_empty_title(monkeypatch, tmp_path):

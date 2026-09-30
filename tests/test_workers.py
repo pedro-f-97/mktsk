@@ -74,6 +74,7 @@ def test_create_md_file_path_error(tmp_path):
     with pytest.raises(TaskError):
         create_md_file(folder, name)
 
+@freeze_time("2026-09-22")
 def test_sign_md_file(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
@@ -81,10 +82,11 @@ def test_sign_md_file(tmp_path):
     file = folder / "ThisTest.md"
     file.touch()
 
-    sign_md_file(file, "260922 - ThisTest")
+    sign_md_file(file, "ThisTest")
 
-    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
+    assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 22/09/2026\n\n"
 
+@freeze_time("2026-09-22")
 def test_sign_md_file_existing_ok(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
@@ -92,13 +94,12 @@ def test_sign_md_file_existing_ok(tmp_path):
     file = folder / "ThisTest.md"
     file.touch()
 
-    file.write_text(f"# {folder.name}\n", encoding="utf-8")
+    # a different date, so a rewrite would be visible in the assertion
+    file.write_text("# ThisTest\n\n## 20/09/2026\n\n", encoding="utf-8")
 
-    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
+    sign_md_file(file, "ThisTest")
 
-    sign_md_file(file, "260922 - ThisTest")
-
-    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
+    assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 20/09/2026\n\n"
 
 def test_sign_md_file_existing_untouched(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
@@ -113,6 +114,7 @@ def test_sign_md_file_existing_untouched(tmp_path):
 
     assert file.read_text(encoding="utf-8") == "# This is some other text\n"
 
+@freeze_time("2026-09-22")
 def test_sign_md_file_existing_space(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
@@ -121,6 +123,6 @@ def test_sign_md_file_existing_space(tmp_path):
 
     file.write_text(" \n", encoding="utf-8")
 
-    sign_md_file(file, "260922 - ThisTest")
+    sign_md_file(file, "ThisTest")
 
-    assert file.read_text(encoding="utf-8") == "# 260922 - ThisTest\n"
+    assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 22/09/2026\n\n"
