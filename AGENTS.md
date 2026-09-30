@@ -16,7 +16,8 @@ PySide6 desktop GUI (`mktsk-gui`) offers the same workflow interactively.
   is the script PyInstaller freezes. Uses an absolute import on purpose, since relative
   imports do not resolve once the package is frozen.
 - `mktsk/helpers.py` — OS helpers: name validation, reserved Windows names, opening files.
-- `mktsk/workers.py` — task logic: title standardization, folder/file creation, signing.
+- `mktsk/workers.py` — task logic: title standardization, lookup, folder/file creation,
+  signing and resuming an existing task.
 - `tests/` — pytest test suite.
 - `pyproject.toml` — packaging, dependencies and tooling configuration.
 
@@ -53,10 +54,16 @@ python -m twine check dist/*
 - Sign the `.md` with the standardized title, a blank line, then the creation date as a
   second level heading: `# ItsAlive\n\n## 23/09/2026\n\n` (date via
   `strftime("%d/%m/%Y")`).
-- A `.md` that already has content is never re-signed, so files created by older
-  versions keep their original heading.
+- `sign_md_file` only writes into an empty file, so files created by older versions keep
+  their original heading.
+- Lookup happens before any creation: search the current directory only, for
+  `<yymmdd> - <StandardizedTitle>` on **any** date. Subdirectories are not searched, so
+  the same title in another directory is a different task and never blocks a new one.
+- Resuming a task appends `## <today>` as a new section at the end of the `.md`, unless
+  that date is already there. Existing text is never rewritten — only trailing
+  whitespace is dropped — and a heading is matched loosely, so `##  05/08/2026 ` counts
+  as 05/08/2026.
 - Reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) are rejected.
-- Collision: never duplicate or overwrite — open the existing `.md`.
 - Open the file with the OS default application (`os.startfile` / `xdg-open`).
 - Keep folder/file names ASCII only.
 
@@ -118,9 +125,9 @@ Requirements:
 - Pick the base path with a native dialog (`QFileDialog`) or navigate inside the window.
 - Navigation: list the folder contents, an up button, a refresh button and
   double-click to enter subfolders or open `.md` files.
-- Create the task with the same domain rules as the CLI (folder/file creation, reserved
-  name errors, collision opening the existing `.md`).
-- Open the created `.md` with the OS default application.
+- Create the task with the same domain rules as the CLI (lookup on any date, folder/file
+  creation, reserved name errors, resuming an existing task).
+- Open the created or resumed `.md` with the OS default application.
 - Keep the window open and clear the title field after creating.
 - Remember the last used path with `QSettings`.
 - Show business errors (`TaskError`) in a `QMessageBox`; if opening the file fails, warn
