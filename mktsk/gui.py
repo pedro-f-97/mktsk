@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
             folder_name = workers.build_folder_name(standardized_title)
             created_folder = workers.create_folder(self.current_directory, folder_name)
             created_file = workers.create_md_file(created_folder, standardized_title)
-            workers.sign_md_file(created_file, created_folder.name)
+            workers.sign_md_file(created_file, standardized_title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return

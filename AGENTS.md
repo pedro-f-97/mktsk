@@ -50,7 +50,11 @@ python -m twine check dist/*
 - Standardize titles: NFKD + strip accents, keep only alphanumerics, join words in
   CamelCase with the first letter uppercase.
 - Folder: `<date> - <StandardizedTitle>`; file: `<StandardizedTitle>.md`.
-- Sign the `.md` heading with the created folder name (`# 260923 - ItsAlive`).
+- Sign the `.md` with the standardized title, a blank line, then the creation date as a
+  second level heading: `# ItsAlive\n\n## 23/09/2026\n\n` (date via
+  `strftime("%d/%m/%Y")`).
+- A `.md` that already has content is never re-signed, so files created by older
+  versions keep their original heading.
 - Reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) are rejected.
 - Collision: never duplicate or overwrite — open the existing `.md`.
 - Open the file with the OS default application (`os.startfile` / `xdg-open`).

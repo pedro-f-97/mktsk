@@ -6,7 +6,7 @@ CLI tool and desktop GUI for quickly setting up task folders.
 
 * Creates task folders using the `YYMMDD - TaskName` naming convention.
 * Creates an associated Markdown file.
-* Adds the task title to the Markdown file, as a heading.
+* Adds the task title to the Markdown file, as a heading, followed by the task date.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
 
@@ -54,12 +54,17 @@ Creates:
 The Markdown file contains:
 
 ```markdown
-# 260923 - ItsAlive
+# ItsAlive
+
+## 23/09/2026
+
+Your notes go here.
 ```
 
 The task folder is created in the directory from which `mktsk` is executed.
 
-The Markdown file is then automatically opened with the system's default application.
+The Markdown file is then automatically opened with the system's default application,
+with the cursor on the empty line after the date heading.
 
 If the folder already exists, no duplicate is created and no content is overwritten: the
 existing Markdown file is opened instead.
