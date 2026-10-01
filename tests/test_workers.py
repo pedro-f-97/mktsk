@@ -661,6 +661,59 @@ def test_rename_task_leaves_a_file_without_any_content(tmp_path, make_task):
 
     assert result.file.read_text(encoding="utf-8") == ""
 
+def test_rename_task_puts_the_file_back_when_the_folder_cannot_move(tmp_path, make_task, monkeypatch):
+    make_task(tmp_path, "260918", "FSociety")
+    original = Path.rename
+
+    def rename(self, target):
+        if self.is_dir():
+            raise OSError("test error")
+        return original(self, target)
+
+    monkeypatch.setattr(Path, "rename", rename)
+
+    with pytest.raises(OSError, match="test error"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    # the folder did not move, so the file must not be left carrying a new name
+    assert (tmp_path / "260918 - FSociety" / "FSociety.md").is_file()
+    assert not (tmp_path / "260918 - FSociety" / "Everbind.md").exists()
+    assert not (tmp_path / "260918 - Everbind").exists()
+
+def test_rename_task_puts_everything_back_when_the_heading_cannot_be_written(tmp_path, make_task, monkeypatch):
+    make_task(tmp_path, "260918", "FSociety")
+    original = Path.write_text
+
+    def write_text(self, data, **kwargs):
+        if data.startswith("# Everbind"):
+            raise OSError("test error")
+        return original(self, data, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", write_text)
+
+    with pytest.raises(OSError, match="test error"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    # the heading could not be written, so the names went back too
+    folder = tmp_path / "260918 - FSociety"
+    assert sorted(entry.name for entry in folder.iterdir()) == ["FSociety.md"]
+    assert (folder / "FSociety.md").read_text(encoding="utf-8") == "# FSociety\n"
+    assert not (tmp_path / "260918 - Everbind").exists()
+
+def test_rename_task_leaves_the_file_alone_when_it_cannot_be_put_back(tmp_path, make_task, monkeypatch):
+    make_task(tmp_path, "260918", "FSociety")
+    original = Path.rename
+
+    def rename(self, target):
+        if self.name == "260918 - FSociety":
+            raise OSError("test error")
+        return original(self, target)
+
+    monkeypatch.setattr(Path, "rename", rename)
+
+    # a rollback that fails is reported rather than swallowed
+    with pytest.raises(OSError, match="test error"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
 
 def test_create_category_creates_the_folder(tmp_path):
     category = create_category(tmp_path, "Veritas")

@@ -429,19 +429,22 @@ def resume_task(folder: Path, title: str) -> TaskResult:
 
     return _resume_task(folder, title, today)
 
-def _retitle(file: Path, title: str, new_title: str) -> None:
-    """Rewrites the leading heading of a .md file when it names the task.
+def _retitled(content: str, title: str, new_title: str) -> str | None:
+    """Returns the content with its leading heading rewritten when it names the task.
 
     Only a first level heading that matches the title the file was created with
     is touched. Everything else, hand written text and dated sections alike, is
-    left exactly as it was.
+    left exactly as it was, and None says so, so the caller leaves the file alone
+    rather than rewriting it with the same text.
 
     Args:
-        file: the .md file to rewrite.
+        content: the text of the .md file.
         title: the standardized title the heading is expected to carry.
         new_title: the standardized title to write in its place.
+
+    Returns:
+        The rewritten content, or None when there is no heading to rewrite.
     """
-    content = file.read_text(encoding="utf-8")
     heading = f"# {title}"
 
     lines = content.split("\n")
@@ -452,9 +455,11 @@ def _retitle(file: Path, title: str, new_title: str) -> None:
 
         if line.strip() == heading:
             lines[index] = f"# {new_title}"
-            file.write_text("\n".join(lines), encoding="utf-8")
+            return "\n".join(lines)
 
-        return
+        return None
+
+    return None
 
 def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     """Renames a task folder and its .md file, keeping the date of the task.
@@ -462,6 +467,9 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     The date prefix stays put, so a renamed task keeps its place in the history,
     and only the leading `#` heading is rewritten, and only when it matches the
     title the task had. Renaming to the title it already has does nothing.
+
+    A step that fails is undone, in reverse, so the task is never left holding a
+    file whose name and heading disagree with the folder it sits in.
 
     Args:
         folder: the task folder to rename.
@@ -498,12 +506,34 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     if find_task_folder(folder.parent, new_title) is not None:
         raise helpers.TaskError(f"'{new_title}' is already a task here")
 
+    # read before anything moves, so a step that fails later can put the file back
+    content = file.read_text(encoding="utf-8")
+    retitled = _retitled(content, title, new_title)
+
+    new_file = folder / f"{new_title}.md"
+
     # the file moves inside the folder first, or its old path stops resolving
-    file.rename(folder / f"{new_title}.md")
-    folder.rename(renamed_folder)
+    file.rename(new_file)
+
+    try:
+        folder.rename(renamed_folder)
+    except OSError:
+        # the folder did not move, so the file goes back to the name it had
+        new_file.rename(file)
+        raise
 
     renamed_file = renamed_folder / f"{new_title}.md"
-    _retitle(renamed_file, title, new_title)
+
+    if retitled is not None:
+        try:
+            renamed_file.write_text(retitled, encoding="utf-8")
+        except OSError:
+            # the heading could not be written, so the whole rename is undone
+            # rather than left with a name and a heading that disagree
+            renamed_file.write_text(content, encoding="utf-8")
+            renamed_folder.rename(folder)
+            new_file.rename(file)
+            raise
 
     return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")
 

@@ -68,6 +68,9 @@ change the name.
   the `.md`, and rewrites only the first non-empty line, and only when it is exactly
   `# <old title>`; a heading it does not recognise, and everything after it, is left
   alone; renaming to the title the task already has does nothing
+- `rename_task` undoes a step that fails, in reverse, so it never leaves the task as
+  `260918 - OldTitle/NewTitle.md` nor with a heading that disagrees with its folder.
+  The `.md` is read before anything moves, so a later failure can put it back
 - `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
   `.md` or a title another task of the same directory already has; it renames the `.md`
   before the folder, or the old file path stops resolving
