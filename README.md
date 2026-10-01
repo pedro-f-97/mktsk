@@ -124,7 +124,7 @@ mktsk --rename "260923 - ItsAlive" "It's Still Alive"
 ```
 
 ```text
-Renamed: 260923 - ItSStillAlive
+Renamed: 260923 - ItsStillAlive
 ```
 
 The date stays, so the task keeps its place in the history, and only the `#` heading at

@@ -48,7 +48,11 @@ change the name.
 
 - Date prefix: `datetime.now().astimezone().strftime("%y%m%d")` + `" - "`
 - Standardize titles: NFKD, strip accents, keep only alphanumerics, join words in
-  CamelCase with the first letter uppercase
+  CamelCase with the first letter uppercase. An apostrophe is not a separator: it is
+  dropped before the split, so a contraction stays one word and `It's Alive!` gives
+  `ItsAlive`, not `ItSAlive`. Both `'` and `’` are dropped. Every other non-alphanumeric
+  still separates, so `Sigur Rós` gives `SigurRos` and `bJÖrk_naÏve-fAçAde!!` gives
+  `BjorkNaiveFacade`
 - Folder: `<date> - <StandardizedTitle>`; file: `<StandardizedTitle>.md`
 - Sign an empty `.md` with `# <StandardizedTitle>`, a blank line, then `## <dd/mm/YYYY>`
   from `strftime("%d/%m/%Y")`, and a blank line; never touch a non-empty file

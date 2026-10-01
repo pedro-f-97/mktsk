@@ -59,8 +59,12 @@ def standardize_string(string_: str) -> str:
     # remove special characters
     without_accents = _without_accents(string_)
 
+    # an apostrophe joins a word rather than cutting it in two, so a
+    # contraction is one word: "It's" standardizes to "Its"
+    joined = without_accents.replace("\u2019", "").replace("'", "")
+
     # remove spacing
-    words = re.split(r"[^A-Za-z0-9]+", without_accents)
+    words = re.split(r"[^A-Za-z0-9]+", joined)
     
     # capitalize and join every word
     capitalized = []

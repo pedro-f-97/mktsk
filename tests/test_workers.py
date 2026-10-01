@@ -30,6 +30,13 @@ def test_standardize_string():
 
     assert standardized_string == "SigurRos"
 
+@pytest.mark.parametrize("apostrophe", ["'", "\u2019"])
+def test_standardize_string_keeps_a_contraction_together(apostrophe):
+    standardized_string = standardize_string(f"It{apostrophe}s Alive!")
+
+    # the apostrophe joins the word, it does not make "s" start one
+    assert standardized_string == "ItsAlive"
+
 def test_standardize_string_spacing():
     test_string = "bJÖrk_naÏve-fAçAde!!"
     standardized_string = standardize_string(test_string)
