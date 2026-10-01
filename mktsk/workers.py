@@ -35,6 +35,18 @@ class TaskGroup(NamedTuple):
     entries: list[TaskEntry]
 
 
+def _without_accents(value: str) -> str:
+    """Removes the accents of a string, leaving everything else as it is.
+
+    Args:
+        value: the string to strip.
+
+    Returns:
+        The string without its combining marks.
+    """
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
 def standardize_string(string_: str) -> str:
     """Normalize a string by removing accents, special characters and spacing.
 
@@ -45,12 +57,7 @@ def standardize_string(string_: str) -> str:
         The standardized string.
     """
     # remove special characters
-    decomposed = unicodedata.normalize("NFKD", string_)
-    chars = []
-    for c in decomposed:
-        if not unicodedata.combining(c):
-            chars.append(c)
-    without_accents = "".join(chars)
+    without_accents = _without_accents(string_)
 
     # remove spacing
     words = re.split(r"[^A-Za-z0-9]+", without_accents)
@@ -482,3 +489,48 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     _retitle(renamed_file, title, new_title)
 
     return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")
+
+
+def create_category(location: Path, raw_name: str) -> Path:
+    """Creates a new category folder in the given directory.
+
+    A category is a plain subdirectory, so it is not a task folder and does not
+    follow the task naming rules. The name is stripped of accents, so that the
+    folder stays ASCII, but otherwise it is left as the user typed it. A name
+    that is already there does not produce an error: the existing path is
+    returned instead.
+
+    Args:
+        location: the directory to create the category in.
+        raw_name: the name to give the category, as typed by the user.
+
+    Returns:
+        The path of the category folder.
+
+    Raises:
+        TaskError: If the name is empty, contains path separators, is a
+            reserved Windows name, would be hidden, or looks like a task folder.
+    """
+    name = _without_accents(raw_name)
+
+    # a folder name is ASCII, and there is no accent to fold a Japanese word
+    if not name.strip() or not name.isascii():
+        raise helpers.TaskError("invalid category name")
+
+    helpers.validate_name(name)
+
+    if helpers.is_reserved_name(name):
+        raise helpers.TaskError(f"'{name}' is a reserved name")
+
+    if name.startswith("."):
+        raise helpers.TaskError("invalid category name")
+
+    if is_task_folder(name):
+        raise helpers.TaskError("invalid category name")
+
+    category = location / name
+
+    # exist_ok, so a name that is already there is not an error
+    category.mkdir(exist_ok=True)
+
+    return category

@@ -133,6 +133,10 @@ Opens a window where you can:
 
 * pick a base folder with the native file dialog or navigate inside the window;
 * see on the left the current folder and its subfolders;
+* create a subfolder with the `+` at the right of the `Directory` heading. The name has no
+  accents (`Produção` becomes `Producao`), and a folder that is already there is opened
+  rather than refused. The new folder is left selected, so the task you type next lands
+  inside it;
 * create a task in a subfolder by selecting it on the left, without opening it. A quiet
   note beside the title field says which subfolder the task will land in, and stays on it
   until you select another one;

@@ -56,6 +56,8 @@ _ENTRY_ROLE = Qt.ItemDataRole.UserRole + 1
 _ALL_TAB = "All"
 
 _ACTION_BAR_PADDING = 4
+_HEADER_BUTTON_MARGIN = 4
+_HEADER_ICON_SIZE = 12
 _ICON_SIZE = 18
 _ICON_STROKE = 2.0
 _ICON_SCALE = 2
@@ -145,6 +147,36 @@ def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QI
     return QIcon(QPixmap.fromImage(image))
 
 
+def _icon_button(
+    parent: QWidget,
+    tooltip: str,
+    draw: Callable[[QPainter, QRectF], None],
+    name: str,
+) -> QToolButton:
+    """Builds a button that carries an icon and a tooltip rather than a label.
+
+    Args:
+        parent: the widget the button belongs to.
+        tooltip: text shown on hover, and the accessible name.
+        draw: painting function of the icon.
+        name: role of the button, for the object name.
+
+    Returns:
+        The button.
+    """
+    button = QToolButton(parent)
+    button.setObjectName(f"{name}Button")
+    button.setIcon(
+        _stroked_icon(
+            button.palette().color(QPalette.ColorRole.ButtonText), draw
+        )
+    )
+    button.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+    button.setToolTip(tooltip)
+    button.setAutoRaise(True)
+    return button
+
+
 class _ActionBar(QWidget):
     """The actions offered for the selected task, aligned to the left.
 
@@ -160,9 +192,15 @@ class _ActionBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(_ACTION_BAR_PADDING)
 
-        self.open_button = self._button("Open the task folder", _draw_folder, "Open")
-        self.resume_button = self._button("Add a note for today", _draw_plus, "Resume")
-        self.rename_button = self._button("Rename this task", _draw_pencil, "Rename")
+        self.open_button = _icon_button(
+            self, "Open the task folder", _draw_folder, "OpenTask"
+        )
+        self.resume_button = _icon_button(
+            self, "Add a note for today", _draw_plus, "ResumeTask"
+        )
+        self.rename_button = _icon_button(
+            self, "Rename this task", _draw_pencil, "RenameTask"
+        )
         for button in self.buttons():
             layout.addWidget(button)
 
@@ -170,26 +208,66 @@ class _ActionBar(QWidget):
         """Returns the three action buttons, in order."""
         return (self.open_button, self.resume_button, self.rename_button)
 
-    def _button(
-        self, tooltip: str, draw: Callable[[QPainter, QRectF], None], name: str
-    ) -> QToolButton:
-        """Builds one icon button of the bar.
+
+class _CategoryTree(QTreeWidget):
+    """The directory tree, with a button on its header for a new category.
+
+    The button lives inside the header widget, at its right end, so it rides
+    along with the header row instead of taking a row of its own. The tree only
+    reports that the button was pressed, leaving the category logic to the
+    window.
+    """
+
+    category_requested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.header_button = _icon_button(
+            self.header(), "New category", _draw_plus, "NewCategory"
+        )
+        self.header_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.header_button.setIconSize(QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE))
+        self.header_button.clicked.connect(lambda: self.category_requested.emit())
+        self.header().geometriesChanged.connect(self._place_header_button)
+        self.header_button.show()
+        self._place_header_button()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place_header_button()
+
+    def select_subdirectory(self, directory: Path) -> None:
+        """Puts the selection on a subdirectory of the current directory.
+
+        A directory that is not listed is left alone, so a selection that is no
+        longer there simply falls away.
 
         Args:
-            tooltip: text shown on hover, and the accessible name.
-            draw: painting function of the icon.
-            name: role of the button, for the object name.
-
-        Returns:
-            The button.
+            directory: the subdirectory to select.
         """
-        button = QToolButton(self)
-        button.setObjectName(f"{name}TaskButton")
-        button.setIcon(_stroked_icon(button.palette().color(QPalette.ColorRole.ButtonText), draw))
-        button.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
-        button.setToolTip(tooltip)
-        button.setAutoRaise(True)
-        return button
+        # findItems only descends with MatchRecursive, and the stored path confirms
+        # the text, so a name shared with another level is never picked
+        flags = Qt.MatchFlag.MatchExactly | Qt.MatchFlag.MatchRecursive
+        for item in self.findItems(directory.name, flags, 0):
+            if item.data(0, _PATH_ROLE) == str(directory):
+                self.setCurrentItem(item)
+                return
+
+    def _place_header_button(self) -> None:
+        """Puts the button at the right end of the header, centred in it.
+
+        The button is squared off to the height of the header, so it never
+        overflows the header row whatever the style asks of a tool button.
+        """
+        header = self.header()
+        button = self.header_button
+        side = min(button.sizeHint().height(), header.height())
+
+        button.resize(side, side)
+        button.move(
+            header.width() - side - _HEADER_BUTTON_MARGIN,
+            (header.height() - side) // 2,
+        )
 
 
 class _InsetDelegate(QStyledItemDelegate):
@@ -338,7 +416,7 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.refresh_button)
         layout.addLayout(bar)
 
-        self.directory_tree = QTreeWidget()
+        self.directory_tree = _CategoryTree()
         self.directory_tree.setHeaderLabel("Directory")
         self.directory_tree.setMinimumWidth(140)
 
@@ -375,6 +453,7 @@ class MainWindow(QMainWindow):
         self.refresh_button.clicked.connect(self.refresh)
         self.directory_tree.itemDoubleClicked.connect(self.open_directory)
         self.directory_tree.itemSelectionChanged.connect(self._sync_creation_target)
+        self.directory_tree.category_requested.connect(self.new_category)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
 
@@ -403,21 +482,18 @@ class MainWindow(QMainWindow):
         self.directory_tree.clear()
         name = self.current_directory.name or str(self.current_directory)
         root = QTreeWidgetItem([name])
-        selection = None
         for subdirectory in workers.list_subdirectories(self.current_directory):
             child = QTreeWidgetItem([subdirectory.name])
             child.setData(0, _PATH_ROLE, str(subdirectory))
             root.addChild(child)
-            if subdirectory == selected:
-                selection = child
 
         self.directory_tree.addTopLevelItem(root)
         root.setExpanded(True)
 
         # a category that is no longer there is dropped, and the current
         # directory takes over as the creation target
-        if selection is not None:
-            self.directory_tree.setCurrentItem(selection)
+        if selected is not None:
+            self.directory_tree.select_subdirectory(selected)
 
     def _selected_directory(self) -> Path | None:
         """Returns the subdirectory selected in the tree, or None when the root
@@ -541,6 +617,29 @@ class MainWindow(QMainWindow):
         path = item.data(0, _PATH_ROLE)
         if path:
             self.navigate_to(Path(path))
+
+    def new_category(self) -> None:
+        """Asks for a name and creates the category in the current directory.
+
+        A category that is already there is not created again, it is selected,
+        and a new one is left selected too, so it becomes the target of the next
+        task without having to enter it.
+        """
+        raw_name, accepted = QInputDialog.getText(
+            self, "New category", "Name", QLineEdit.EchoMode.Normal
+        )
+
+        if not accepted or not raw_name.strip():
+            return
+
+        try:
+            category = workers.create_category(self.current_directory, raw_name)
+        except (OSError, helpers.TaskError) as error:
+            QMessageBox.critical(self, "mktsk", str(error))
+            return
+
+        self.refresh()
+        self.directory_tree.select_subdirectory(category)
 
     def open_task(self, entry: workers.TaskEntry) -> None:
         """Reveals the folder of a task with the file manager.

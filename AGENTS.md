@@ -62,6 +62,14 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 - Lookup uses `is_task_folder`; a folder that fails the check is never resumed, and the
   new task is created beside it
 - Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`)
+- `create_category(location, raw_name)` makes a plain subdirectory, not a task folder, so
+  it does not call `standardize_string`: it folds the accents out (`Produção` becomes
+  `Producao`) and leaves the case, the spacing and the punctuation alone; it raises
+  `TaskError` on a name that is empty, cannot be made ASCII, carries a path separator, is
+  reserved, starts with `.` or looks like a task folder (`260918 - Foo`), because any of
+  those would be missing from the listing; a name that is already there is not an error
+- `standardize_string` and `create_category` share `_without_accents` for the NFKD folding,
+  so the accent removal is only implemented once
 - Open files and folders with the OS default application: `os.startfile` on Windows,
   `xdg-open` on Linux when it is there, `gio open` otherwise
 - Folder and file names are ASCII only
@@ -80,6 +88,14 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 - The tree lists folders only, one level deep, and never task folders or hidden
   directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
   and the root does nothing
+- A `+` button sits at the right end of the `Directory` header row and creates a category
+  in the current directory (`create_category`); the button is a child of the header widget
+  and is placed by arithmetic against the header size, because
+  `QHeaderView.sectionViewportGeometry` is missing from the PySide6 stubs
+- The button is squared off to the header height, so it cannot overflow the row, and
+  carries an icon and a tooltip like every other button in the window
+- A new category is left selected, so it becomes the creation target at once; a category
+  that is already there is not an error, it is just selected
 - A subdirectory selected in the tree is where a new task is created
   (`creation_directory`), so a task lands in a category without entering it; the root,
   or nothing selected, makes the current directory the target; selecting does not
