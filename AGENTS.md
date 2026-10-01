@@ -32,6 +32,18 @@ The `gui` extra is required so pyright resolves Qt imports. CI runs the same che
 enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 `QT_QPA_PLATFORM=offscreen`). Release tooling lives in the `release` extra.
 
+Inside the local venv, pyright needs the interpreter spelled out, because it does not
+adopt the `.venv` on its own and reports three unresolved `PySide6` imports:
+
+```bash
+pyright --pythonpath .venv/Scripts/python.exe mktsk/
+```
+
+On Linux the path is `.venv/bin/python`. CI keeps the plain `pyright mktsk/`, where the
+`gui` extra lands in the system interpreter that pyright already resolves. `--venvpath`
+does not help: pyright looks for a venv named `venv`, not `.venv`, and has no flag to
+change the name.
+
 ## Domain rules (do not break)
 
 - Date prefix: `datetime.now().astimezone().strftime("%y%m%d")` + `" - "`
