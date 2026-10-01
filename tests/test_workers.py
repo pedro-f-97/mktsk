@@ -187,6 +187,25 @@ def test_find_task_folder_ignores_date(tmp_path):
 
     assert find_task_folder(tmp_path, "Foo") == folder
 
+def test_find_task_folder_takes_the_most_recent_of_several(tmp_path):
+    # a title is unique in a directory, but a folder copied by hand or restored
+    # from a backup can leave two behind, and the newest is the one to resume
+    for date in ("260918", "260925", "260930"):
+        (tmp_path / f"{date} - Foo").mkdir()
+
+    assert find_task_folder(tmp_path, "Foo") == tmp_path / "260930 - Foo"
+
+def test_find_task_folder_takes_the_most_recent_whatever_the_iterdir_order(
+    tmp_path, monkeypatch
+):
+    for date in ("260918", "260930"):
+        (tmp_path / f"{date} - Foo").mkdir()
+
+    folders = sorted(tmp_path.iterdir())
+    monkeypatch.setattr(Path, "iterdir", lambda self: list(reversed(folders)))
+
+    assert find_task_folder(tmp_path, "Foo") == tmp_path / "260930 - Foo"
+
 def test_find_task_folder_ignores_subdirectories(tmp_path):
     (tmp_path / "Veritas" / "260925 - Foo").mkdir(parents=True)
 
@@ -340,6 +359,17 @@ def test_open_or_create_task_resumes_a_task_with_a_valid_date(tmp_path):
 
     assert result.file == folder / "Foo.md"
     assert result.message == "Opened: 260918 - Foo (added ## 30/09/2026)"
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_resumes_the_most_recent_of_several(tmp_path):
+    for date in ("260918", "260930"):
+        folder = tmp_path / f"{date} - Foo"
+        folder.mkdir()
+        (folder / "Foo.md").write_text(f"# Foo\n\n## {date}\n\n", encoding="utf-8")
+
+    result = open_or_create_task(tmp_path, "Foo")
+
+    assert result.file == tmp_path / "260930 - Foo" / "Foo.md"
 
 @freeze_time("2026-09-30")
 def test_open_or_create_task_same_day_only_once(tmp_path):
@@ -638,6 +668,19 @@ def test_rename_task_rejects_a_task_that_is_already_there(tmp_path, make_task):
 
     assert file.read_text(encoding="utf-8") == "# FSociety\n"
     assert (tmp_path / "260917 - FSocietyEverbind").is_dir()
+
+def test_rename_task_rejects_a_title_of_another_date(tmp_path, make_task):
+    # a title is unique in a directory, whichever date the task it clashes with
+    # carries, so renaming must not be the way to end up with two of one title
+    other = make_task(tmp_path, "260930", "FSociety")
+    file = make_task(tmp_path, "260918", "Veritas")
+
+    with pytest.raises(TaskError, match="already a task here"):
+        rename_task(tmp_path / "260918 - Veritas", "Veritas", "F Society")
+
+    assert file.read_text(encoding="utf-8") == "# Veritas\n"
+    assert other.read_text(encoding="utf-8") == "# FSociety\n"
+    assert not (tmp_path / "260918 - FSociety").exists()
 
 def test_rename_task_rejects_a_folder_without_markdown(tmp_path):
     (tmp_path / "260918 - FSociety").mkdir()

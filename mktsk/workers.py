@@ -177,8 +177,14 @@ def is_task_folder(name: str) -> bool:
 def find_task_folder(location: Path, title: str) -> Path | None:
     """Finds the task folder for a title in the given directory, on any date.
 
-    The search stays in `location`, so a task of the same name in another
-    directory is a different task and is not considered.
+    The title of a task is unique within its directory, which is what makes a
+    lookup unambiguous there. The date is ignored, so `260918 - Foo` is still
+    the task `mktsk Foo` resumes months later. A task of the same title in
+    another directory is a different task and is not considered.
+
+    Should a directory hold more than one anyway, because a folder was copied
+    by hand or restored from a backup, the most recent one wins rather than
+    whichever came first out of `iterdir`.
 
     Args:
         location: the directory to look in.
@@ -190,14 +196,22 @@ def find_task_folder(location: Path, title: str) -> Path | None:
     if not location.is_dir():
         return None
 
-    for entry in sorted(location.iterdir()):
-        if not entry.is_dir() or not is_task_folder(entry.name):
+    matches = []
+
+    for entry in location.iterdir():
+        if not entry.is_dir():
             continue
 
-        if entry.name.partition(_TASK_NAME_SEPARATOR)[2] == title:
-            return entry
+        parts = _task_date_and_title(entry.name)
 
-    return None
+        if parts is not None and parts[1] == title:
+            matches.append((parts[0], entry))
+
+    if not matches:
+        return None
+
+    # a folder copied in by hand leaves the date, so the newest wins
+    return max(matches, key=lambda match: match[0])[1]
 
 def _task_date_and_title(name: str) -> tuple[datetime.date, str] | None:
     """Splits a task folder name into its date and its standardized title.
@@ -377,8 +391,10 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
     """Finds the task for a title, or creates it, and returns its .md file.
 
     An existing task is looked up by title on any date, inside `location`, and a
-    new dated section is added to it. With no match, a new task folder is
-    created in `location`.
+    new dated section is added to it. The title is unique within `location`, so
+    the lookup is unambiguous there; should a directory hold two anyway, the most
+    recent is the one resumed. With no match, a new task folder is created in
+    `location`.
 
     Args:
         location: the directory the task belongs to.
@@ -503,6 +519,9 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     date_prefix = folder.name.partition(_TASK_NAME_SEPARATOR)[0]
     renamed_folder = folder.parent / build_folder_name(new_title, date_prefix)
 
+    # the lookup ignores the date on purpose: a title is unique in a directory,
+    # so one held by a task of any date is a clash. Keeping the title unique is
+    # what leaves a later lookup by title unambiguous
     if find_task_folder(folder.parent, new_title) is not None:
         raise helpers.TaskError(f"'{new_title}' is already a task here")
 

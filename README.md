@@ -7,7 +7,8 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * Creates task folders using the `YYMMDD - TaskName` naming convention.
 * Creates an associated Markdown file.
 * Adds the task title to the Markdown file, as a heading, followed by the task date.
-* Finds an existing task by title on any date, and starts a new dated section in it.
+* Finds an existing task by title in the current directory, on any date, and starts a new
+  dated section in it.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
 
@@ -131,10 +132,13 @@ The date stays, so the task keeps its place in the history, and only the `#` hea
 the top of the file is rewritten. The notes are left exactly as they were, and the file
 is not opened, because renaming is not working on the task.
 
-The folder is named rather than looked up by title, so with two tasks of the same title
-on different dates you always rename the one you mean. A name that is not a task folder
-is refused, as is a new title that is empty, a Windows reserved name, or one another
-task already has.
+The folder is named rather than looked up by title, so the task you name is the task you
+rename. A name that is not a task folder is refused, as is a new title that is empty, a
+Windows reserved name, or one another task already has.
+
+A task title belongs to one task in a directory, so two tasks with the same title should not
+be sitting in the same category, and renaming is refused rather than allowed to make it so.
+The same title in a different category is a different task, and that is fine.
 
 ## Listing tasks
 

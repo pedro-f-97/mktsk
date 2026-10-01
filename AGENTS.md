@@ -56,9 +56,14 @@ change the name.
 - Folder: `<date> - <StandardizedTitle>`; file: `<StandardizedTitle>.md`
 - Sign an empty `.md` with `# <StandardizedTitle>`, a blank line, then `## <dd/mm/YYYY>`
   from `strftime("%d/%m/%Y")`, and a blank line; never touch a non-empty file
-- Lookup runs before any creation, in the current directory only, for
-  `<yymmdd> - <StandardizedTitle>` on any date; the same title in another directory is a
-  different task
+- The title of a task is unique within its directory, or category, so a lookup by title is
+  unambiguous there. Lookup runs before any creation, in the current directory only, and
+  ignores the date: `260918 - Foo` is what `mktsk Foo` resumes weeks later. The same title
+  in another directory is a different task, and that is what makes it legitimate
+- Renaming to a title the directory already holds is refused, on any date, so `rename_task`
+  cannot be the way to end up with two of one title. A folder copied by hand, or restored
+  from a backup, can, and `find_task_folder` then takes the most recent rather than
+  whichever came first out of `iterdir()`
 - Resuming appends `## <today>` at the end of the `.md` unless that date is already
   there; the dated section never rewrites the body, only trailing whitespace is dropped;
   headings are matched loosely, so `##  05/08/2026 ` counts as 05/08/2026
@@ -116,10 +121,9 @@ change the name.
   `parser.error()`, so a missing argument still exits with code 2. Do not let that check
   be skipped, or `mktsk` with no arguments creates a folder instead of failing
 - `--rename <folder> <new title>` takes the name of the task folder, not a title to look
-  up, so two tasks with the same title on different dates are told apart; everything
-  after the folder is the new title, which is why a title of several words needs no
-  quoting. It prints the message and does not open the `.md`, because renaming is not
-  working on the task
+  up, so the task you name is the task you rename; everything after the folder is the new
+  title, which is why a title of several words needs no quoting. It prints the message and
+  does not open the `.md`, because renaming is not working on the task
 - `--list` takes no title and opens nothing; it prints each directory as a heading and
   its tasks under it, formatted the way the GUI shows them, which is `DATE_FORMAT`, two
   spaces and `readable_title`. The order is the one `find_task_groups` already gives, so
