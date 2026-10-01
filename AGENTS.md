@@ -44,8 +44,17 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
   `<yymmdd> - <StandardizedTitle>` on any date; the same title in another directory is a
   different task
 - Resuming appends `## <today>` at the end of the `.md` unless that date is already
-  there; existing text is never rewritten, only trailing whitespace is dropped; headings
-  are matched loosely, so `##  05/08/2026 ` counts as 05/08/2026
+  there; the dated section never rewrites the body, only trailing whitespace is dropped;
+  headings are matched loosely, so `##  05/08/2026 ` counts as 05/08/2026
+- `resume_task(folder, title)` resumes the folder it is given, wherever that folder
+  lives; unlike `open_or_create_task`, it does no lookup and takes no directory
+- `rename_task(folder, title, raw_title)` keeps the date prefix, renames the folder and
+  the `.md`, and rewrites only the first non-empty line, and only when it is exactly
+  `# <old title>`; a heading it does not recognise, and everything after it, is left
+  alone; renaming to the title the task already has does nothing
+- `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
+  `.md` or a title another task of the same directory already has; it renames the `.md`
+  before the folder, or the old file path stops resolving
 - `is_task_folder(name)` is a shape check: a real `%y%m%d` date, ` - `, then an ASCII
   alphanumeric title that does not start with a lowercase letter (`2026` counts)
 - `standardize_string` is not idempotent (`BigWord` becomes `Bigword`); never test
@@ -53,19 +62,84 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 - Lookup uses `is_task_folder`; a folder that fails the check is never resumed, and the
   new task is created beside it
 - Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`)
-- Open files with the OS default application (`os.startfile` / `xdg-open`)
+- `create_category(location, raw_name)` makes a plain subdirectory, not a task folder, so
+  it does not call `standardize_string`: it folds the accents out (`Produção` becomes
+  `Producao`) and leaves the case, the spacing and the punctuation alone; it raises
+  `TaskError` on a name that is empty, cannot be made ASCII, carries a path separator, is
+  reserved, starts with `.` or looks like a task folder (`260918 - Foo`), because any of
+  those would be missing from the listing; a name that is already there is not an error
+- `standardize_string` and `create_category` share `_without_accents` for the NFKD folding,
+  so the accent removal is only implemented once
+- Open files and folders with the OS default application: `os.startfile` on Windows,
+  `xdg-open` on Linux when it is there, `gio open` otherwise
 - Folder and file names are ASCII only
+- Reading a title back for display (`readable_title`): every uppercase letter starts a
+  word and a digit starts one too, so `FSocietyEverbind` reads as `F Society Everbind`
+  and `Task2` as `Task 2`; consecutive digits stay together, so `2026` survives
 
 ## GUI
 
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
-- List the folder in `Tasks` and `Other` sections split by `is_task_folder`; omit empty
-  sections; headings bold and not selectable
+- Two panes in a `QSplitter`: a `QTreeWidget` on the left holding the current directory
+  and its immediate subdirectories, so it shows where new tasks are created; a
+  `QTabWidget` on the right holding one `QListWidget` per task category
+- The tree lists folders only, one level deep, and never task folders or hidden
+  directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
+  and the root does nothing
+- A `+` button sits at the right end of the `Directory` header row and creates a category
+  in the current directory (`create_category`); the button is a child of the header widget
+  and is placed by arithmetic against the header size, because
+  `QHeaderView.sectionViewportGeometry` is missing from the PySide6 stubs
+- The button is squared off to the header height, so it cannot overflow the row, and
+  carries an icon and a tooltip like every other button in the window
+- A new category is left selected, so it becomes the creation target at once; a category
+  that is already there is not an error, it is just selected
+- A subdirectory selected in the tree is where a new task is created
+  (`creation_directory`), so a task lands in a category without entering it; the root,
+  or nothing selected, makes the current directory the target; selecting does not
+  navigate and does not change the active tab
+- The tree selection survives a refresh, so a second task lands in the same category; a
+  selected category that is no longer there is dropped and the current directory takes
+  over
+- Lookup for a title runs in the target directory, not in the current one, so the same
+  title in another directory is still a different task
+- A hint beside the title field reads `New tasks in <category>`, shown only when the
+  target is not the current directory; it sits between the title field and the `Create`
+  button, in the same font and only the colour tells it apart, so it adds no height, and
+  the full path is its tooltip
+- The task list comes from `find_task_groups`: one tab per category, the current
+  directory being a category named after itself, plus an `All` tab first; only
+  categories that hold tasks get a tab
+- `All` lists every task under a heading per category, headings bold and not
+  selectable; a category tab lists just its own tasks, with no heading
+- The active tab survives a refresh or a new task; when its category is gone, `All`
+  takes over again
+- Within a category, newest first, alphabetical for tasks of the same date
+- A task folder with no `.md` is not listed; a task two levels down is not found
+- A task label is `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as
+  tooltip
+- Selecting a task shows an action bar over that row, aligned to the left, with the
+  `Open`, `Resume` and `Rename` buttons; it moves with the selection and disappears with
+  it
+- The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
+  `Open`, a plus for `Resume` and a pencil for `Rename`, all drawn with `QPainter` in
+  `gui.py`, so no image file has to be collected for a frozen build
+- The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
+  checks the item holds a `TaskEntry` before showing or placing the bar
+- Only the selected row is inset to make room for the bar, so the space appears when the
+  row is clicked and is given back when the selection goes; every row keeps the height
+  the bar needs, or the list would shift as the selection moves
+- `Open` replaces the double click on a task; `Open` reveals the task folder in the file
+  manager and touches nothing, `Resume` opens the `.md`, `Rename` does not open it, it
+  just refreshes the list
+- `Resume` is the only browse action that appends a date, and it appends it to the task
+  it was asked for, not to one looked up in the current directory
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
-  what was created
+  what was created; the warning carries the error as it is, `helpers.open_file` already
+  words it, so the path is never hidden behind a duplicated prefix
 - Keep the window open and clear the title field after creating
 
 ## Conventions

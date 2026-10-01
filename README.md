@@ -132,11 +132,30 @@ python -m mktsk
 Opens a window where you can:
 
 * pick a base folder with the native file dialog or navigate inside the window;
-* see the contents split into `Tasks` and `Other`, so a folder such as `260923 - ItsAlive`
-  is told apart from a plain folder at a glance;
+* see on the left the current folder and its subfolders;
+* create a subfolder with the `+` at the right of the `Directory` heading. The name has no
+  accents (`Produção` becomes `Producao`), and a folder that is already there is opened
+  rather than refused. The new folder is left selected, so the task you type next lands
+  inside it;
+* create a task in a subfolder by selecting it on the left, without opening it. A quiet
+  note beside the title field says which subfolder the task will land in, and stays on it
+  until you select another one;
+* see on the right every existing task, including the ones in subfolders. Each category
+  gets its own tab, the current folder included, plus an `All` tab that lists everything
+  under a heading per category. Newest first, with the date as `dd/mm/yyyy` and the
+  title read as words (`260923 - FSocietyEverbind` shows as `23/09/2026  F Society
+  Everbind`);
 * create a task with the same rules as the CLI, opening the resulting Markdown file with
   the default application;
-* open existing `.md` files by double-clicking.
+* act on an existing task by selecting it, which brings a bar of buttons over its row.
+  The room for the buttons appears only on the row you clicked:
+  * `Open` reveals the task folder in the file manager, without touching the task;
+  * `Resume` adds a section for today, wherever the task lives, and opens it;
+  * `Rename` asks for a new title, renames the folder and the file keeping the date, and
+    rewrites the `#` heading at the top of the file. The body is left alone, and a title
+    another task already has is refused.
+
+  The buttons show an icon each, and the name of the action on hover.
 
 The last visited folder is remembered between sessions.
 

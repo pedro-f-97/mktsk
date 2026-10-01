@@ -1,17 +1,24 @@
 import datetime
+from pathlib import Path
 
 import pytest
 from freezegun import freeze_time
 
 from mktsk.helpers import TaskError
 from mktsk.workers import (
+    TaskEntry,
     append_date_section,
     build_folder_name,
+    create_category,
     create_folder,
     create_md_file,
     find_task_folder,
+    find_task_groups,
     is_task_folder,
+    list_subdirectories,
     open_or_create_task,
+    rename_task,
+    resume_task,
     sign_md_file,
     standardize_string,
 )
@@ -378,3 +385,338 @@ def test_open_or_create_task_reserved_name(tmp_path):
         open_or_create_task(tmp_path, "con")
 
     assert list(tmp_path.iterdir()) == []
+def test_find_task_groups_empty_directory(tmp_path):
+    assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_missing_directory(tmp_path):
+    assert find_task_groups(tmp_path / "missing") == []
+
+def test_find_task_groups_unpacks_date_title_and_file(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSocietyEverbind")
+
+    groups = find_task_groups(tmp_path)
+
+    assert len(groups) == 1
+    assert groups[0].category is None
+    assert groups[0].entries == [
+        TaskEntry(datetime.date(2026, 9, 18), "FSocietyEverbind", file)
+    ]
+
+def test_find_task_groups_root_task_has_no_category(tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+
+    groups = find_task_groups(tmp_path)
+
+    assert [group.category for group in groups] == [None]
+
+def test_find_task_groups_subdirectory_becomes_a_category(tmp_path, make_task):
+    file = make_task(tmp_path / "Veritas", "260925", "FSociety")
+
+    groups = find_task_groups(tmp_path)
+
+    assert len(groups) == 1
+    assert groups[0].category == tmp_path / "Veritas"
+    assert groups[0].entries[0].file == file
+
+def test_find_task_groups_comes_before_the_subdirectories(tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path / "Veritas", "260925", "Bar")
+
+    groups = find_task_groups(tmp_path)
+
+    assert [group.category for group in groups] == [None, tmp_path / "Veritas"]
+
+def test_find_task_groups_categories_are_alphabetical(tmp_path, make_task):
+    make_task(tmp_path / "Veritas", "260925", "Foo")
+    make_task(tmp_path / "Able", "260925", "Bar")
+    make_task(tmp_path / "monad", "260925", "Baz")
+
+    groups = find_task_groups(tmp_path)
+
+    assert [
+        group.category.name for group in groups if group.category is not None
+    ] == ["Able", "monad", "Veritas"]
+
+def test_find_task_groups_sorts_newest_first(tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path, "260930", "Bar")
+    make_task(tmp_path, "260925", "Baz")
+
+    groups = find_task_groups(tmp_path)
+
+    assert [entry.title for entry in groups[0].entries] == ["Bar", "Baz", "Foo"]
+
+def test_find_task_groups_same_date_is_alphabetical(tmp_path, make_task):
+    make_task(tmp_path, "260930", "Foo")
+    make_task(tmp_path, "260930", "Bar")
+    make_task(tmp_path, "260930", "Baz")
+
+    groups = find_task_groups(tmp_path)
+
+    assert [entry.title for entry in groups[0].entries] == ["Bar", "Baz", "Foo"]
+
+def test_find_task_groups_stops_one_level_down(tmp_path, make_task):
+    make_task(tmp_path / "SteelMountain" / "nested", "260924", "Everbind")
+
+    assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_skips_task_folder_without_md(tmp_path):
+    (tmp_path / "260918 - Foo").mkdir()
+
+    assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_skips_subdirectory_without_tasks(tmp_path):
+    (tmp_path / "SteelMountain").mkdir()
+
+    assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_ignores_hidden_directories(tmp_path, make_task):
+    make_task(tmp_path / ".hidden", "260902", "Foo")
+
+    assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_ignores_files(tmp_path):
+    (tmp_path / "a.md").touch()
+
+    assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_invalid_date_prefix_is_a_subdirectory(tmp_path, make_task):
+    folder = tmp_path / "999999 - ItsAlive"
+    folder.mkdir()
+    make_task(folder, "260925", "Foo")
+
+    groups = find_task_groups(tmp_path)
+
+    assert [group.category for group in groups] == [folder]
+    assert [entry.title for entry in groups[0].entries] == ["Foo"]
+
+def test_list_subdirectories_is_alphabetical(tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    (tmp_path / "able").mkdir()
+    (tmp_path / "monad").mkdir()
+
+    assert [path.name for path in list_subdirectories(tmp_path)] == [
+        "able",
+        "monad",
+        "Veritas",
+    ]
+
+def test_list_subdirectories_leaves_out_task_folders_and_files(tmp_path):
+    (tmp_path / "260918 - Foo").mkdir()
+    (tmp_path / "Veritas").mkdir()
+    (tmp_path / "a.md").touch()
+
+    assert [path.name for path in list_subdirectories(tmp_path)] == ["Veritas"]
+
+def test_list_subdirectories_leaves_out_hidden_directories(tmp_path):
+    (tmp_path / ".hidden").mkdir()
+
+    assert list_subdirectories(tmp_path) == []
+
+def test_list_subdirectories_stops_one_level_down(tmp_path):
+    (tmp_path / "SteelMountain" / "nested").mkdir(parents=True)
+
+    assert [path.name for path in list_subdirectories(tmp_path)] == ["SteelMountain"]
+
+def test_find_task_groups_skips_unreadable_subdirectory(
+    tmp_path, make_task, monkeypatch
+):
+    make_task(tmp_path / "Veritas", "260925", "Foo")
+    real_iterdir = Path.iterdir
+
+    def guarded_iterdir(self):
+        if self.name == "Veritas":
+            raise PermissionError
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
+
+    assert find_task_groups(tmp_path) == []
+
+
+@freeze_time("2026-09-30")
+def test_resume_task_uses_the_given_folder(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+    folder = tmp_path / "260918 - FSociety"
+
+    result = resume_task(folder, "FSociety")
+
+    assert result.file == folder / "FSociety.md"
+    assert "## 30/09/2026" in result.file.read_text(encoding="utf-8")
+
+@freeze_time("2026-09-30")
+def test_resume_task_ignores_the_current_directory(tmp_path, make_task):
+    make_task(tmp_path / "Veritas", "260918", "FSociety")
+    folder = tmp_path / "Veritas" / "260918 - FSociety"
+    elsewhere = tmp_path / "SteelMountain"
+    elsewhere.mkdir()
+
+    result = resume_task(folder, "FSociety")
+
+    assert result.file == folder / "FSociety.md"
+    assert list(elsewhere.iterdir()) == []
+
+
+@freeze_time("2026-09-30")
+def test_rename_task_keeps_the_date_and_rewrites_the_heading(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("# FSociety\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "F Society Everbind")
+
+    assert result.file == tmp_path / "260918 - FSocietyEverbind" / "FSocietyEverbind.md"
+    assert result.message == "Renamed: 260918 - FSocietyEverbind"
+
+def test_rename_task_leaves_the_rest_of_the_file_alone(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text(
+        "# FSociety\n\n## 18/09/2026\n\n# FSociety\n\nbody\n", encoding="utf-8"
+    )
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == (
+        "# Everbind\n\n## 18/09/2026\n\n# FSociety\n\nbody\n"
+    )
+
+def test_rename_task_leaves_a_heading_it_does_not_recognise(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("notes first\n# FSociety\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == "notes first\n# FSociety\n"
+
+def test_rename_task_ignores_a_heading_with_stray_spacing(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("  # FSociety  \n\nbody\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == "# Everbind\n\nbody\n"
+
+def test_rename_task_to_the_title_it_already_has(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+    folder = tmp_path / "260918 - FSociety"
+
+    result = rename_task(folder, "FSociety", "F Society")
+
+    assert result.file == folder / "FSociety.md"
+    assert result.message == "Renamed: 260918 - FSociety"
+
+def test_rename_task_rejects_an_empty_title(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="invalid task description"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "!!!")
+
+def test_rename_task_rejects_a_blank_title(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="invalid task description"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "   ")
+
+def test_rename_task_rejects_a_reserved_name(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="reserved name"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "con")
+
+def test_rename_task_rejects_a_task_that_is_already_there(tmp_path, make_task):
+    make_task(tmp_path, "260917", "FSocietyEverbind")
+    file = make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="already a task here"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "F Society Everbind")
+
+    assert file.read_text(encoding="utf-8") == "# FSociety\n"
+    assert (tmp_path / "260917 - FSocietyEverbind").is_dir()
+
+def test_rename_task_rejects_a_folder_without_markdown(tmp_path):
+    (tmp_path / "260918 - FSociety").mkdir()
+
+    with pytest.raises(TaskError, match="no Markdown file"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+def test_rename_task_skips_blank_lines_before_the_heading(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("\n\n# FSociety\n\nbody\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == "\n\n# Everbind\n\nbody\n"
+
+def test_rename_task_leaves_a_file_without_any_content(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == ""
+
+
+def test_create_category_creates_the_folder(tmp_path):
+    category = create_category(tmp_path, "Veritas")
+
+    assert category == tmp_path / "Veritas"
+    assert category.is_dir()
+
+def test_create_category_strips_the_accents(tmp_path):
+    assert create_category(tmp_path, "Produção") == tmp_path / "Producao"
+    assert (tmp_path / "Producao").is_dir()
+
+def test_create_category_keeps_the_case_and_the_spaces(tmp_path):
+    assert create_category(tmp_path, "my tasks") == tmp_path / "my tasks"
+
+def test_create_category_returns_the_folder_that_is_already_there(tmp_path):
+    existing = tmp_path / "Veritas"
+    existing.mkdir()
+
+    assert create_category(tmp_path, "Veritas") == existing
+
+def test_create_category_leaves_the_folder_that_is_already_there_alone(tmp_path):
+    existing = tmp_path / "Veritas"
+    existing.mkdir()
+    (existing / "notes.md").write_text("notes\n", encoding="utf-8")
+
+    create_category(tmp_path, "Veritas")
+
+    assert (existing / "notes.md").read_text(encoding="utf-8") == "notes\n"
+
+def test_create_category_rejects_an_empty_name(tmp_path):
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, "")
+
+def test_create_category_rejects_a_blank_name(tmp_path):
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, "   ")
+
+def test_create_category_rejects_a_name_with_a_separator(tmp_path):
+    with pytest.raises(TaskError, match="single path component"):
+        create_category(tmp_path, "a/b")
+
+def test_create_category_rejects_a_reserved_name(tmp_path):
+    with pytest.raises(TaskError, match="reserved name"):
+        create_category(tmp_path, "con")
+
+def test_create_category_rejects_a_hidden_name(tmp_path):
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, ".hidden")
+
+def test_create_category_rejects_a_task_folder_name(tmp_path):
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, "260918 - Foo")
+
+def test_create_category_rejects_a_name_it_cannot_make_ascii(tmp_path):
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, "日本語")
+
+def test_create_category_rejects_a_task_folder_name_with_accents(tmp_path):
+    # folding the accents is what turns this into a valid task folder name
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, "260918 - FooÇo")
+
+def test_create_category_is_listed_as_a_category(tmp_path):
+    create_category(tmp_path, "Veritas")
+
+    assert list_subdirectories(tmp_path) == [tmp_path / "Veritas"]

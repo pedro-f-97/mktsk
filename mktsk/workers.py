@@ -20,6 +20,33 @@ class TaskResult(NamedTuple):
     message: str
 
 
+class TaskEntry(NamedTuple):
+    """A task folder found under a base directory."""
+
+    date: datetime.date
+    title: str
+    file: Path
+
+
+class TaskGroup(NamedTuple):
+    """Tasks found in the base directory or in one of its subdirectories."""
+
+    category: Path | None
+    entries: list[TaskEntry]
+
+
+def _without_accents(value: str) -> str:
+    """Removes the accents of a string, leaving everything else as it is.
+
+    Args:
+        value: the string to strip.
+
+    Returns:
+        The string without its combining marks.
+    """
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
 def standardize_string(string_: str) -> str:
     """Normalize a string by removing accents, special characters and spacing.
 
@@ -30,12 +57,7 @@ def standardize_string(string_: str) -> str:
         The standardized string.
     """
     # remove special characters
-    decomposed = unicodedata.normalize("NFKD", string_)
-    chars = []
-    for c in decomposed:
-        if not unicodedata.combining(c):
-            chars.append(c)
-    without_accents = "".join(chars)
+    without_accents = _without_accents(string_)
 
     # remove spacing
     words = re.split(r"[^A-Za-z0-9]+", without_accents)
@@ -173,6 +195,117 @@ def find_task_folder(location: Path, title: str) -> Path | None:
 
     return None
 
+def _task_date_and_title(name: str) -> tuple[datetime.date, str] | None:
+    """Splits a task folder name into its date and its standardized title.
+
+    Args:
+        name: the directory name to split.
+
+    Returns:
+        The date and the title, or None if the name is not a task folder.
+    """
+    if not is_task_folder(name):
+        return None
+
+    date_prefix, _separator, title = name.partition(_TASK_NAME_SEPARATOR)
+
+    # is_task_folder already parsed the prefix as a real date, so this cannot fail
+    parsed = datetime.datetime.strptime(date_prefix, _TASK_DATE_FORMAT)  # noqa: DTZ007
+
+    return parsed.date(), title
+
+def _tasks_in(directory: Path) -> list[TaskEntry]:
+    """Collects the task folders of a directory, newest first.
+
+    A task folder is listed only when it holds the .md file that goes with it,
+    so a folder left without one is never offered to open. A directory that
+    cannot be read holds no tasks, and is left out rather than raising.
+
+    Args:
+        directory: the directory to look in.
+
+    Returns:
+        One entry per task folder, newest first and alphabetical for tasks of
+        the same date.
+    """
+    try:
+        folders = list(directory.iterdir())
+    except OSError:
+        return []
+
+    entries = []
+
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+
+        parts = _task_date_and_title(folder.name)
+        if parts is None:
+            continue
+
+        date, title = parts
+        file = folder / f"{title}.md"
+        if file.is_file():
+            entries.append(TaskEntry(date, title, file))
+
+    return sorted(entries, key=lambda entry: (-entry.date.toordinal(), entry.title))
+
+def list_subdirectories(location: Path) -> list[Path]:
+    """Lists the immediate subdirectories that are not task folders.
+
+    Hidden directories are left out, so a listing does not walk into `.git` and
+    friends. The list stays one level deep, so a subdirectory of a
+    subdirectory is never a category.
+
+    Args:
+        location: the directory to look in.
+
+    Returns:
+        The subdirectories, in alphabetical order.
+    """
+    return sorted(
+        (
+            entry
+            for entry in location.iterdir()
+            if entry.is_dir()
+            and not entry.name.startswith(".")
+            and not is_task_folder(entry.name)
+        ),
+        key=lambda path: path.name.lower(),
+    )
+
+def find_task_groups(location: Path) -> list[TaskGroup]:
+    """Finds the tasks in a directory and in its immediate subdirectories.
+
+    Every subdirectory that is not a task folder becomes a category named after
+    it, so tasks kept apart in a subdirectory are still told apart in the list.
+    The search stops one level down, so a task inside a subdirectory of a
+    subdirectory is not found.
+
+    Args:
+        location: the directory to look in.
+
+    Returns:
+        The tasks of `location` first, with a category of None, then the tasks
+        of each subdirectory in alphabetical order. Groups without tasks are
+        left out.
+    """
+    if not location.is_dir():
+        return []
+
+    groups: list[TaskGroup] = []
+
+    root_entries = _tasks_in(location)
+    if root_entries:
+        groups.append(TaskGroup(None, root_entries))
+
+    for subdirectory in list_subdirectories(location):
+        entries = _tasks_in(subdirectory)
+        if entries:
+            groups.append(TaskGroup(subdirectory, entries))
+
+    return groups
+
 def append_date_section(file: Path, date: datetime.date) -> bool:
     """Adds a second level heading with the given date at the end of the .md file.
 
@@ -261,3 +394,143 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
     sign_md_file(created_file, title)
 
     return TaskResult(created_file, f"Created: {folder_name}")
+
+def resume_task(folder: Path, title: str) -> TaskResult:
+    """Adds a dated section to a task folder and returns its .md file.
+
+    Unlike `open_or_create_task`, which looks a title up in the current
+    directory, this resumes the folder it is given, wherever that folder lives.
+
+    Args:
+        folder: the task folder to resume.
+        title: the standardized title of the task.
+
+    Returns:
+        The .md file to open and a message describing what happened.
+    """
+    today = datetime.datetime.now().astimezone().date()
+
+    return _resume_task(folder, title, today)
+
+def _retitle(file: Path, title: str, new_title: str) -> None:
+    """Rewrites the leading heading of a .md file when it names the task.
+
+    Only a first level heading that matches the title the file was created with
+    is touched. Everything else, hand written text and dated sections alike, is
+    left exactly as it was.
+
+    Args:
+        file: the .md file to rewrite.
+        title: the standardized title the heading is expected to carry.
+        new_title: the standardized title to write in its place.
+    """
+    content = file.read_text(encoding="utf-8")
+    heading = f"# {title}"
+
+    lines = content.split("\n")
+
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+
+        if line.strip() == heading:
+            lines[index] = f"# {new_title}"
+            file.write_text("\n".join(lines), encoding="utf-8")
+
+        return
+
+def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
+    """Renames a task folder and its .md file, keeping the date of the task.
+
+    The date prefix stays put, so a renamed task keeps its place in the history,
+    and only the leading `#` heading is rewritten, and only when it matches the
+    title the task had. Renaming to the title it already has does nothing.
+
+    Args:
+        folder: the task folder to rename.
+        title: the standardized title the task has now.
+        raw_title: the new title, as typed by the user.
+
+    Returns:
+        The renamed .md file and a message describing what happened.
+
+    Raises:
+        TaskError: If the new title is empty, normalizes to nothing, is a
+            reserved Windows name, or names a task that is already there.
+        OSError: If the folder or the file cannot be renamed.
+    """
+    new_title = standardize_string(raw_title)
+
+    if not new_title.strip():
+        raise helpers.TaskError("invalid task description")
+
+    if helpers.is_reserved_name(new_title):
+        raise helpers.TaskError(f"'{new_title}' is a reserved name")
+
+    file = folder / f"{title}.md"
+
+    if not file.is_file():
+        raise helpers.TaskError(f"'{title}' has no Markdown file")
+
+    if new_title == title:
+        return TaskResult(file, f"Renamed: {folder.name}")
+
+    date_prefix = folder.name.partition(_TASK_NAME_SEPARATOR)[0]
+    renamed_folder = folder.parent / build_folder_name(new_title, date_prefix)
+
+    if find_task_folder(folder.parent, new_title) is not None:
+        raise helpers.TaskError(f"'{new_title}' is already a task here")
+
+    # the file moves inside the folder first, or its old path stops resolving
+    file.rename(folder / f"{new_title}.md")
+    folder.rename(renamed_folder)
+
+    renamed_file = renamed_folder / f"{new_title}.md"
+    _retitle(renamed_file, title, new_title)
+
+    return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")
+
+
+def create_category(location: Path, raw_name: str) -> Path:
+    """Creates a new category folder in the given directory.
+
+    A category is a plain subdirectory, so it is not a task folder and does not
+    follow the task naming rules. The name is stripped of accents, so that the
+    folder stays ASCII, but otherwise it is left as the user typed it. A name
+    that is already there does not produce an error: the existing path is
+    returned instead.
+
+    Args:
+        location: the directory to create the category in.
+        raw_name: the name to give the category, as typed by the user.
+
+    Returns:
+        The path of the category folder.
+
+    Raises:
+        TaskError: If the name is empty, contains path separators, is a
+            reserved Windows name, would be hidden, or looks like a task folder.
+    """
+    name = _without_accents(raw_name)
+
+    # a folder name is ASCII, and there is no accent to fold a Japanese word
+    if not name.strip() or not name.isascii():
+        raise helpers.TaskError("invalid category name")
+
+    helpers.validate_name(name)
+
+    if helpers.is_reserved_name(name):
+        raise helpers.TaskError(f"'{name}' is a reserved name")
+
+    if name.startswith("."):
+        raise helpers.TaskError("invalid category name")
+
+    if is_task_folder(name):
+        raise helpers.TaskError("invalid category name")
+
+    category = location / name
+
+    # exist_ok, so a name that is already there is not an error
+    category.mkdir(exist_ok=True)
+
+    return category
