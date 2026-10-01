@@ -244,13 +244,20 @@ def _reserved_task_title(name: str) -> bool:
         and helpers.is_reserved_name(title)
     )
 
-def find_task_folder(location: Path, title: str) -> Path | None:
+def find_task_folder(
+    location: Path, title: str, exclude: Path | None = None
+) -> Path | None:
     """Finds the task folder for a title in the given directory, on any date.
 
     The title of a task is unique within its directory, which is what makes a
     lookup unambiguous there. The date is ignored, so `260918 - Foo` is still
     the task `mktsk Foo` resumes months later. A task of the same title in
     another directory is a different task and is not considered.
+
+    The comparison ignores the case, because `standardize_string` lowers the
+    capitals inside a title and a folder renamed by hand keeps them, so anyone
+    copying a folder name into the terminal has to reach the task it names
+    rather than a second one.
 
     Should a directory hold more than one anyway, because a folder was copied
     by hand or restored from a backup, the most recent one wins rather than
@@ -259,6 +266,8 @@ def find_task_folder(location: Path, title: str) -> Path | None:
     Args:
         location: the directory to look in.
         title: the standardized title to look for.
+        exclude: a folder to leave out of the search, which is how `rename_task`
+            keeps a task from clashing with itself when only the case changes.
 
     Returns:
         The task folder, or None if the directory holds none.
@@ -269,12 +278,15 @@ def find_task_folder(location: Path, title: str) -> Path | None:
     matches = []
 
     for entry in location.iterdir():
+        if exclude is not None and entry == exclude:
+            continue
+
         if not entry.is_dir():
             continue
 
         parts = _task_date_and_title(entry.name)
 
-        if parts is not None and parts[1] == title:
+        if parts is not None and parts[1].casefold() == title.casefold():
             matches.append((parts[0], entry))
 
     if not matches:
@@ -452,10 +464,17 @@ def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
     Returns:
         The .md file to open and a message describing what happened.
     """
-    file = create_md_file(folder, title)
+    # the title is the one the folder carries rather than the one the lookup was
+    # given: a folder renamed by hand keeps the capitals of its own name, and the
+    # .md and the heading inside it both follow that name. `resume_task` can also
+    # be handed a folder that is not a task folder, a copy by hand, and there the
+    # title given is the only one there is.
+    folder_title = task_folder_title(folder.name) or title
+
+    file = create_md_file(folder, folder_title)
 
     # signing a file with nothing in it dates it, so there is no visit to add
-    if sign_md_file(file, title):
+    if sign_md_file(file, folder_title):
         return TaskResult(file, f"Opened: {folder.name}")
 
     formatted = date.strftime(DATE_FORMAT)
@@ -599,8 +618,10 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
 
     # the lookup ignores the date on purpose: a title is unique in a directory,
     # so one held by a task of any date is a clash. Keeping the title unique is
-    # what leaves a later lookup by title unambiguous
-    if find_task_folder(folder.parent, new_title) is not None:
+    # what leaves a later lookup by title unambiguous. The lookup ignores the
+    # case, so the task being renamed is left out of it, or a rename that only
+    # changes the case would be a clash with the task it already is.
+    if find_task_folder(folder.parent, new_title, exclude=folder) is not None:
         raise helpers.TaskError(f"'{new_title}' is already a task here")
 
     # read before anything moves, so a step that fails later can put the file back

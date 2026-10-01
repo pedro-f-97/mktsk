@@ -261,6 +261,23 @@ def test_find_task_folder_ignores_date(tmp_path):
 
     assert find_task_folder(tmp_path, "Foo") == folder
 
+def test_find_task_folder_ignores_the_case_of_the_title(tmp_path):
+    # standardize_string lowers the capitals inside a title, so a folder renamed
+    # by hand keeps ones the lookup would never produce. Copying its name into the
+    # terminal has to reach the task, not create a second one
+    folder = tmp_path / "260918 - EmbalagemAlteracaoFormulario"
+    folder.mkdir()
+
+    assert find_task_folder(tmp_path, "Embalagemalteracaoformulario") == folder
+
+def test_find_task_folder_excludes_a_folder(tmp_path):
+    # how rename_task keeps a task from clashing with itself over the case alone
+    folder = tmp_path / "260918 - AbCd"
+    folder.mkdir()
+
+    assert find_task_folder(tmp_path, "Abcd") == folder
+    assert find_task_folder(tmp_path, "Abcd", exclude=folder) is None
+
 def test_find_task_folder_takes_the_most_recent_of_several(tmp_path):
     # a title is unique in a directory, but a folder copied by hand or restored
     # from a backup can leave two behind, and the newest is the one to resume
@@ -688,6 +705,38 @@ def test_resume_task_uses_the_given_folder(tmp_path, make_task):
     assert "## 30/09/2026" in result.file.read_text(encoding="utf-8")
 
 @freeze_time("2026-09-30")
+def test_resume_task_keeps_the_caps_the_folder_carries(tmp_path):
+    folder = tmp_path / "260918 - EmbalagemAlteracaoFormulario"
+    folder.mkdir()
+    original = folder / "EmbalagemAlteracaoFormulario.md"
+    original.write_text(
+        "# EmbalagemAlteracaoFormulario\n\n## 18/09/2026\n\nnotas\n", encoding="utf-8"
+    )
+
+    result = resume_task(folder, "Embalagemalteracaoformulario")
+
+    # the .md is the one that was there, and nothing was signed on top of it
+    assert [path.name for path in folder.iterdir()] == [original.name]
+    assert result.file == original
+    assert result.file.read_text(encoding="utf-8") == (
+        "# EmbalagemAlteracaoFormulario\n\n## 18/09/2026\n\nnotas\n\n## 30/09/2026\n\n"
+    )
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_reaches_a_folder_renamed_by_hand(tmp_path):
+    folder = tmp_path / "260918 - EmbalagemAlteracaoFormulario"
+    folder.mkdir()
+    (folder / "EmbalagemAlteracaoFormulario.md").write_text(
+        "# EmbalagemAlteracaoFormulario\n\nnotas\n", encoding="utf-8"
+    )
+
+    # pasting the folder name is what a user reaching for the task does
+    result = open_or_create_task(tmp_path, "EmbalagemAlteracaoFormulario")
+
+    assert [path.name for path in tmp_path.iterdir()] == [folder.name]
+    assert result.file == folder / "EmbalagemAlteracaoFormulario.md"
+
+@freeze_time("2026-09-30")
 def test_resume_task_ignores_the_current_directory(tmp_path, make_task):
     make_task(tmp_path / "Veritas", "260918", "FSociety")
     folder = tmp_path / "Veritas" / "260918 - FSociety"
@@ -800,6 +849,30 @@ def test_rename_task_rejects_a_title_of_another_date(tmp_path, make_task):
     assert file.read_text(encoding="utf-8") == "# Veritas\n"
     assert other.read_text(encoding="utf-8") == "# FSociety\n"
     assert not (tmp_path / "260918 - FSociety").exists()
+
+@pytest.mark.parametrize("raw_title", ["FSOCIETY", "FSociety", "fsociety", "fSociety"])
+def test_rename_task_rejects_a_clash_in_any_case(tmp_path, make_task, raw_title):
+    # standardize_string puts the first letter up and the rest down, so every
+    # spelling of the title lands on the same one before the clash test sees it
+    make_task(tmp_path, "260917", "FSociety")
+    file = make_task(tmp_path, "260918", "Able")
+
+    with pytest.raises(TaskError, match="already a task here"):
+        rename_task(tmp_path / "260918 - Able", "Able", raw_title)
+
+    assert file.read_text(encoding="utf-8") == "# Able\n"
+
+@freeze_time("2026-09-30")
+def test_rename_task_only_changes_the_case(tmp_path, make_task):
+    make_task(tmp_path, "260918", "AbCd")
+
+    result = rename_task(tmp_path / "260918 - AbCd", "AbCd", "abcd")
+
+    # the lookup ignores the case, so without leaving the folder out of it this
+    # would be a task clashing with itself
+    assert [path.name for path in tmp_path.iterdir()] == ["260918 - Abcd"]
+    assert result.file == tmp_path / "260918 - Abcd" / "Abcd.md"
+    assert result.file.read_text(encoding="utf-8") == "# Abcd\n"
 
 def test_rename_task_rejects_a_folder_without_markdown(tmp_path):
     (tmp_path / "260918 - FSociety").mkdir()
