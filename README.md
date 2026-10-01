@@ -141,7 +141,15 @@ Opens a window where you can:
   Everbind`);
 * create a task with the same rules as the CLI, opening the resulting Markdown file with
   the default application;
-* open an existing task by double-clicking it, without touching the file.
+* act on an existing task by selecting it, which brings a bar of buttons over its row.
+  The room for the buttons appears only on the row you clicked:
+  * `Open` reveals the task folder in the file manager, without touching the task;
+  * `Resume` adds a section for today, wherever the task lives, and opens it;
+  * `Rename` asks for a new title, renames the folder and the file keeping the date, and
+    rewrites the `#` heading at the top of the file. The body is left alone, and a title
+    another task already has is refused.
+
+  The buttons show an icon each, and the name of the action on hover.
 
 The last visited folder is remembered between sessions.
 

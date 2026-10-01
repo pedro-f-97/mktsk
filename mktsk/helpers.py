@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -60,10 +61,10 @@ def readable_title(title: str) -> str:
 
 
 def open_file(file: Path) -> None:
-    """Opens a file with the operating system's default application.
+    """Opens a file or folder with the operating system's default application.
 
     Args:
-        file: File to open.
+        file: File or folder to open.
 
     Raises:
         OSError: If the file cannot be opened.
@@ -71,7 +72,9 @@ def open_file(file: Path) -> None:
     try:
         if sys.platform == "win32":
             os.startfile(file)
-        else:
+        elif shutil.which("xdg-open"):
             subprocess.run(["xdg-open", file], check=True)
+        else:
+            subprocess.run(["gio", "open", file], check=True)
     except (OSError, subprocess.CalledProcessError) as error:
-        raise OSError(f"Could not open file: {file}") from error
+        raise OSError(f"Could not open: {file}") from error

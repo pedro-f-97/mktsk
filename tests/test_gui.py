@@ -3,10 +3,12 @@ from pathlib import Path
 
 import pytest
 from freezegun import freeze_time
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QRect, QSettings, QSize, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QMessageBox
 
-from mktsk.gui import MainWindow
+from mktsk import gui
+from mktsk.gui import _ENTRY_ROLE, MainWindow
 from mktsk.gui import main as gui_main
 
 _PATH_ROLE = Qt.ItemDataRole.UserRole
@@ -40,7 +42,8 @@ def find_task(window, path, title="All"):
     listing = task_listing(window, title)
     for index in range(listing.count()):
         item = listing.item(index)
-        if item.data(_PATH_ROLE) == str(path):
+        entry = item.data(_ENTRY_ROLE)
+        if entry is not None and entry.file == path:
             return item
     raise AssertionError(f"{path} is not listed in the {title} tab")
 
@@ -297,49 +300,301 @@ def test_double_click_on_the_tree_root_does_nothing(qtbot, window, tmp_path):
 
     assert window.current_directory == tmp_path.resolve()
 
-def test_double_click_opens_task(qtbot, window, tmp_path, fake_open, make_task):
+def select_task(window, path, title="All"):
+    """Selects a task row, which is what brings its action bar up."""
+    listing = task_listing(window, title)
+    item = find_task(window, path, title)
+    listing.setCurrentItem(item)
+    return listing
+
+
+def action_bar(window, path, title="All"):
+    return select_task(window, path, title).action_bar
+
+
+def test_action_bar_stays_hidden_without_a_selection(window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    assert task_listing(window).action_bar.isVisible() is False
+
+def test_action_bar_follows_the_selected_task(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
 
-    task_listing(window).itemDoubleClicked.emit(find_task(window, file))
+    bar = action_bar(window, file)
 
-    assert fake_open == [file]
+    assert bar.isVisible() is True
+    assert len(bar.buttons()) == 3
 
-def test_double_click_opens_task_from_a_category_tab(
-    qtbot, window, tmp_path, fake_open, make_task
+def test_action_bar_sits_over_the_selected_row(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    listing = select_task(window, file)
+    row = listing.visualItemRect(listing.currentItem())
+
+    assert listing.action_bar.geometry() == QRect(
+        row.left(), row.top(), listing.inset, row.height()
+    )
+
+def test_action_bar_shows_icons_and_not_labels(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    bar = action_bar(window, file)
+
+    assert bar.buttons() == (
+        bar.open_button,
+        bar.resume_button,
+        bar.rename_button,
+    )
+    for button in bar.buttons():
+        assert button.text() == ""
+        assert button.icon().isNull() is False
+
+def test_action_bar_tooltips_name_the_actions(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    bar = action_bar(window, file)
+
+    assert [button.toolTip() for button in bar.buttons()] == [
+        "Open the task folder",
+        "Add a note for today",
+        "Rename this task",
+    ]
+
+def test_action_bar_is_left_aligned(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    listing = select_task(window, file)
+    bar = listing.action_bar
+    row = listing.visualItemRect(listing.currentItem())
+    lefts = [button.geometry().left() for button in bar.buttons()]
+
+    assert lefts == sorted(lefts)
+    assert bar.geometry().left() == row.left()
+    assert bar.width() < row.width() / 2
+    assert bar.buttons()[-1].geometry().right() <= bar.width()
+
+def test_only_the_selected_row_gets_room_for_the_buttons(window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path, "260917", "Bar")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+
+    listing.setCurrentItem(listing.item(0))
+
+    assert listing.delegate.inset_row == 0
+    assert listing.itemDelegate() is listing.delegate
+
+def test_the_room_for_the_buttons_goes_away_with_the_selection(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = select_task(window, tmp_path / "260918 - Foo" / "Foo.md")
+
+    listing.setCurrentItem(None)
+
+    assert listing.delegate.inset_row == -1
+
+def test_action_bar_hides_again_when_the_selection_goes(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+
+    listing.setCurrentItem(None)
+
+    assert listing.action_bar.isVisible() is False
+
+def test_action_bar_never_appears_over_a_heading(window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path / "Veritas", "260925", "Bar")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    heading = listing.item(0)
+
+    assert heading.flags() == Qt.ItemFlag.NoItemFlags
+    assert listing.selected_entry() is None
+
+    # Qt lets a heading become the current item, and it still gets no bar
+    listing.setCurrentItem(heading)
+
+    assert listing.selected_entry() is None
+    assert listing.action_bar.isVisible() is False
+
+def test_buttons_do_nothing_without_a_selection(
+    window, tmp_path, fake_open, make_task
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+
+    listing.setCurrentItem(None)
+    for button in listing.action_bar.findChildren(type(listing.action_bar.open_button)):
+        button.click()
+
+    assert fake_open == []
+
+def test_open_button_reveals_the_task_folder(window, tmp_path, fake_open, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    action_bar(window, file).open_button.click()
+
+    assert fake_open == [file.parent]
+
+def test_open_button_reveals_a_task_from_a_category_tab(
+    window, tmp_path, fake_open, make_task
 ):
     file = make_task(tmp_path / "Veritas", "260925", "FSociety")
     window.navigate_to(tmp_path)
     select_tab(window, "Veritas")
 
-    task_listing(window, "Veritas").itemDoubleClicked.emit(
-        find_task(window, file, "Veritas")
-    )
+    action_bar(window, file, "Veritas").open_button.click()
 
-    assert fake_open == [file]
+    assert fake_open == [file.parent]
 
-def test_double_click_leaves_the_opened_task_untouched(
-    qtbot, window, tmp_path, fake_open, make_task
+def test_revealing_the_folder_leaves_the_task_untouched(
+    window, tmp_path, fake_open, make_task
 ):
     file = make_task(tmp_path / "Veritas", "260918", "FSociety")
     file.write_text("# FSociety\n\n## 18/09/2026\n\n", encoding="utf-8")
     window.navigate_to(tmp_path)
 
+    action_bar(window, file).open_button.click()
+
+    assert fake_open == [file.parent]
+    assert file.read_text(encoding="utf-8") == "# FSociety\n\n## 18/09/2026\n\n"
+
+def test_double_click_on_a_task_does_nothing(qtbot, window, tmp_path, fake_open, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
     task_listing(window).itemDoubleClicked.emit(find_task(window, file))
 
+    assert fake_open == []
+
+@freeze_time("2026-09-30")
+def test_resume_button_adds_today_and_opens(window, tmp_path, fake_open, make_task):
+    file = make_task(tmp_path / "Veritas", "260918", "FSociety")
+    file.write_text("# FSociety\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    window.navigate_to(tmp_path)
+
+    action_bar(window, file).resume_button.click()
+
+    assert file.read_text(encoding="utf-8") == (
+        "# FSociety\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+    )
     assert fake_open == [file]
-    assert file.read_text(encoding="utf-8") == "# FSociety\n\n## 18/09/2026\n\n"
+
+@freeze_time("2026-09-30")
+def test_resume_button_resumes_a_task_outside_the_current_directory(
+    window, tmp_path, fake_open, make_task
+):
+    file = make_task(tmp_path / "Veritas", "260918", "FSociety")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window, "Veritas")
+
+    listing.setCurrentItem(find_task(window, file, "Veritas"))
+    listing.action_bar.resume_button.click()
+
+    assert "## 30/09/2026" in file.read_text(encoding="utf-8")
+    assert fake_open == [file]
+
+def test_resume_button_reports_a_missing_file(
+    window, tmp_path, monkeypatch, fake_messages, make_task
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    def raise_error(folder, title):
+        raise OSError("boom")
+
+    monkeypatch.setattr("mktsk.workers.resume_task", raise_error)
+    action_bar(window, file).resume_button.click()
+
+    assert fake_messages["critical"] == ["boom"]
+
+def test_rename_button_keeps_the_date_and_updates_the_list(
+    window, tmp_path, make_task, monkeypatch
+):
+    file = make_task(tmp_path, "260918", "FSociety")
+    window.navigate_to(tmp_path)
+    monkeypatch.setattr(
+        "mktsk.gui.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
+    )
+
+    action_bar(window, file).rename_button.click()
+
+    renamed = tmp_path / "260918 - FSocietyEverbind" / "FSocietyEverbind.md"
+    assert renamed.read_text(encoding="utf-8") == "# FSocietyEverbind\n"
+    assert tab_labels(window) == [tmp_path.name, "18/09/2026  F Society Everbind"]
+
+def test_rename_button_keeps_the_active_tab(
+    window, tmp_path, make_task, monkeypatch
+):
+    file = make_task(tmp_path / "Veritas", "260918", "FSociety")
+    window.navigate_to(tmp_path)
+    select_tab(window, "Veritas")
+    monkeypatch.setattr(
+        "mktsk.gui.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
+    )
+
+    action_bar(window, file, "Veritas").rename_button.click()
+
+    assert window.tabs.tabText(window.tabs.currentIndex()) == "Veritas"
+
+def test_cancelling_the_rename_changes_nothing(
+    window, tmp_path, make_task, monkeypatch
+):
+    file = make_task(tmp_path, "260918", "FSociety")
+    window.navigate_to(tmp_path)
+    monkeypatch.setattr("mktsk.gui.QInputDialog.getText", lambda *args: ("", False))
+
+    action_bar(window, file).rename_button.click()
+
+    assert file.is_file()
+    assert tab_labels(window) == [tmp_path.name, "18/09/2026  F Society"]
+
+def test_blank_rename_changes_nothing(window, tmp_path, make_task, monkeypatch):
+    file = make_task(tmp_path, "260918", "FSociety")
+    window.navigate_to(tmp_path)
+    monkeypatch.setattr("mktsk.gui.QInputDialog.getText", lambda *args: ("  ", True))
+
+    action_bar(window, file).rename_button.click()
+
+    assert file.is_file()
+    assert tab_labels(window) == [tmp_path.name, "18/09/2026  F Society"]
+
+def test_rename_button_reports_a_collision(
+    window, tmp_path, fake_messages, make_task, monkeypatch
+):
+    make_task(tmp_path, "260917", "FSocietyEverbind")
+    file = make_task(tmp_path, "260918", "FSociety")
+    window.navigate_to(tmp_path)
+    monkeypatch.setattr(
+        "mktsk.gui.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
+    )
+
+    action_bar(window, file).rename_button.click()
+
+    assert fake_messages["critical"] == ["'FSocietyEverbind' is already a task here"]
+    assert file.is_file()
 
 def test_open_failure_warns(window, tmp_path, monkeypatch, fake_messages):
     def raise_error(path):
-        raise OSError("boom")
+        raise OSError("Could not open: /somewhere")
 
     monkeypatch.setattr("mktsk.helpers.open_file", raise_error)
 
     window.open_with_default_app(tmp_path / "a.md")
 
-    assert len(fake_messages["warning"]) == 1
-    assert "Could not open file" in fake_messages["warning"][0]
+    # the window shows the error as it is, the helper already words it
+    assert fake_messages["warning"] == ["Could not open: /somewhere"]
 
 @freeze_time("2026-09-28")
 def test_create_task(qtbot, window, tmp_path, fake_open):
@@ -534,3 +789,66 @@ def test_module_entry_point_uses_gui_main():
     from mktsk import __main__ as module
 
     assert module.main is gui_main
+def test_rows_are_tall_enough_for_the_action_bar(window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    listing.setCurrentItem(listing.item(0))
+
+    assert listing.visualItemRect(listing.item(0)).height() >= (
+        listing.action_bar.sizeHint().height()
+    )
+
+
+def _ink(draw):
+    """Renders an icon and returns its ink, one cell per logical pixel."""
+    icon = gui._stroked_icon(QColor("#000000"), draw)
+    image = icon.pixmap(QSize(gui._ICON_SIZE, gui._ICON_SIZE)).toImage()
+    step = image.width() / image.deviceIndependentSize().width()
+    return [
+        [
+            image.pixelColor(round(x * step), round(y * step)).alpha() > 0
+            for x in range(gui._ICON_SIZE)
+        ]
+        for y in range(gui._ICON_SIZE)
+    ]
+
+
+def _painted(ink, along, at):
+    """Whether a line of the icon has ink, across a row or a column."""
+    if along == "column":
+        return any(ink[y][at] for y in range(gui._ICON_SIZE))
+    return any(ink[at])
+
+
+def test_the_folder_outline_is_closed(qapp):
+    ink = _ink(gui._draw_folder)
+
+    # every side of a closed folder is drawn, the left one like the right one
+    assert _painted(ink, "column", 1) is True
+    assert _painted(ink, "column", 16) is True
+    assert _painted(ink, "row", 15) is True
+
+    # and it is an outline, not a filled block
+    assert ink[11][8] is False
+
+
+def test_the_folder_has_a_tab_and_not_just_a_box(qapp):
+    ink = _ink(gui._draw_folder)
+
+    # the tab stands above the body, so the top is inked on the left only
+    assert ink[4][5] is True
+    assert ink[4][12] is False
+    assert ink[6][12] is True
+
+
+def test_the_plus_is_symmetric_about_its_centre(qapp):
+    ink = _ink(gui._draw_plus)
+    last = gui._ICON_SIZE - 1
+    centre = gui._ICON_SIZE // 2
+
+    # the bars cross at the middle of the icon, and reach as far either side
+    assert ink[centre][centre] is True
+    for offset in range(gui._ICON_SIZE):
+        assert ink[centre][offset] == ink[centre][last - offset]
+        assert ink[offset][centre] == ink[last - offset][centre]

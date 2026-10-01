@@ -387,3 +387,98 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
     sign_md_file(created_file, title)
 
     return TaskResult(created_file, f"Created: {folder_name}")
+
+def resume_task(folder: Path, title: str) -> TaskResult:
+    """Adds a dated section to a task folder and returns its .md file.
+
+    Unlike `open_or_create_task`, which looks a title up in the current
+    directory, this resumes the folder it is given, wherever that folder lives.
+
+    Args:
+        folder: the task folder to resume.
+        title: the standardized title of the task.
+
+    Returns:
+        The .md file to open and a message describing what happened.
+    """
+    today = datetime.datetime.now().astimezone().date()
+
+    return _resume_task(folder, title, today)
+
+def _retitle(file: Path, title: str, new_title: str) -> None:
+    """Rewrites the leading heading of a .md file when it names the task.
+
+    Only a first level heading that matches the title the file was created with
+    is touched. Everything else, hand written text and dated sections alike, is
+    left exactly as it was.
+
+    Args:
+        file: the .md file to rewrite.
+        title: the standardized title the heading is expected to carry.
+        new_title: the standardized title to write in its place.
+    """
+    content = file.read_text(encoding="utf-8")
+    heading = f"# {title}"
+
+    lines = content.split("\n")
+
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+
+        if line.strip() == heading:
+            lines[index] = f"# {new_title}"
+            file.write_text("\n".join(lines), encoding="utf-8")
+
+        return
+
+def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
+    """Renames a task folder and its .md file, keeping the date of the task.
+
+    The date prefix stays put, so a renamed task keeps its place in the history,
+    and only the leading `#` heading is rewritten, and only when it matches the
+    title the task had. Renaming to the title it already has does nothing.
+
+    Args:
+        folder: the task folder to rename.
+        title: the standardized title the task has now.
+        raw_title: the new title, as typed by the user.
+
+    Returns:
+        The renamed .md file and a message describing what happened.
+
+    Raises:
+        TaskError: If the new title is empty, normalizes to nothing, is a
+            reserved Windows name, or names a task that is already there.
+        OSError: If the folder or the file cannot be renamed.
+    """
+    new_title = standardize_string(raw_title)
+
+    if not new_title.strip():
+        raise helpers.TaskError("invalid task description")
+
+    if helpers.is_reserved_name(new_title):
+        raise helpers.TaskError(f"'{new_title}' is a reserved name")
+
+    file = folder / f"{title}.md"
+
+    if not file.is_file():
+        raise helpers.TaskError(f"'{title}' has no Markdown file")
+
+    if new_title == title:
+        return TaskResult(file, f"Renamed: {folder.name}")
+
+    date_prefix = folder.name.partition(_TASK_NAME_SEPARATOR)[0]
+    renamed_folder = folder.parent / build_folder_name(new_title, date_prefix)
+
+    if find_task_folder(folder.parent, new_title) is not None:
+        raise helpers.TaskError(f"'{new_title}' is already a task here")
+
+    # the file moves inside the folder first, or its old path stops resolving
+    file.rename(folder / f"{new_title}.md")
+    folder.rename(renamed_folder)
+
+    renamed_file = renamed_folder / f"{new_title}.md"
+    _retitle(renamed_file, title, new_title)
+
+    return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")

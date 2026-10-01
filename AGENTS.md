@@ -44,8 +44,17 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
   `<yymmdd> - <StandardizedTitle>` on any date; the same title in another directory is a
   different task
 - Resuming appends `## <today>` at the end of the `.md` unless that date is already
-  there; existing text is never rewritten, only trailing whitespace is dropped; headings
-  are matched loosely, so `##  05/08/2026 ` counts as 05/08/2026
+  there; the dated section never rewrites the body, only trailing whitespace is dropped;
+  headings are matched loosely, so `##  05/08/2026 ` counts as 05/08/2026
+- `resume_task(folder, title)` resumes the folder it is given, wherever that folder
+  lives; unlike `open_or_create_task`, it does no lookup and takes no directory
+- `rename_task(folder, title, raw_title)` keeps the date prefix, renames the folder and
+  the `.md`, and rewrites only the first non-empty line, and only when it is exactly
+  `# <old title>`; a heading it does not recognise, and everything after it, is left
+  alone; renaming to the title the task already has does nothing
+- `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
+  `.md` or a title another task of the same directory already has; it renames the `.md`
+  before the folder, or the old file path stops resolving
 - `is_task_folder(name)` is a shape check: a real `%y%m%d` date, ` - `, then an ASCII
   alphanumeric title that does not start with a lowercase letter (`2026` counts)
 - `standardize_string` is not idempotent (`BigWord` becomes `Bigword`); never test
@@ -53,7 +62,8 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 - Lookup uses `is_task_folder`; a folder that fails the check is never resumed, and the
   new task is created beside it
 - Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`)
-- Open files with the OS default application (`os.startfile` / `xdg-open`)
+- Open files and folders with the OS default application: `os.startfile` on Windows,
+  `xdg-open` on Linux when it is there, `gio open` otherwise
 - Folder and file names are ASCII only
 - Reading a title back for display (`readable_title`): every uppercase letter starts a
   word and a digit starts one too, so `FSocietyEverbind` reads as `F Society Everbind`
@@ -81,12 +91,26 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 - A task folder with no `.md` is not listed; a task two levels down is not found
 - A task label is `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as
   tooltip
-- Browsing is read-only: clicking a task just opens its `.md`, it never creates a file
-  and never appends a date; only `create_task` resumes a task, and it still looks in
-  the current directory only
+- Selecting a task shows an action bar over that row, aligned to the left, with the
+  `Open`, `Resume` and `Rename` buttons; it moves with the selection and disappears with
+  it
+- The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
+  `Open`, a plus for `Resume` and a pencil for `Rename`, all drawn with `QPainter` in
+  `gui.py`, so no image file has to be collected for a frozen build
+- The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
+  checks the item holds a `TaskEntry` before showing or placing the bar
+- Only the selected row is inset to make room for the bar, so the space appears when the
+  row is clicked and is given back when the selection goes; every row keeps the height
+  the bar needs, or the list would shift as the selection moves
+- `Open` replaces the double click on a task; `Open` reveals the task folder in the file
+  manager and touches nothing, `Resume` opens the `.md`, `Rename` does not open it, it
+  just refreshes the list
+- `Resume` is the only browse action that appends a date, and it appends it to the task
+  it was asked for, not to one looked up in the current directory
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
-  what was created
+  what was created; the warning carries the error as it is, `helpers.open_file` already
+  words it, so the path is never hidden behind a duplicated prefix
 - Keep the window open and clear the title field after creating
 
 ## Conventions

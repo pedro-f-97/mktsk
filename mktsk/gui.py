@@ -1,12 +1,36 @@
+from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtCore import (
+    QModelIndex,
+    QPersistentModelIndex,
+    QPointF,
+    QRect,
+    QRectF,
+    QSettings,
+    QSize,
+    Qt,
+    Signal,
+    SignalInstance,
+)
+from PySide6.QtGui import (
+    QCloseEvent,
+    QColor,
+    QIcon,
+    QImage,
+    QPainter,
+    QPalette,
+    QPen,
+    QPixmap,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
+    QLayout,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -14,7 +38,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTabWidget,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -24,8 +51,262 @@ from PySide6.QtWidgets import (
 from . import helpers, workers
 
 _PATH_ROLE = Qt.ItemDataRole.UserRole
+_ENTRY_ROLE = Qt.ItemDataRole.UserRole + 1
 
 _ALL_TAB = "All"
+
+_ACTION_BAR_PADDING = 4
+_ICON_SIZE = 18
+_ICON_STROKE = 2.0
+_ICON_SCALE = 2
+
+
+def _icon_pen(color: QColor) -> QPen:
+    """Builds the pen every icon is stroked with.
+
+    Args:
+        color: colour of the strokes.
+
+    Returns:
+        A round capped and joined pen, so the icons read as a set.
+    """
+    pen = QPen(color, _ICON_STROKE)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    return pen
+
+
+def _draw_folder(painter: QPainter, box: QRectF) -> None:
+    """Draws a closed folder with a tab, for showing where a task lives."""
+    painter.drawPolygon(
+        QPolygonF(
+            [
+                QPointF(2, 5),
+                QPointF(7, 5),
+                QPointF(8.5, 7),
+                QPointF(16, 7),
+                QPointF(16, 15),
+                QPointF(2, 15),
+            ]
+        )
+    )
+
+
+def _draw_plus(painter: QPainter, box: QRectF) -> None:
+    """Draws a plus, for adding an intervention to a task."""
+    painter.drawLine(QPointF(9, 4), QPointF(9, 14))
+    painter.drawLine(QPointF(4, 9), QPointF(14, 9))
+
+
+def _draw_pencil(painter: QPainter, box: QRectF) -> None:
+    """Draws a pencil, for changing the title of a task."""
+    painter.drawPolygon(
+        QPolygonF(
+            [
+                QPointF(3.5, 14.5),
+                QPointF(6.1, 14.1),
+                QPointF(14.1, 6.1),
+                QPointF(11.9, 3.9),
+                QPointF(3.9, 11.9),
+            ]
+        )
+    )
+    painter.drawLine(QPointF(10.4, 5.5), QPointF(12.5, 7.6))
+
+
+def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QIcon:
+    """Renders a stroked icon on a transparent image.
+
+    Drawing them in code keeps the package free of image files, so nothing has to
+    be collected for a frozen build. The image is drawn at twice the size and
+    halved by the device pixel ratio, so the strokes stay sharp on a HiDPI screen.
+
+    Args:
+        color: colour of the strokes.
+        draw: painting function, given a painter and the box to draw in.
+
+    Returns:
+        The rendered icon.
+    """
+    image = QImage(
+        _ICON_SIZE * _ICON_SCALE,
+        _ICON_SIZE * _ICON_SCALE,
+        QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    image.setDevicePixelRatio(_ICON_SCALE)
+    image.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(_icon_pen(color))
+    draw(painter, QRectF(0, 0, _ICON_SIZE, _ICON_SIZE))
+    painter.end()
+
+    return QIcon(QPixmap.fromImage(image))
+
+
+class _ActionBar(QWidget):
+    """The actions offered for the selected task, aligned to the left.
+
+    The buttons carry an icon and a tooltip rather than a label, which keeps the
+    bar narrow enough to sit on a row without hiding much of it.
+    """
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        # the listing positions the bar, so the layout must not resize it
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(_ACTION_BAR_PADDING)
+
+        self.open_button = self._button("Open the task folder", _draw_folder, "Open")
+        self.resume_button = self._button("Add a note for today", _draw_plus, "Resume")
+        self.rename_button = self._button("Rename this task", _draw_pencil, "Rename")
+        for button in self.buttons():
+            layout.addWidget(button)
+
+    def buttons(self) -> tuple[QToolButton, ...]:
+        """Returns the three action buttons, in order."""
+        return (self.open_button, self.resume_button, self.rename_button)
+
+    def _button(
+        self, tooltip: str, draw: Callable[[QPainter, QRectF], None], name: str
+    ) -> QToolButton:
+        """Builds one icon button of the bar.
+
+        Args:
+            tooltip: text shown on hover, and the accessible name.
+            draw: painting function of the icon.
+            name: role of the button, for the object name.
+
+        Returns:
+            The button.
+        """
+        button = QToolButton(self)
+        button.setObjectName(f"{name}TaskButton")
+        button.setIcon(_stroked_icon(button.palette().color(QPalette.ColorRole.ButtonText), draw))
+        button.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+        button.setToolTip(tooltip)
+        button.setAutoRaise(True)
+        return button
+
+
+class _InsetDelegate(QStyledItemDelegate):
+    """Keeps the text of the row carrying the action bar clear of it.
+
+    Only the selected row is inset, so the space for the buttons appears when the
+    row is clicked and is given back when the selection goes. Every row keeps the
+    height the bar needs, which stops the list from shifting as the selection
+    moves.
+
+    Args:
+        inset: width reserved on the left of the selected row.
+        min_height: height a row needs to hold the action bar.
+    """
+
+    def __init__(self, inset: int, min_height: int) -> None:
+        super().__init__()
+        self.inset = inset
+        self.min_height = min_height
+        self.inset_row = -1
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        option.rect = QRect(option.rect)
+        if index.row() == self.inset_row:
+            option.rect.adjust(self.inset, 0, 0, 0)
+        super().paint(painter, option, index)
+
+    def sizeHint(
+        self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
+    ) -> QSize:
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), self.min_height))
+        if index.row() == self.inset_row:
+            size.setWidth(size.width() + self.inset)
+        return size
+
+
+class TaskListing(QListWidget):
+    """A list of tasks with an action bar over the selected row.
+
+    The bar follows the selected row, and shows only when a task is selected.
+    Headings are not selectable, so they never get one. The listing only reports
+    which action was asked for, leaving the task logic to the window.
+    """
+
+    open_requested = Signal(object)
+    resume_requested = Signal(object)
+    rename_requested = Signal(object)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.action_bar = _ActionBar(self.viewport())
+        self.inset = self.action_bar.minimumSizeHint().width() + 2 * _ACTION_BAR_PADDING
+        self.delegate = _InsetDelegate(
+            self.inset, self.action_bar.minimumSizeHint().height()
+        )
+        self.setItemDelegate(self.delegate)
+
+        self.action_bar.open_button.clicked.connect(
+            lambda: self._request(self.open_requested)
+        )
+        self.action_bar.resume_button.clicked.connect(
+            lambda: self._request(self.resume_requested)
+        )
+        self.action_bar.rename_button.clicked.connect(
+            lambda: self._request(self.rename_requested)
+        )
+        self.currentItemChanged.connect(lambda *_: self._sync_action_bar())
+        self.action_bar.hide()
+
+    def selected_entry(self) -> workers.TaskEntry | None:
+        """Returns the task of the selected row, or None when none is."""
+        item = self.currentItem()
+        return item.data(_ENTRY_ROLE) if item else None
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        self._place_action_bar()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place_action_bar()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._sync_action_bar()
+
+    def _request(self, signal: SignalInstance) -> None:
+        entry = self.selected_entry()
+        if entry is not None:
+            signal.emit(entry)
+
+    def _sync_action_bar(self) -> None:
+        self.delegate.inset_row = self.currentRow()
+        self.viewport().update()
+
+        if self.selected_entry() is None:
+            self.action_bar.hide()
+            return
+
+        # showing first, then placing: showing a widget with a layout lets the
+        # layout resize it to its own idea of a size
+        self.action_bar.show()
+        self._place_action_bar()
+
+    def _place_action_bar(self) -> None:
+        item = self.currentItem()
+        if item is None or item.data(_ENTRY_ROLE) is None:
+            return
+
+        rect = self.visualItemRect(item)
+        self.action_bar.setGeometry(rect.left(), rect.top(), self.inset, rect.height())
 
 
 class MainWindow(QMainWindow):
@@ -152,9 +433,11 @@ class MainWindow(QMainWindow):
         """Returns the title of the tab for the tasks of the current directory."""
         return self.current_directory.name or str(self.current_directory)
 
-    def _new_listing(self) -> QListWidget:
-        listing = QListWidget()
-        listing.itemDoubleClicked.connect(self.open_item)
+    def _new_listing(self) -> TaskListing:
+        listing = TaskListing()
+        listing.open_requested.connect(self.open_task)
+        listing.resume_requested.connect(self.resume_task)
+        listing.rename_requested.connect(self.rename_task)
         return listing
 
     def _add_tab(self, title: str, listing: QListWidget) -> None:
@@ -179,7 +462,7 @@ class MainWindow(QMainWindow):
     def _add_task(self, listing: QListWidget, entry: workers.TaskEntry) -> None:
         date = entry.date.strftime(workers.DATE_FORMAT)
         item = QListWidgetItem(f"{date}  {helpers.readable_title(entry.title)}")
-        item.setData(_PATH_ROLE, str(entry.file))
+        item.setData(_ENTRY_ROLE, entry)
         item.setToolTip(str(entry.file))
         listing.addItem(item)
 
@@ -200,16 +483,61 @@ class MainWindow(QMainWindow):
         if path:
             self.navigate_to(Path(path))
 
-    def open_item(self, item: QListWidgetItem) -> None:
-        path = item.data(_PATH_ROLE)
-        if path:
-            self.open_with_default_app(Path(path))
+    def open_task(self, entry: workers.TaskEntry) -> None:
+        """Reveals the folder of a task with the file manager.
+
+        Args:
+            entry: the selected task.
+        """
+        self.open_with_default_app(entry.file.parent)
+
+    def resume_task(self, entry: workers.TaskEntry) -> None:
+        """Adds a dated section to a task and opens it.
+
+        The task is resumed where it is, which is not necessarily the current
+        directory.
+
+        Args:
+            entry: the selected task.
+        """
+        try:
+            result = workers.resume_task(entry.file.parent, entry.title)
+        except (OSError, helpers.TaskError) as error:
+            QMessageBox.critical(self, "mktsk", str(error))
+            return
+
+        self.open_with_default_app(result.file)
+
+    def rename_task(self, entry: workers.TaskEntry) -> None:
+        """Renames a task, keeping the date it was created on.
+
+        Args:
+            entry: the selected task.
+        """
+        raw_title, accepted = QInputDialog.getText(
+            self,
+            "Rename task",
+            "Title",
+            QLineEdit.EchoMode.Normal,
+            helpers.readable_title(entry.title),
+        )
+
+        if not accepted or not raw_title.strip():
+            return
+
+        try:
+            workers.rename_task(entry.file.parent, entry.title, raw_title)
+        except (OSError, helpers.TaskError) as error:
+            QMessageBox.critical(self, "mktsk", str(error))
+            return
+
+        self.refresh()
 
     def open_with_default_app(self, path: Path) -> None:
         try:
             helpers.open_file(path)
         except OSError as error:
-            QMessageBox.warning(self, "mktsk", f"Could not open file: {error}")
+            QMessageBox.warning(self, "mktsk", str(error))
 
     def create_task(self) -> None:
         raw_title = self.title_input.text()

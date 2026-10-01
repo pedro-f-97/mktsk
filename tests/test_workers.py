@@ -16,6 +16,8 @@ from mktsk.workers import (
     is_task_folder,
     list_subdirectories,
     open_or_create_task,
+    rename_task,
+    resume_task,
     sign_md_file,
     standardize_string,
 )
@@ -430,7 +432,9 @@ def test_find_task_groups_categories_are_alphabetical(tmp_path, make_task):
 
     groups = find_task_groups(tmp_path)
 
-    assert [group.category.name for group in groups] == ["Able", "monad", "Veritas"]
+    assert [
+        group.category.name for group in groups if group.category is not None
+    ] == ["Able", "monad", "Veritas"]
 
 def test_find_task_groups_sorts_newest_first(tmp_path, make_task):
     make_task(tmp_path, "260918", "Foo")
@@ -527,3 +531,124 @@ def test_find_task_groups_skips_unreadable_subdirectory(
     monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
 
     assert find_task_groups(tmp_path) == []
+
+
+@freeze_time("2026-09-30")
+def test_resume_task_uses_the_given_folder(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+    folder = tmp_path / "260918 - FSociety"
+
+    result = resume_task(folder, "FSociety")
+
+    assert result.file == folder / "FSociety.md"
+    assert "## 30/09/2026" in result.file.read_text(encoding="utf-8")
+
+@freeze_time("2026-09-30")
+def test_resume_task_ignores_the_current_directory(tmp_path, make_task):
+    make_task(tmp_path / "Veritas", "260918", "FSociety")
+    folder = tmp_path / "Veritas" / "260918 - FSociety"
+    elsewhere = tmp_path / "SteelMountain"
+    elsewhere.mkdir()
+
+    result = resume_task(folder, "FSociety")
+
+    assert result.file == folder / "FSociety.md"
+    assert list(elsewhere.iterdir()) == []
+
+
+@freeze_time("2026-09-30")
+def test_rename_task_keeps_the_date_and_rewrites_the_heading(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("# FSociety\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "F Society Everbind")
+
+    assert result.file == tmp_path / "260918 - FSocietyEverbind" / "FSocietyEverbind.md"
+    assert result.message == "Renamed: 260918 - FSocietyEverbind"
+
+def test_rename_task_leaves_the_rest_of_the_file_alone(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text(
+        "# FSociety\n\n## 18/09/2026\n\n# FSociety\n\nbody\n", encoding="utf-8"
+    )
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == (
+        "# Everbind\n\n## 18/09/2026\n\n# FSociety\n\nbody\n"
+    )
+
+def test_rename_task_leaves_a_heading_it_does_not_recognise(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("notes first\n# FSociety\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == "notes first\n# FSociety\n"
+
+def test_rename_task_ignores_a_heading_with_stray_spacing(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("  # FSociety  \n\nbody\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == "# Everbind\n\nbody\n"
+
+def test_rename_task_to_the_title_it_already_has(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+    folder = tmp_path / "260918 - FSociety"
+
+    result = rename_task(folder, "FSociety", "F Society")
+
+    assert result.file == folder / "FSociety.md"
+    assert result.message == "Renamed: 260918 - FSociety"
+
+def test_rename_task_rejects_an_empty_title(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="invalid task description"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "!!!")
+
+def test_rename_task_rejects_a_blank_title(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="invalid task description"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "   ")
+
+def test_rename_task_rejects_a_reserved_name(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="reserved name"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "con")
+
+def test_rename_task_rejects_a_task_that_is_already_there(tmp_path, make_task):
+    make_task(tmp_path, "260917", "FSocietyEverbind")
+    file = make_task(tmp_path, "260918", "FSociety")
+
+    with pytest.raises(TaskError, match="already a task here"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "F Society Everbind")
+
+    assert file.read_text(encoding="utf-8") == "# FSociety\n"
+    assert (tmp_path / "260917 - FSocietyEverbind").is_dir()
+
+def test_rename_task_rejects_a_folder_without_markdown(tmp_path):
+    (tmp_path / "260918 - FSociety").mkdir()
+
+    with pytest.raises(TaskError, match="no Markdown file"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+def test_rename_task_skips_blank_lines_before_the_heading(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("\n\n# FSociety\n\nbody\n", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == "\n\n# Everbind\n\nbody\n"
+
+def test_rename_task_leaves_a_file_without_any_content(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    file.write_text("", encoding="utf-8")
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.file.read_text(encoding="utf-8") == ""
