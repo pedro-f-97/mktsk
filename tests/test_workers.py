@@ -232,6 +232,21 @@ def test_is_task_folder_missing_separator_or_title():
     assert not is_task_folder("ItsAlive")
     assert not is_task_folder("")
 
+@pytest.mark.parametrize(
+    "name", ["261001 - CON", "261001 - Nul", "261001 - com1", "261001 - PRN"]
+)
+def test_is_task_folder_reserved_title(name):
+    # the date prefix keeps the folder name itself out of the reserved set, but
+    # the .md inside would be CON.md, which is as reserved as CON
+    assert not is_task_folder(name)
+
+@pytest.mark.parametrize(
+    "name", ["261001 - CONtact", "261001 - Com", "261001 - Nulled", "261001 - CON1"]
+)
+def test_is_task_folder_title_merely_looks_reserved(name):
+    # only the whole title is reserved, not a prefix or a stem of one
+    assert is_task_folder(name)
+
 def test_is_task_folder_title_not_standardized():
     assert not is_task_folder("260930 - Blá")
     assert not is_task_folder("260930 - Its Alive")
@@ -925,6 +940,12 @@ def test_create_category_rejects_a_task_folder_name(tmp_path):
     with pytest.raises(TaskError, match="invalid category name"):
         create_category(tmp_path, "260918 - Foo")
 
+def test_create_category_rejects_a_reserved_task_title(tmp_path):
+    # is_task_folder refuses the name as a task, and a category must not take
+    # the name a task folder would have had, which cannot be opened either
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, "261001 - CON")
+
 def test_create_category_rejects_a_name_it_cannot_make_ascii(tmp_path):
     with pytest.raises(TaskError, match="invalid category name"):
         create_category(tmp_path, "日本語")
@@ -938,3 +959,11 @@ def test_create_category_is_listed_as_a_category(tmp_path):
     create_category(tmp_path, "Veritas")
 
     assert list_subdirectories(tmp_path) == [tmp_path / "Veritas"]
+
+def test_a_task_folder_with_a_reserved_title_is_still_visible(tmp_path):
+    # not a task and not a category, so it is a plain folder the user can see,
+    # navigate to and clear out, rather than one that is nowhere to be found
+    (tmp_path / "261001 - CON").mkdir()
+
+    assert list_subdirectories(tmp_path) == [tmp_path / "261001 - CON"]
+    assert find_task_groups(tmp_path) == []

@@ -89,7 +89,10 @@ change the name.
   None when the name is not a task folder; it is how the CLI reads the current title of a
   folder the user named, so the CLI never has to know how the name is split
 - `is_task_folder(name)` is a shape check: a real `%y%m%d` date, ` - `, then an ASCII
-  alphanumeric title that does not start with a lowercase letter (`2026` counts)
+  alphanumeric title that does not start with a lowercase letter (`2026` counts) and is
+  not a Windows reserved name. The date prefix keeps `261001 - CON` out of the reserved
+  set as a folder name, but the `.md` inside it would be `CON.md`, so a title the shape
+  check accepted would still be one that cannot be opened
 - `standardize_string` is not idempotent (`BigWord` becomes `Bigword`); never test
   `standardize_string(title) == title`
 - Lookup uses `is_task_folder`; a folder that fails the check is never resumed, and the
@@ -106,7 +109,10 @@ change the name.
   `Producao`) and leaves the case, the spacing and the punctuation alone; it raises
   `TaskError` on a name that is empty, cannot be made ASCII, carries a path separator, is
   reserved, starts with `.` or looks like a task folder (`260918 - Foo`), because any of
-  those would be missing from the listing; a name that is already there is not an error
+  those would be missing from the listing; a name that is already there is not an error.
+  It also refuses `_reserved_task_title`, which is what `is_task_folder` now rejects, so a
+  category cannot take the name a task folder would have had; a folder like that is a plain
+  directory, visible in the tree, rather than a task and a category that neither open
 - `validate_name` uses the Windows rules on every platform, because Windows is the
   strictest of the two and a name it takes is taken everywhere: a character from
   `<>:"/\|?*`, a control character, a name that is empty or only spaces, a name that is not

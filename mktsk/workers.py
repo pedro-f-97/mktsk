@@ -187,6 +187,11 @@ def is_task_folder(name: str) -> bool:
     be a real calendar date, and the title must be ASCII alphanumeric and must
     not start lowercase, which is exactly what `standardize_string` produces.
 
+    The title must not be a name Windows reserves either. The date prefix keeps
+    `261001 - CON` out of the reserved set as a folder name, but the .md inside
+    it would be `CON.md`, which is reserved, so a task the shape check accepts
+    would still be one that cannot be opened.
+
     Args:
         name: the directory name to check.
 
@@ -207,7 +212,37 @@ def is_task_folder(name: str) -> bool:
     except ValueError:
         return False
 
-    return title.isascii() and title.isalnum() and not title[0].islower()
+    return (
+        title.isascii()
+        and title.isalnum()
+        and not title[0].islower()
+        and not helpers.is_reserved_name(title)
+    )
+
+def _reserved_task_title(name: str) -> bool:
+    """Tells whether a task folder name carries a title Windows reserves.
+
+    The date prefix keeps the folder name itself out of the reserved set, so it
+    is the title that has to be checked, which is also what its .md is called.
+    Only the shape of the name is read here, and not the calendar date or the
+    standardization of the title, because `is_task_folder` decides on both of
+    those and refuses the name as a task; this says why, so a category cannot
+    take the name that a task folder would have had.
+
+    Args:
+        name: the directory name to check.
+
+    Returns:
+        True when the name looks like a task folder whose title is reserved.
+    """
+    date_prefix, separator, title = name.partition(_TASK_NAME_SEPARATOR)
+
+    return (
+        bool(separator)
+        and len(date_prefix) == _TASK_DATE_PREFIX_LENGTH
+        and date_prefix.isdigit()
+        and helpers.is_reserved_name(title)
+    )
 
 def find_task_folder(location: Path, title: str) -> Path | None:
     """Finds the task folder for a title in the given directory, on any date.
@@ -634,7 +669,7 @@ def create_category(location: Path, raw_name: str) -> Path:
     if name.startswith("."):
         raise helpers.TaskError("invalid category name")
 
-    if is_task_folder(name):
+    if is_task_folder(name) or _reserved_task_title(name):
         raise helpers.TaskError("invalid category name")
 
     category = location / name
