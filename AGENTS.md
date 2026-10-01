@@ -162,6 +162,14 @@ change the name.
 - Small functions; imports sorted by isort (`ruff check . --fix`)
 - Comment only when it adds value; never delete existing comments
 - Tests in `tests/test_*.py`; never write to real user folders (`tmp_path`)
+- One test file per subject, named after it (`test_gui_listing.py`, `test_gui_target.py`,
+  `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py`, `test_gui_window.py`);
+  a file that grows past a few hundred lines is split, never extended
+- Fixtures go in `tests/conftest.py`; the plain helpers shared across GUI test files live
+  in `tests/gui_helpers.py` and are imported as `from tests.gui_helpers import ...`, because
+  `tests/__init__.py` makes `tests/` a package
+- Private names the tests need are imported from the module under test, never redefined,
+  so a change in `mktsk/` cannot be papered over by a stale copy in the tests
 
 ## Writing style
 
