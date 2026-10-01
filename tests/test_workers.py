@@ -121,18 +121,58 @@ def test_sign_md_file_existing_ok(tmp_path):
 
     assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 20/09/2026\n\n"
 
-def test_sign_md_file_existing_untouched(tmp_path):
+def test_sign_md_file_completes_foreign_content(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
 
     file = folder / "ThisTest.md"
     file.touch()
 
+    # a folder copied by hand, so the heading names a different task
     file.write_text("# This is some other text\n", encoding="utf-8")
 
-    sign_md_file(file, "260922 - ThisTest")
+    assert sign_md_file(file, "ThisTest") is False
 
-    assert file.read_text(encoding="utf-8") == "# This is some other text\n"
+    assert (
+        file.read_text(encoding="utf-8")
+        == "# ThisTest\n\n# This is some other text\n"
+    )
+
+def test_sign_md_file_completes_content_without_a_heading(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
+    folder.mkdir()
+
+    file = folder / "ThisTest.md"
+    file.write_text("some content\n", encoding="utf-8")
+
+    assert sign_md_file(file, "ThisTest") is False
+
+    assert file.read_text(encoding="utf-8") == "# ThisTest\n\nsome content\n"
+
+def test_sign_md_file_leaves_a_matching_heading_alone(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
+    folder.mkdir()
+
+    file = folder / "ThisTest.md"
+    original = "# ThisTest\n\n## 20/09/2026\n\nnotes\n"
+    file.write_text(original, encoding="utf-8")
+
+    assert sign_md_file(file, "ThisTest") is False
+
+    assert file.read_text(encoding="utf-8") == original
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_signs_foreign_md(tmp_path):
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# AnotherTask\n\nsome content\n", encoding="utf-8")
+
+    result = open_or_create_task(tmp_path, "Foo")
+
+    assert (
+        result.file.read_text(encoding="utf-8")
+        == "# Foo\n\n# AnotherTask\n\nsome content\n\n## 30/09/2026\n\n"
+    )
 
 @freeze_time("2026-09-22")
 def test_sign_md_file_existing_space(tmp_path):

@@ -55,7 +55,11 @@ change the name.
   `BjorkNaiveFacade`
 - Folder: `<date> - <StandardizedTitle>`; file: `<StandardizedTitle>.md`
 - Sign an empty `.md` with `# <StandardizedTitle>`, a blank line, then `## <dd/mm/YYYY>`
-  from `strftime("%d/%m/%Y")`, and a blank line; never touch a non-empty file
+  from `strftime("%d/%m/%Y")`, and a blank line. A `.md` whose leading heading is not
+  `# <StandardizedTitle>` gains the missing heading at the start and keeps everything
+  below it, so content from another task, in a folder copied by hand or restored from a
+  backup, is never mistaken for the identity of this one. Nothing is ever rewritten or
+  dropped; `sign_md_file` returns whether it dated a file that had no date of its own
 - The title of a task is unique within its directory, or category, so a lookup by title is
   unambiguous there. Lookup runs before any creation, in the current directory only, and
   ignores the date: `260918 - Foo` is what `mktsk Foo` resumes weeks later. The same title
@@ -64,9 +68,11 @@ change the name.
   cannot be the way to end up with two of one title. A folder copied by hand, or restored
   from a backup, can, and `find_task_folder` then takes the most recent rather than
   whichever came first out of `iterdir()`
-- Resuming appends `## <today>` at the end of the `.md` unless that date is already
-  there; the dated section never rewrites the body, only trailing whitespace is dropped;
-  headings are matched loosely, so `##  05/08/2026 ` counts as 05/08/2026
+- Resuming signs first, then appends `## <today>` at the end of the `.md` unless that
+  date is already there; the dated section never rewrites the body, only trailing
+  whitespace is dropped; headings are matched loosely, so `##  05/08/2026 ` counts as
+  05/08/2026. Signing a file that had nothing in it dates it, so the append is skipped
+  for that file, which is the only case in which resuming adds no dated section
 - `resume_task(folder, title)` resumes the folder it is given, wherever that folder
   lives; unlike `open_or_create_task`, it does no lookup and takes no directory
 - `rename_task(folder, title, raw_title)` keeps the date prefix, renames the folder and

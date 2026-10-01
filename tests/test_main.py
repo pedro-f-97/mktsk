@@ -65,6 +65,7 @@ def test_main_resumes_existing_task(monkeypatch, tmp_path):
     existing_folder = folder / "260922 - TestMain"
     existing_folder.mkdir()
     existing_file = existing_folder / "TestMain.md"
+    # a heading from another task, so signing completes it at the start
     existing_file.write_text("# existing notes\n", encoding="utf-8")
 
     opened_files = []
@@ -79,7 +80,7 @@ def test_main_resumes_existing_task(monkeypatch, tmp_path):
 
     assert result == 0
     assert existing_file.read_text(encoding="utf-8") == (
-        "# existing notes\n\n## 22/09/2026\n\n"
+        "# TestMain\n\n# existing notes\n\n## 22/09/2026\n\n"
     )
     assert opened_files == [existing_file]
 

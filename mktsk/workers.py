@@ -126,24 +126,42 @@ def create_md_file(location: Path, name: str) -> Path:
 
     return file_to_create
 
-def sign_md_file(file: Path, title: str) -> None:
+def sign_md_file(file: Path, title: str) -> bool:
     """Writes given title and the current date as headings in the given .md file.
 
     The title becomes the first level heading and the date, in `dd/mm/yyyy`
     format, the second level heading. A blank line follows, so the body can be
     typed straight away.
 
-    If the file already contains content, it is left untouched.
+    A file whose leading heading already names the task is left untouched. A
+    file carrying something else, which is content from a folder copied by hand
+    or restored from a backup, gains the missing heading at the start and keeps
+    everything below it as it was; nothing is ever rewritten or dropped, so the
+    content of another task is never mistaken for the identity of this one.
 
     Args:
         file: file to be signed
         title: string to use as the heading, e.g. the standardized task title
+
+    Returns:
+        True when the file carried no dated section of its own and the date
+        written here is the first, False when there was content to keep.
     """
     content = file.read_text(encoding="utf-8")
+    date = datetime.datetime.now().astimezone().strftime(DATE_FORMAT)
 
-    if not content.strip():
-        date = datetime.datetime.now().astimezone().strftime(DATE_FORMAT)
+    # a heading that already names the task, or nothing to insert one before
+    if _retitled(content, title, title) is None:
+        body = content.lstrip()
+
+        if body:
+            file.write_text(f"# {title}\n\n{body}", encoding="utf-8")
+            return False
+
         file.write_text(f"# {title}\n\n## {date}\n\n", encoding="utf-8")
+        return True
+
+    return False
 
 def is_task_folder(name: str) -> bool:
     """Tells whether a directory name is a task folder.
@@ -376,8 +394,8 @@ def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
     """
     file = create_md_file(folder, title)
 
-    if not file.read_text(encoding="utf-8").strip():
-        sign_md_file(file, title)
+    # signing a file with nothing in it dates it, so there is no visit to add
+    if sign_md_file(file, title):
         return TaskResult(file, f"Opened: {folder.name}")
 
     formatted = date.strftime(DATE_FORMAT)

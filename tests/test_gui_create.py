@@ -59,6 +59,7 @@ def test_create_task_resumes_existing_task(window, tmp_path, fake_open):
     existing_folder = tmp_path / "260928 - TestTask"
     existing_folder.mkdir()
     existing_file = existing_folder / "TestTask.md"
+    # a heading from another task, so signing completes it at the start
     existing_file.write_text("# existing notes\n", encoding="utf-8")
     window.navigate_to(tmp_path)
     window.title_input.setText("Test Task")
@@ -66,7 +67,7 @@ def test_create_task_resumes_existing_task(window, tmp_path, fake_open):
     window.create_task()
 
     assert existing_file.read_text(encoding="utf-8") == (
-        "# existing notes\n\n## 28/09/2026\n\n"
+        "# TestTask\n\n# existing notes\n\n## 28/09/2026\n\n"
     )
     assert fake_open == [existing_file]
 
