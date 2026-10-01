@@ -229,6 +229,146 @@ def test_parse_arguments_for_list_and_rename(monkeypatch):
 
     assert failure.value.code == 2
 
+def test_parse_arguments_for_new_category(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "My Category"])
+
+    args = parse_arguments()
+
+    assert args.new_category == "My Category"
+    assert args.title == []
+
+def test_parse_arguments_for_new_category_with_a_title(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "My", "Category"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_new_category_without_a_name(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_new_category_and_list(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Foo", "--list"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_new_category_and_rename(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv", ["mktsk", "--new-category", "Foo", "--rename", "260918 - A", "B"]
+    )
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_main_new_category(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "Veritas").is_dir()
+    assert capsys.readouterr().out == f"Created: {tmp_path / 'Veritas'}\n"
+    # making somewhere to put tasks is not working on one
+    assert opened == []
+
+def test_main_new_category_keeps_the_case_and_the_spaces(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "My Clients"])
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "My Clients").is_dir()
+
+def test_main_new_category_strips_the_accents(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Produção"])
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "Producao").is_dir()
+
+def test_main_new_category_takes_a_name_that_is_already_there(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Veritas").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "Veritas").is_dir()
+    assert f"Created: {tmp_path / 'Veritas'}" in capsys.readouterr().out
+
+@pytest.mark.parametrize(
+    "name",
+    ["  ", "con", "260918 - Foo", ".hidden", "a/b"],
+)
+def test_main_new_category_refuses_a_name_it_cannot_use(monkeypatch, tmp_path, capsys, name):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", name])
+
+    result = main()
+
+    assert result == 1
+    assert "Error:" in capsys.readouterr().out
+    assert list(tmp_path.iterdir()) == []
+
+def test_main_new_category_keeps_the_punctuation(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Its-Alive!"])
+
+    result = main()
+
+    # a category is not a task, so its name is not standardized
+    assert result == 0
+    assert (tmp_path / "Its-Alive!").is_dir()
+
+@freeze_time("2026-09-30")
+def test_main_new_category_can_hold_a_task(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    assert main() == 0
+
+    # the task lands inside the category, not beside it
+    category = tmp_path / "Veritas"
+    monkeypatch.chdir(category)
+    monkeypatch.setattr("sys.argv", ["mktsk", "New", "Task"])
+
+    assert main() == 0
+    assert (category / "260930 - NewTask" / "NewTask.md").is_file()
+    assert not (tmp_path / "260930 - NewTask").exists()
+
+def test_main_new_category_reports_a_failure_to_create(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    def raise_error(*args):
+        raise OSError("test error")
+
+    monkeypatch.setattr("mktsk.workers.create_category", raise_error)
+
+    result = main()
+
+    assert result == 1
+    assert "Error: test error" in capsys.readouterr().out
+
 def test_main_list(monkeypatch, tmp_path, capsys, make_task):
     make_task(tmp_path, "260918", "Foo")
     make_task(tmp_path, "260923", "ItsAlive")

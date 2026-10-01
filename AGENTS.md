@@ -109,6 +109,13 @@ change the name.
   spaces and `readable_title`. The order is the one `find_task_groups` already gives, so
   a directory with no tasks prints nothing. Never format a date or a title in the CLI by
   hand, or the two listings drift apart
+- `--new-category <name>` creates a category in the current directory and prints the path;
+  it opens nothing, because making somewhere to put tasks is not working on one. The name
+  is one argument, so a name with spaces in it has to be quoted, unlike a task title or a
+  new title for `--rename`. It refuses to go with `--rename` or `--list`
+- Each option checks only what it needs, and only the plain form falls back to the title;
+  when a second option arrives alongside, the refusal is about the two options, not about
+  the title
 
 ## GUI
 

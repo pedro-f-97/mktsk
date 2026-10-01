@@ -29,6 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="list the tasks here and in the categories below, and open nothing",
     )
+    parser.add_argument(
+        "--new-category",
+        metavar="NAME",
+        help="create a category folder here, for tasks to be kept apart in",
+    )
     return parser
 
 
@@ -36,10 +41,18 @@ def parse_arguments() -> argparse.Namespace:
     parser = build_parser()
     args = parser.parse_args()
 
+    # every option names what it needs, so each is checked on its own and only
+    # the plain form falls back to the title
     if args.rename and args.list:
         parser.error("--rename and --list do not go together")
 
-    if args.list:
+    if args.new_category is not None:
+        if args.rename or args.list:
+            parser.error("--new-category does not go with --rename or --list")
+
+        if args.title:
+            parser.error("--new-category takes one name, so quote it")
+    elif args.list:
         # the list is of what is here, so a title alongside it is a mistake
         if args.title:
             parser.error("--list takes no title")
@@ -55,6 +68,9 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_arguments()
+
+    if args.new_category is not None:
+        return _new_category(Path.cwd(), args.new_category)
 
     if args.list:
         return _list(Path.cwd())
@@ -96,6 +112,30 @@ def _list(location: Path) -> int:
         for entry in group.entries:
             date = entry.date.strftime(workers.DATE_FORMAT)
             print(f"  {date}  {helpers.readable_title(entry.title)}")
+
+    return 0
+
+def _new_category(location: Path, raw_name: str) -> int:
+    """Creates a category folder in the given directory, and reports it.
+
+    The folder is not opened: making somewhere to put tasks is not working on
+    one. A name that is already there is not an error, because the point is to
+    have the folder, not to be the first to make it.
+
+    Args:
+        location: the directory to create the category in.
+        raw_name: the name to give the category, as typed by the user.
+
+    Returns:
+        0 on success, 1 when the name cannot be used.
+    """
+    try:
+        category = workers.create_category(location, raw_name)
+    except (OSError, helpers.TaskError) as error:
+        print(f"Error: {error}")
+        return 1
+
+    print(f"Created: {category}")
 
     return 0
 

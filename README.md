@@ -161,6 +161,29 @@ and the directories themselves in alphabetical order.
 
 A task folder without its Markdown file is left out, since there is nothing to open.
 
+## Creating a category
+
+Pass `--new-category` with a name, and the folder is made in the directory you are in:
+
+```bash
+mktsk --new-category "Produção"
+```
+
+```text
+Created: /home/you/tasks/Producao
+```
+
+A category is a plain folder for keeping tasks apart, not a task, so its name is only
+stripped of accents (`Produção` becomes `Producao`) and is otherwise left as you typed
+it, spaces and punctuation included. A name that is already there is not an error, since
+the point is to have the folder rather than to be the first to make it.
+
+The name is refused when it is empty, a Windows reserved name, hidden, carries a path
+separator, or looks like a task folder (`260918 - Foo`).
+
+Then create tasks inside it by running `mktsk` from there, and `--list` will show them
+under its own heading.
+
 ## Desktop GUI
 
 Launch with:
