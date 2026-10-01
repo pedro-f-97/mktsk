@@ -80,6 +80,19 @@ enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 - The tree lists folders only, one level deep, and never task folders or hidden
   directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
   and the root does nothing
+- A subdirectory selected in the tree is where a new task is created
+  (`creation_directory`), so a task lands in a category without entering it; the root,
+  or nothing selected, makes the current directory the target; selecting does not
+  navigate and does not change the active tab
+- The tree selection survives a refresh, so a second task lands in the same category; a
+  selected category that is no longer there is dropped and the current directory takes
+  over
+- Lookup for a title runs in the target directory, not in the current one, so the same
+  title in another directory is still a different task
+- A hint beside the title field reads `New tasks in <category>`, shown only when the
+  target is not the current directory; it sits between the title field and the `Create`
+  button, in the same font and only the colour tells it apart, so it adds no height, and
+  the full path is its tooltip
 - The task list comes from `find_task_groups`: one tab per category, the current
   directory being a category named after itself, plus an `All` tab first; only
   categories that hold tasks get a tab

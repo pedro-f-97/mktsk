@@ -132,8 +132,10 @@ python -m mktsk
 Opens a window where you can:
 
 * pick a base folder with the native file dialog or navigate inside the window;
-* see on the left the current folder and its subfolders, which is where new tasks are
-  created;
+* see on the left the current folder and its subfolders;
+* create a task in a subfolder by selecting it on the left, without opening it. A quiet
+  note beside the title field says which subfolder the task will land in, and stays on it
+  until you select another one;
 * see on the right every existing task, including the ones in subfolders. Each category
   gets its own tab, the current folder included, plus an `All` tab that lists everything
   under a heading per category. Newest first, with the date as `dd/mm/yyyy` and the

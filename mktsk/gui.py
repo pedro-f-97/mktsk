@@ -353,8 +353,20 @@ class MainWindow(QMainWindow):
         form = QHBoxLayout()
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Task title")
+        self.target_label = QLabel()
+        # the hint goes where the task is created, in the font it already uses,
+        # so it adds no height of its own and only the colour tells it apart
+        self.target_label.setWordWrap(False)
+        hint = self.target_label.palette()
+        hint.setColor(
+            QPalette.ColorRole.WindowText,
+            hint.color(QPalette.ColorRole.PlaceholderText),
+        )
+        self.target_label.setPalette(hint)
+        self.target_label.hide()
         self.create_button = QPushButton("Create")
         form.addWidget(self.title_input, 1)
+        form.addWidget(self.target_label)
         form.addWidget(self.create_button)
         layout.addLayout(form)
 
@@ -362,6 +374,7 @@ class MainWindow(QMainWindow):
         self.up_button.clicked.connect(self.go_up)
         self.refresh_button.clicked.connect(self.refresh)
         self.directory_tree.itemDoubleClicked.connect(self.open_directory)
+        self.directory_tree.itemSelectionChanged.connect(self._sync_creation_target)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
 
@@ -374,24 +387,70 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def refresh(self) -> None:
-        self.directory_tree.clear()
         if not self.current_directory.is_dir():
+            self.directory_tree.clear()
+            self.target_label.hide()
             self.tabs.clear()
             return
 
         self._reload_tree()
+        self._sync_creation_target()
         self._reload_tasks()
 
     def _reload_tree(self) -> None:
+        # the selection is read before the clear, which takes it with it
+        selected = self._selected_directory()
+        self.directory_tree.clear()
         name = self.current_directory.name or str(self.current_directory)
         root = QTreeWidgetItem([name])
+        selection = None
         for subdirectory in workers.list_subdirectories(self.current_directory):
             child = QTreeWidgetItem([subdirectory.name])
             child.setData(0, _PATH_ROLE, str(subdirectory))
             root.addChild(child)
+            if subdirectory == selected:
+                selection = child
 
         self.directory_tree.addTopLevelItem(root)
         root.setExpanded(True)
+
+        # a category that is no longer there is dropped, and the current
+        # directory takes over as the creation target
+        if selection is not None:
+            self.directory_tree.setCurrentItem(selection)
+
+    def _selected_directory(self) -> Path | None:
+        """Returns the subdirectory selected in the tree, or None when the root
+        or nothing is selected."""
+        item = self.directory_tree.currentItem()
+        path = item.data(0, _PATH_ROLE) if item else None
+        return Path(path) if path else None
+
+    def creation_directory(self) -> Path:
+        """Returns the directory a new task is created in.
+
+        A subdirectory selected in the tree is the target, so a task lands in a
+        category without having to enter it. With the root, or nothing,
+        selected the current directory is the target.
+
+        Returns:
+            The directory to create the task in.
+        """
+        return self._selected_directory() or self.current_directory
+
+    def _sync_creation_target(self) -> None:
+        """Points the target line at the directory a new task would land in."""
+        target = self.creation_directory()
+
+        if target == self.current_directory:
+            self.target_label.hide()
+            return
+
+        # the path label beside it already names the base directory, so the name
+        # of the category says it all and the full path stays in the tooltip
+        self.target_label.setText(f"New tasks in {target.name}")
+        self.target_label.setToolTip(str(target))
+        self.target_label.show()
 
     def _reload_tasks(self) -> None:
         sections = self._sections()
@@ -546,7 +605,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            result = workers.open_or_create_task(self.current_directory, raw_title)
+            result = workers.open_or_create_task(self.creation_directory(), raw_title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return

@@ -77,6 +77,11 @@ def find_directory(window, path):
     raise AssertionError(f"{path} is not listed")
 
 
+def select_directory(window, path):
+    """Selects a category in the tree, which is what targets the creation."""
+    window.directory_tree.setCurrentItem(find_directory(window, path))
+
+
 @pytest.fixture
 def window(qtbot, tmp_path):
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
@@ -299,6 +304,150 @@ def test_double_click_on_the_tree_root_does_nothing(qtbot, window, tmp_path):
     window.directory_tree.itemDoubleClicked.emit(tree_root(window), 0)
 
     assert window.current_directory == tmp_path.resolve()
+
+def test_creation_directory_without_a_selection(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    assert window.creation_directory() == tmp_path.resolve()
+
+def test_creation_directory_with_the_root_selected(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    window.directory_tree.setCurrentItem(tree_root(window))
+
+    assert window.creation_directory() == tmp_path.resolve()
+
+def test_creation_directory_with_a_category_selected(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    assert window.creation_directory() == (tmp_path / "Veritas").resolve()
+    assert window.current_directory == tmp_path.resolve()
+
+def test_target_line_is_hidden_without_a_category(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    assert window.target_label.isVisible() is False
+
+def test_target_line_is_hidden_on_the_root(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    window.directory_tree.setCurrentItem(tree_root(window))
+
+    assert window.target_label.isVisible() is False
+
+def test_target_line_names_the_selected_category(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+    category = (tmp_path / "Veritas").resolve()
+
+    select_directory(window, category)
+
+    # the path label above already names the base directory
+    assert window.target_label.text() == "New tasks in Veritas"
+    assert window.target_label.toolTip() == str(category)
+    assert window.target_label.isVisible() is True
+
+def test_target_line_stays_on_one_line(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    assert window.target_label.wordWrap() is False
+
+def test_target_line_shares_the_row_of_the_title_field(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    assert window.target_label.y() == window.title_input.y()
+    assert window.target_label.height() == window.title_input.height()
+    assert window.target_label.fontMetrics().height() == (
+        window.path_label.fontMetrics().height()
+    )
+
+def test_target_line_sits_between_the_title_field_and_create(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    assert window.target_label.x() >= window.title_input.x() + window.title_input.width()
+    assert (
+        window.target_label.x() + window.target_label.width()
+        <= window.create_button.x()
+    )
+
+def test_target_line_hides_again_after_navigating_into_the_category(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    window.navigate_to(tmp_path / "Veritas")
+
+    assert window.creation_directory() == (tmp_path / "Veritas").resolve()
+    assert window.target_label.isVisible() is False
+
+def test_target_line_hides_again_after_navigating_away(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    (tmp_path / "SteelMountain").mkdir()
+    window.navigate_to(tmp_path)
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    window.navigate_to(tmp_path / "SteelMountain")
+
+    assert window.creation_directory() == (tmp_path / "SteelMountain").resolve()
+    assert window.target_label.isVisible() is False
+
+def test_selecting_a_category_does_not_change_the_active_tab(window, tmp_path, make_task):
+    make_task(tmp_path / "Veritas", "260925", "Bar")
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    select_tab(window, tmp_path.name)
+
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    assert window.tabs.tabText(window.tabs.currentIndex()) == tmp_path.name
+
+def test_selecting_a_category_does_not_reload_the_tabs(window, tmp_path, make_task):
+    make_task(tmp_path / "Veritas", "260925", "Bar")
+    window.navigate_to(tmp_path)
+    before = tab_titles(window)
+
+    select_directory(window, (tmp_path / "Veritas").resolve())
+
+    assert tab_titles(window) == before
+
+def test_the_tree_selection_survives_a_refresh(window, tmp_path):
+    (tmp_path / "Veritas").mkdir()
+    window.navigate_to(tmp_path)
+    category = (tmp_path / "Veritas").resolve()
+    select_directory(window, category)
+
+    window.refresh()
+
+    assert window.creation_directory() == category
+    assert window.target_label.isVisible() is True
+
+def test_the_tree_selection_is_dropped_when_the_category_is_deleted(window, tmp_path):
+    category = tmp_path / "Veritas"
+    category.mkdir()
+    window.navigate_to(tmp_path)
+    select_directory(window, category.resolve())
+
+    shutil.rmtree(category)
+    window.refresh()
+
+    assert window.creation_directory() == tmp_path.resolve()
+    assert window.target_label.isVisible() is False
 
 def select_task(window, path, title="All"):
     """Selects a task row, which is what brings its action bar up."""
@@ -715,6 +864,76 @@ def test_create_task_open_failure_warns(window, tmp_path, monkeypatch, fake_mess
     assert len(fake_messages["warning"]) == 1
     assert (tmp_path / "260928 - TestTask" / "TestTask.md").is_file()
     assert window.title_input.text() == ""
+
+@freeze_time("2026-09-30")
+def test_create_task_lands_in_the_selected_category(window, tmp_path, fake_open):
+    category = tmp_path / "Veritas"
+    category.mkdir()
+    window.navigate_to(tmp_path)
+    select_directory(window, category.resolve())
+    window.title_input.setText("Test Task")
+
+    window.create_task()
+
+    created = category / "260930 - TestTask" / "TestTask.md"
+    assert created.is_file()
+    assert fake_open == [created]
+    assert not (tmp_path / "260930 - TestTask").exists()
+    assert window.title_input.text() == ""
+    assert window.current_directory == tmp_path.resolve()
+
+@freeze_time("2026-09-30")
+def test_create_task_twice_keeps_the_selected_category(window, tmp_path, fake_open):
+    category = tmp_path / "Veritas"
+    category.mkdir()
+    window.navigate_to(tmp_path)
+    select_directory(window, category.resolve())
+
+    window.title_input.setText("Test Task")
+    window.create_task()
+    window.title_input.setText("Other Task")
+    window.create_task()
+
+    assert (category / "260930 - TestTask" / "TestTask.md").is_file()
+    assert (category / "260930 - OtherTask" / "OtherTask.md").is_file()
+    assert window.creation_directory() == category.resolve()
+
+@freeze_time("2026-09-30")
+def test_create_task_looks_the_title_up_inside_the_selected_category(
+    window, tmp_path, fake_open
+):
+    category = tmp_path / "Veritas"
+    category.mkdir()
+    folder = tmp_path / "260918 - TestTask"
+    folder.mkdir()
+    outside = folder / "TestTask.md"
+    outside.write_text("# TestTask\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    window.navigate_to(tmp_path)
+    select_directory(window, category.resolve())
+    window.title_input.setText("Test Task")
+
+    window.create_task()
+
+    created = category / "260930 - TestTask" / "TestTask.md"
+    assert created.is_file()
+    assert fake_open == [created]
+    assert outside.read_text(encoding="utf-8") == (
+        "# TestTask\n\n## 18/09/2026\n\nnotes\n"
+    )
+
+@freeze_time("2026-09-30")
+def test_create_task_in_a_category_keeps_the_active_tab(window, tmp_path, fake_open, make_task):
+    make_task(tmp_path / "Veritas", "260918", "Other")
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    select_tab(window, tmp_path.name)
+    select_directory(window, (tmp_path / "Veritas").resolve())
+    window.title_input.setText("Test Task")
+
+    window.create_task()
+
+    assert window.tabs.tabText(window.tabs.currentIndex()) == tmp_path.name
+    assert tab_labels(window, tmp_path.name) == ["18/09/2026  Foo"]
 
 def test_choose_directory(window, tmp_path, monkeypatch, qtbot):
     monkeypatch.setattr(
