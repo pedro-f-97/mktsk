@@ -67,6 +67,9 @@ change the name.
 - `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
   `.md` or a title another task of the same directory already has; it renames the `.md`
   before the folder, or the old file path stops resolving
+- `task_folder_title(name)` returns the standardized title a task folder name carries, or
+  None when the name is not a task folder; it is how the CLI reads the current title of a
+  folder the user named, so the CLI never has to know how the name is split
 - `is_task_folder(name)` is a shape check: a real `%y%m%d` date, ` - `, then an ASCII
   alphanumeric title that does not start with a lowercase letter (`2026` counts)
 - `standardize_string` is not idempotent (`BigWord` becomes `Bigword`); never test
@@ -89,10 +92,25 @@ change the name.
   word and a digit starts one too, so `FSocietyEverbind` reads as `F Society Everbind`
   and `Task2` as `Task 2`; consecutive digits stay together, so `2026` survives
 
+## CLI
+
+- `mktsk <title>` creates or resumes the task and opens its `.md`
+- The title is `nargs="*"`, not `nargs="+"`, because the options take arguments of their
+  own; `parse_arguments` then checks what each option was given and calls
+  `parser.error()`, so a missing argument still exits with code 2. Do not let that check
+  be skipped, or `mktsk` with no arguments creates a folder instead of failing
+- `--rename <folder> <new title>` takes the name of the task folder, not a title to look
+  up, so two tasks with the same title on different dates are told apart; everything
+  after the folder is the new title, which is why a title of several words needs no
+  quoting. It prints the message and does not open the `.md`, because renaming is not
+  working on the task
+
 ## GUI
 
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
-  `tests/test_gui.py` with pytest-qt
+  `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
+  `tests/test_gui_actions.py`, `tests/test_gui_create.py` and `tests/test_gui_window.py`
+  with pytest-qt
 - No Qt imports in the CLI or the business logic
 - Two panes in a `QSplitter`: a `QTreeWidget` on the left holding the current directory
   and its immediate subdirectories, so it shows where new tasks are created; a

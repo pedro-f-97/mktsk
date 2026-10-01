@@ -115,6 +115,27 @@ tasks/
 from there creates `tasks/260930 - FSociety`, because the Veritas one lives in another
 directory. To resume a task, run the command from the directory that holds it.
 
+## Renaming a task
+
+Pass `--rename` with the name of the task folder and the title you want instead:
+
+```bash
+mktsk --rename "260923 - ItsAlive" "It's Still Alive"
+```
+
+```text
+Renamed: 260923 - ItSStillAlive
+```
+
+The date stays, so the task keeps its place in the history, and only the `#` heading at
+the top of the file is rewritten. The notes are left exactly as they were, and the file
+is not opened, because renaming is not working on the task.
+
+The folder is named rather than looked up by title, so with two tasks of the same title
+on different dates you always rename the one you mean. A name that is not a task folder
+is refused, as is a new title that is empty, a Windows reserved name, or one another
+task already has.
+
 ## Desktop GUI
 
 Launch with:

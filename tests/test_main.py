@@ -170,9 +170,189 @@ def test_parse_arguments(monkeypatch):
     args = parse_arguments()
 
     assert args.title == ["Back", "to", "the", "Future"]
+    assert args.rename is False
 
 def test_parse_arguments_without_title(monkeypatch):
     monkeypatch.setattr("sys.argv", ["mktsk"])
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as failure:
         parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_rename(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Foo", "Bar"])
+
+    args = parse_arguments()
+
+    assert args.rename is True
+    assert args.title == ["260918 - Foo", "Bar"]
+
+def test_parse_arguments_for_rename_without_a_new_title(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Foo"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_rename_keeps_a_new_title_of_several_words(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv", ["mktsk", "--rename", "260918 - Foo", "Back", "to", "the", "Future"]
+    )
+
+    args = parse_arguments()
+
+    assert args.title == ["260918 - Foo", "Back", "to", "the", "Future"]
+
+def test_main_rename(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - OldTitle"
+    folder.mkdir()
+    file = folder / "OldTitle.md"
+    file.write_text("# OldTitle\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "New Title"])
+
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
+
+    result = main()
+
+    renamed_folder = tmp_path / "260918 - NewTitle"
+    renamed_file = renamed_folder / "NewTitle.md"
+
+    assert result == 0
+    assert renamed_file.is_file()
+    assert not folder.exists()
+    assert renamed_file.read_text(encoding="utf-8") == (
+        "# NewTitle\n\n## 18/09/2026\n\nnotes\n"
+    )
+    assert capsys.readouterr().out == f"Renamed: {renamed_folder.name}\n"
+    # renaming is not working on the task, so nothing is opened
+    assert opened == []
+
+def test_main_rename_joins_a_new_title_given_in_words(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - OldTitle"
+    folder.mkdir()
+    (folder / "OldTitle.md").write_text("# OldTitle\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv", ["mktsk", "--rename", folder.name, "Back", "to", "the", "Future"]
+    )
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "260918 - BackToTheFuture" / "BackToTheFuture.md").is_file()
+
+def test_main_rename_to_the_title_it_already_has(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - OldTitle"
+    folder.mkdir()
+    file = folder / "OldTitle.md"
+    file.write_text("# OldTitle\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Old Title"])
+
+    result = main()
+
+    assert result == 0
+    assert file.is_file()
+    assert capsys.readouterr().out == f"Renamed: {folder.name}\n"
+
+def test_main_rename_refuses_a_name_that_is_not_a_task_folder(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Veritas").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "Veritas", "Foo"])
+
+    result = main()
+
+    assert result == 1
+    assert "Error: 'Veritas' is not a task folder" in capsys.readouterr().out
+
+def test_main_rename_refuses_an_invalid_date_prefix(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "261318 - Foo").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "261318 - Foo", "Bar"])
+
+    result = main()
+
+    assert result == 1
+    assert "is not a task folder" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_folder_that_is_not_there(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Missing", "Foo"])
+
+    result = main()
+
+    assert result == 1
+    assert "Error: '260918 - Missing' is not there" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_collision(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    taken = tmp_path / "260901 - Bar"
+    taken.mkdir()
+    (taken / "Bar.md").write_text("# Bar\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Bar"])
+
+    result = main()
+
+    assert result == 1
+    assert "'Bar' is already a task here" in capsys.readouterr().out
+    assert (folder / "Foo.md").is_file()
+
+def test_main_rename_refuses_a_blank_new_title(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "!!!"])
+
+    result = main()
+
+    assert result == 1
+    assert "invalid task description" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_reserved_new_title(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "con"])
+
+    result = main()
+
+    assert result == 1
+    assert "'Con' is a reserved name" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_task_without_markdown(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "260918 - Foo").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Foo", "Bar"])
+
+    result = main()
+
+    assert result == 1
+    assert "'Foo' has no Markdown file" in capsys.readouterr().out
+
+def test_main_rename_reports_a_failure_to_rename(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Bar"])
+
+    def raise_error(*args):
+        raise OSError("test error")
+
+    monkeypatch.setattr("mktsk.workers.rename_task", raise_error)
+
+    result = main()
+
+    assert result == 1
+    assert "Error: test error" in capsys.readouterr().out

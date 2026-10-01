@@ -214,6 +214,19 @@ def _task_date_and_title(name: str) -> tuple[datetime.date, str] | None:
 
     return parsed.date(), title
 
+def task_folder_title(name: str) -> str | None:
+    """Returns the standardized title a task folder name carries.
+
+    Args:
+        name: the directory name to read.
+
+    Returns:
+        The standardized title, or None if the name is not a task folder.
+    """
+    parts = _task_date_and_title(name)
+
+    return None if parts is None else parts[1]
+
 def _tasks_in(directory: Path) -> list[TaskEntry]:
     """Collects the task folders of a directory, newest first.
 
