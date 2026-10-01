@@ -30,6 +30,13 @@ def test_standardize_string():
 
     assert standardized_string == "SigurRos"
 
+@pytest.mark.parametrize("apostrophe", ["'", "\u2019"])
+def test_standardize_string_keeps_a_contraction_together(apostrophe):
+    standardized_string = standardize_string(f"It{apostrophe}s Alive!")
+
+    # the apostrophe joins the word, it does not make "s" start one
+    assert standardized_string == "ItsAlive"
+
 def test_standardize_string_spacing():
     test_string = "bJÖrk_naÏve-fAçAde!!"
     standardized_string = standardize_string(test_string)
@@ -87,6 +94,25 @@ def test_create_md_file_path_error(tmp_path):
     with pytest.raises(TaskError):
         create_md_file(folder, name)
 
+@pytest.mark.parametrize("name", ["CON", "com1.log"])
+def test_create_md_file_reserved_name(tmp_path, name):
+    folder = (tmp_path / "my_folder")
+    folder.mkdir()
+
+    # a task folder copied by hand can carry a title Windows reserves, and the
+    # .md of that title is as reserved as the folder name
+    with pytest.raises(TaskError):
+        create_md_file(folder, name)
+
+    assert list(folder.iterdir()) == []
+
+def test_create_folder_takes_a_reserved_name(tmp_path):
+    # the date prefix keeps a task folder name out of the reserved set, so
+    # create_folder is not the place the rule belongs and does not check it
+    created = create_folder(tmp_path, "CON")
+
+    assert created.exists()
+
 @freeze_time("2026-09-22")
 def test_sign_md_file(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
@@ -114,18 +140,58 @@ def test_sign_md_file_existing_ok(tmp_path):
 
     assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 20/09/2026\n\n"
 
-def test_sign_md_file_existing_untouched(tmp_path):
+def test_sign_md_file_completes_foreign_content(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
 
     file = folder / "ThisTest.md"
     file.touch()
 
+    # a folder copied by hand, so the heading names a different task
     file.write_text("# This is some other text\n", encoding="utf-8")
 
-    sign_md_file(file, "260922 - ThisTest")
+    assert sign_md_file(file, "ThisTest") is False
 
-    assert file.read_text(encoding="utf-8") == "# This is some other text\n"
+    assert (
+        file.read_text(encoding="utf-8")
+        == "# ThisTest\n\n# This is some other text\n"
+    )
+
+def test_sign_md_file_completes_content_without_a_heading(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
+    folder.mkdir()
+
+    file = folder / "ThisTest.md"
+    file.write_text("some content\n", encoding="utf-8")
+
+    assert sign_md_file(file, "ThisTest") is False
+
+    assert file.read_text(encoding="utf-8") == "# ThisTest\n\nsome content\n"
+
+def test_sign_md_file_leaves_a_matching_heading_alone(tmp_path):
+    folder = tmp_path / "260922 - ThisTest"
+    folder.mkdir()
+
+    file = folder / "ThisTest.md"
+    original = "# ThisTest\n\n## 20/09/2026\n\nnotes\n"
+    file.write_text(original, encoding="utf-8")
+
+    assert sign_md_file(file, "ThisTest") is False
+
+    assert file.read_text(encoding="utf-8") == original
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_signs_foreign_md(tmp_path):
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# AnotherTask\n\nsome content\n", encoding="utf-8")
+
+    result = open_or_create_task(tmp_path, "Foo")
+
+    assert (
+        result.file.read_text(encoding="utf-8")
+        == "# Foo\n\n# AnotherTask\n\nsome content\n\n## 30/09/2026\n\n"
+    )
 
 @freeze_time("2026-09-22")
 def test_sign_md_file_existing_space(tmp_path):
@@ -166,6 +232,21 @@ def test_is_task_folder_missing_separator_or_title():
     assert not is_task_folder("ItsAlive")
     assert not is_task_folder("")
 
+@pytest.mark.parametrize(
+    "name", ["261001 - CON", "261001 - Nul", "261001 - com1", "261001 - PRN"]
+)
+def test_is_task_folder_reserved_title(name):
+    # the date prefix keeps the folder name itself out of the reserved set, but
+    # the .md inside would be CON.md, which is as reserved as CON
+    assert not is_task_folder(name)
+
+@pytest.mark.parametrize(
+    "name", ["261001 - CONtact", "261001 - Com", "261001 - Nulled", "261001 - CON1"]
+)
+def test_is_task_folder_title_merely_looks_reserved(name):
+    # only the whole title is reserved, not a prefix or a stem of one
+    assert is_task_folder(name)
+
 def test_is_task_folder_title_not_standardized():
     assert not is_task_folder("260930 - Blá")
     assert not is_task_folder("260930 - Its Alive")
@@ -179,6 +260,25 @@ def test_find_task_folder_ignores_date(tmp_path):
     folder.mkdir()
 
     assert find_task_folder(tmp_path, "Foo") == folder
+
+def test_find_task_folder_takes_the_most_recent_of_several(tmp_path):
+    # a title is unique in a directory, but a folder copied by hand or restored
+    # from a backup can leave two behind, and the newest is the one to resume
+    for date in ("260918", "260925", "260930"):
+        (tmp_path / f"{date} - Foo").mkdir()
+
+    assert find_task_folder(tmp_path, "Foo") == tmp_path / "260930 - Foo"
+
+def test_find_task_folder_takes_the_most_recent_whatever_the_iterdir_order(
+    tmp_path, monkeypatch
+):
+    for date in ("260918", "260930"):
+        (tmp_path / f"{date} - Foo").mkdir()
+
+    folders = sorted(tmp_path.iterdir())
+    monkeypatch.setattr(Path, "iterdir", lambda self: list(reversed(folders)))
+
+    assert find_task_folder(tmp_path, "Foo") == tmp_path / "260930 - Foo"
 
 def test_find_task_folder_ignores_subdirectories(tmp_path):
     (tmp_path / "Veritas" / "260925 - Foo").mkdir(parents=True)
@@ -333,6 +433,17 @@ def test_open_or_create_task_resumes_a_task_with_a_valid_date(tmp_path):
 
     assert result.file == folder / "Foo.md"
     assert result.message == "Opened: 260918 - Foo (added ## 30/09/2026)"
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_resumes_the_most_recent_of_several(tmp_path):
+    for date in ("260918", "260930"):
+        folder = tmp_path / f"{date} - Foo"
+        folder.mkdir()
+        (folder / "Foo.md").write_text(f"# Foo\n\n## {date}\n\n", encoding="utf-8")
+
+    result = open_or_create_task(tmp_path, "Foo")
+
+    assert result.file == tmp_path / "260930 - Foo" / "Foo.md"
 
 @freeze_time("2026-09-30")
 def test_open_or_create_task_same_day_only_once(tmp_path):
@@ -518,6 +629,18 @@ def test_list_subdirectories_stops_one_level_down(tmp_path):
 
     assert [path.name for path in list_subdirectories(tmp_path)] == ["SteelMountain"]
 
+def test_list_subdirectories_unreadable_directory(tmp_path, monkeypatch):
+    real_iterdir = Path.iterdir
+
+    def guarded_iterdir(self):
+        if self.name == "private":
+            raise PermissionError
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
+
+    assert list_subdirectories(tmp_path / "private") == []
+
 def test_find_task_groups_skips_unreadable_subdirectory(
     tmp_path, make_task, monkeypatch
 ):
@@ -532,6 +655,26 @@ def test_find_task_groups_skips_unreadable_subdirectory(
     monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
 
     assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_lists_the_readable_categories(
+    tmp_path, make_task, monkeypatch
+):
+    make_task(tmp_path, "260925", "Foo")
+    make_task(tmp_path / "Veritas", "260925", "Bar")
+    (tmp_path / "private").mkdir()
+    real_iterdir = Path.iterdir
+
+    def guarded_iterdir(self):
+        if self.name == "private":
+            raise PermissionError
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
+
+    # the category that cannot be read is left out, the rest is still listed
+    groups = find_task_groups(tmp_path)
+
+    assert [group.category for group in groups] == [None, tmp_path / "Veritas"]
 
 
 @freeze_time("2026-09-30")
@@ -555,6 +698,19 @@ def test_resume_task_ignores_the_current_directory(tmp_path, make_task):
 
     assert result.file == folder / "FSociety.md"
     assert list(elsewhere.iterdir()) == []
+
+
+@freeze_time("2026-09-30")
+def test_resume_task_refuses_a_reserved_title(tmp_path):
+    # a folder the lookup would never have created, so a copy by hand or a
+    # restore from a backup, which is what the GUI Resume button can be given
+    folder = tmp_path / "260918 - CON"
+    folder.mkdir()
+
+    with pytest.raises(TaskError):
+        resume_task(folder, "CON")
+
+    assert list(folder.iterdir()) == []
 
 
 @freeze_time("2026-09-30")
@@ -632,6 +788,19 @@ def test_rename_task_rejects_a_task_that_is_already_there(tmp_path, make_task):
     assert file.read_text(encoding="utf-8") == "# FSociety\n"
     assert (tmp_path / "260917 - FSocietyEverbind").is_dir()
 
+def test_rename_task_rejects_a_title_of_another_date(tmp_path, make_task):
+    # a title is unique in a directory, whichever date the task it clashes with
+    # carries, so renaming must not be the way to end up with two of one title
+    other = make_task(tmp_path, "260930", "FSociety")
+    file = make_task(tmp_path, "260918", "Veritas")
+
+    with pytest.raises(TaskError, match="already a task here"):
+        rename_task(tmp_path / "260918 - Veritas", "Veritas", "F Society")
+
+    assert file.read_text(encoding="utf-8") == "# Veritas\n"
+    assert other.read_text(encoding="utf-8") == "# FSociety\n"
+    assert not (tmp_path / "260918 - FSociety").exists()
+
 def test_rename_task_rejects_a_folder_without_markdown(tmp_path):
     (tmp_path / "260918 - FSociety").mkdir()
 
@@ -654,6 +823,59 @@ def test_rename_task_leaves_a_file_without_any_content(tmp_path, make_task):
 
     assert result.file.read_text(encoding="utf-8") == ""
 
+def test_rename_task_puts_the_file_back_when_the_folder_cannot_move(tmp_path, make_task, monkeypatch):
+    make_task(tmp_path, "260918", "FSociety")
+    original = Path.rename
+
+    def rename(self, target):
+        if self.is_dir():
+            raise OSError("test error")
+        return original(self, target)
+
+    monkeypatch.setattr(Path, "rename", rename)
+
+    with pytest.raises(OSError, match="test error"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    # the folder did not move, so the file must not be left carrying a new name
+    assert (tmp_path / "260918 - FSociety" / "FSociety.md").is_file()
+    assert not (tmp_path / "260918 - FSociety" / "Everbind.md").exists()
+    assert not (tmp_path / "260918 - Everbind").exists()
+
+def test_rename_task_puts_everything_back_when_the_heading_cannot_be_written(tmp_path, make_task, monkeypatch):
+    make_task(tmp_path, "260918", "FSociety")
+    original = Path.write_text
+
+    def write_text(self, data, **kwargs):
+        if data.startswith("# Everbind"):
+            raise OSError("test error")
+        return original(self, data, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", write_text)
+
+    with pytest.raises(OSError, match="test error"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    # the heading could not be written, so the names went back too
+    folder = tmp_path / "260918 - FSociety"
+    assert sorted(entry.name for entry in folder.iterdir()) == ["FSociety.md"]
+    assert (folder / "FSociety.md").read_text(encoding="utf-8") == "# FSociety\n"
+    assert not (tmp_path / "260918 - Everbind").exists()
+
+def test_rename_task_leaves_the_file_alone_when_it_cannot_be_put_back(tmp_path, make_task, monkeypatch):
+    make_task(tmp_path, "260918", "FSociety")
+    original = Path.rename
+
+    def rename(self, target):
+        if self.name == "260918 - FSociety":
+            raise OSError("test error")
+        return original(self, target)
+
+    monkeypatch.setattr(Path, "rename", rename)
+
+    # a rollback that fails is reported rather than swallowed
+    with pytest.raises(OSError, match="test error"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
 
 def test_create_category_creates_the_folder(tmp_path):
     category = create_category(tmp_path, "Veritas")
@@ -699,6 +921,17 @@ def test_create_category_rejects_a_reserved_name(tmp_path):
     with pytest.raises(TaskError, match="reserved name"):
         create_category(tmp_path, "con")
 
+@pytest.mark.parametrize(
+    "name",
+    ["foo:bar", "foo?", "foo*", "foo|", "foo.", "foo ", r"C:\foo", "con.txt"],
+)
+def test_create_category_reports_a_name_windows_would_refuse(tmp_path, name):
+    # a domain error, not the raw OSError of whichever machine we are on
+    with pytest.raises(TaskError):
+        create_category(tmp_path, name)
+
+    assert list(tmp_path.iterdir()) == []
+
 def test_create_category_rejects_a_hidden_name(tmp_path):
     with pytest.raises(TaskError, match="invalid category name"):
         create_category(tmp_path, ".hidden")
@@ -706,6 +939,12 @@ def test_create_category_rejects_a_hidden_name(tmp_path):
 def test_create_category_rejects_a_task_folder_name(tmp_path):
     with pytest.raises(TaskError, match="invalid category name"):
         create_category(tmp_path, "260918 - Foo")
+
+def test_create_category_rejects_a_reserved_task_title(tmp_path):
+    # is_task_folder refuses the name as a task, and a category must not take
+    # the name a task folder would have had, which cannot be opened either
+    with pytest.raises(TaskError, match="invalid category name"):
+        create_category(tmp_path, "261001 - CON")
 
 def test_create_category_rejects_a_name_it_cannot_make_ascii(tmp_path):
     with pytest.raises(TaskError, match="invalid category name"):
@@ -720,3 +959,11 @@ def test_create_category_is_listed_as_a_category(tmp_path):
     create_category(tmp_path, "Veritas")
 
     assert list_subdirectories(tmp_path) == [tmp_path / "Veritas"]
+
+def test_a_task_folder_with_a_reserved_title_is_still_visible(tmp_path):
+    # not a task and not a category, so it is a plain folder the user can see,
+    # navigate to and clear out, rather than one that is nowhere to be found
+    (tmp_path / "261001 - CON").mkdir()
+
+    assert list_subdirectories(tmp_path) == [tmp_path / "261001 - CON"]
+    assert find_task_groups(tmp_path) == []

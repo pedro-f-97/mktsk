@@ -7,7 +7,8 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * Creates task folders using the `YYMMDD - TaskName` naming convention.
 * Creates an associated Markdown file.
 * Adds the task title to the Markdown file, as a heading, followed by the task date.
-* Finds an existing task by title on any date, and starts a new dated section in it.
+* Finds an existing task by title in the current directory, on any date, and starts a new
+  dated section in it.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
 
@@ -124,17 +125,20 @@ mktsk --rename "260923 - ItsAlive" "It's Still Alive"
 ```
 
 ```text
-Renamed: 260923 - ItSStillAlive
+Renamed: 260923 - ItsStillAlive
 ```
 
 The date stays, so the task keeps its place in the history, and only the `#` heading at
 the top of the file is rewritten. The notes are left exactly as they were, and the file
 is not opened, because renaming is not working on the task.
 
-The folder is named rather than looked up by title, so with two tasks of the same title
-on different dates you always rename the one you mean. A name that is not a task folder
-is refused, as is a new title that is empty, a Windows reserved name, or one another
-task already has.
+The folder is named rather than looked up by title, so the task you name is the task you
+rename. A name that is not a task folder is refused, as is a new title that is empty, a
+Windows reserved name, or one another task already has.
+
+A task title belongs to one task in a directory, so two tasks with the same title should not
+be sitting in the same category, and renaming is refused rather than allowed to make it so.
+The same title in a different category is a different task, and that is fine.
 
 ## Listing tasks
 
@@ -178,8 +182,12 @@ stripped of accents (`Produção` becomes `Producao`) and is otherwise left as y
 it, spaces and punctuation included. A name that is already there is not an error, since
 the point is to have the folder rather than to be the first to make it.
 
-The name is refused when it is empty, a Windows reserved name, hidden, carries a path
-separator, or looks like a task folder (`260918 - Foo`).
+The name is refused when it is empty, hidden, looks like a task folder (`260918 - Foo`), or
+carries anything Windows refuses in a name. That last rule is checked on every platform,
+not just Windows, so a category you create on Linux is still one you can open on Windows.
+It covers a Windows reserved name (`con`, and also `con.txt`, because Windows reserves the
+name before the extension), a path separator, a character from `<>:"/\|?*`, and a name
+ending in a dot or a space, which Windows drops.
 
 Then create tasks inside it by running `mktsk` from there, and `--list` will show them
 under its own heading.

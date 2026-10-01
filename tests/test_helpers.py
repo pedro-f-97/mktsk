@@ -1,8 +1,10 @@
 import subprocess
+from pathlib import PurePosixPath
 
 import pytest
 
 from mktsk import helpers
+from mktsk.helpers import TaskError
 
 
 def test_is_reserved_name_true():
@@ -23,6 +25,65 @@ def test_is_reserved_name_false():
     assert not helpers.is_reserved_name("com0")
     assert not helpers.is_reserved_name("com10")
     assert not helpers.is_reserved_name("lpt10")
+
+@pytest.mark.parametrize("name", ["con.txt", "nul.md", "com1.log", "PRN.json"])
+def test_is_reserved_name_with_an_extension(name):
+    # Windows reserves the stem, so CON.txt is as refused as a folder called CON
+    assert helpers.is_reserved_name(name)
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "foo:bar",
+        "foo?",
+        "foo*",
+        "foo|",
+        "foo<",
+        "foo>",
+        'foo"bar',
+        "a/b",
+        "..",
+        "foo.",
+        "foo ",
+        "foo..",
+        "foo\tbar",
+        "foo\x00bar",
+        "C:\\foo",
+        "foo\\bar",
+        "C:",
+    ],
+)
+def test_validate_name_refuses_what_windows_would(name):
+    with pytest.raises(TaskError):
+        helpers.validate_name(name)
+
+@pytest.mark.parametrize(
+    "name",
+    ["Veritas", "my tasks", "Steel Mountain", "260918 - Foo", "Foo-Bar_2"],
+)
+def test_validate_name_accepts_a_portable_name(name):
+    # a task folder carries spaces and a hyphen, and stays valid
+    helpers.validate_name(name)
+
+@pytest.mark.parametrize("name", ["", " ", "   "])
+def test_validate_name_refuses_an_empty_name(name):
+    with pytest.raises(TaskError, match="must not be empty"):
+        helpers.validate_name(name)
+
+def test_validate_name_says_when_a_name_is_a_path():
+    with pytest.raises(TaskError, match="single path component"):
+        helpers.validate_name("foo/bar")
+
+@pytest.mark.parametrize("name", ["C:\\foo", "foo\\bar", "C:"])
+def test_validate_name_refuses_a_windows_path_on_any_platform(name, monkeypatch):
+    # Path follows the platform we are on, so on Linux it takes "C:\foo" for a
+    # single name. Putting the posix flavour on both names is what a Linux run
+    # would see, and the answer must not change.
+    monkeypatch.setattr(helpers, "Path", PurePosixPath)
+    monkeypatch.setattr(helpers, "PureWindowsPath", PurePosixPath)
+
+    with pytest.raises(TaskError):
+        helpers.validate_name(name)
 
 def test_readable_title_separates_words():
     assert helpers.readable_title("ItsAlive") == "Its Alive"

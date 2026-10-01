@@ -48,22 +48,40 @@ change the name.
 
 - Date prefix: `datetime.now().astimezone().strftime("%y%m%d")` + `" - "`
 - Standardize titles: NFKD, strip accents, keep only alphanumerics, join words in
-  CamelCase with the first letter uppercase
+  CamelCase with the first letter uppercase. An apostrophe is not a separator: it is
+  dropped before the split, so a contraction stays one word and `It's Alive!` gives
+  `ItsAlive`, not `ItSAlive`. Both `'` and `’` are dropped. Every other non-alphanumeric
+  still separates, so `Sigur Rós` gives `SigurRos` and `bJÖrk_naÏve-fAçAde!!` gives
+  `BjorkNaiveFacade`
 - Folder: `<date> - <StandardizedTitle>`; file: `<StandardizedTitle>.md`
 - Sign an empty `.md` with `# <StandardizedTitle>`, a blank line, then `## <dd/mm/YYYY>`
-  from `strftime("%d/%m/%Y")`, and a blank line; never touch a non-empty file
-- Lookup runs before any creation, in the current directory only, for
-  `<yymmdd> - <StandardizedTitle>` on any date; the same title in another directory is a
-  different task
-- Resuming appends `## <today>` at the end of the `.md` unless that date is already
-  there; the dated section never rewrites the body, only trailing whitespace is dropped;
-  headings are matched loosely, so `##  05/08/2026 ` counts as 05/08/2026
+  from `strftime("%d/%m/%Y")`, and a blank line. A `.md` whose leading heading is not
+  `# <StandardizedTitle>` gains the missing heading at the start and keeps everything
+  below it, so content from another task, in a folder copied by hand or restored from a
+  backup, is never mistaken for the identity of this one. Nothing is ever rewritten or
+  dropped; `sign_md_file` returns whether it dated a file that had no date of its own
+- The title of a task is unique within its directory, or category, so a lookup by title is
+  unambiguous there. Lookup runs before any creation, in the current directory only, and
+  ignores the date: `260918 - Foo` is what `mktsk Foo` resumes weeks later. The same title
+  in another directory is a different task, and that is what makes it legitimate
+- Renaming to a title the directory already holds is refused, on any date, so `rename_task`
+  cannot be the way to end up with two of one title. A folder copied by hand, or restored
+  from a backup, can, and `find_task_folder` then takes the most recent rather than
+  whichever came first out of `iterdir()`
+- Resuming signs first, then appends `## <today>` at the end of the `.md` unless that
+  date is already there; the dated section never rewrites the body, only trailing
+  whitespace is dropped; headings are matched loosely, so `##  05/08/2026 ` counts as
+  05/08/2026. Signing a file that had nothing in it dates it, so the append is skipped
+  for that file, which is the only case in which resuming adds no dated section
 - `resume_task(folder, title)` resumes the folder it is given, wherever that folder
   lives; unlike `open_or_create_task`, it does no lookup and takes no directory
 - `rename_task(folder, title, raw_title)` keeps the date prefix, renames the folder and
   the `.md`, and rewrites only the first non-empty line, and only when it is exactly
   `# <old title>`; a heading it does not recognise, and everything after it, is left
   alone; renaming to the title the task already has does nothing
+- `rename_task` undoes a step that fails, in reverse, so it never leaves the task as
+  `260918 - OldTitle/NewTitle.md` nor with a heading that disagrees with its folder.
+  The `.md` is read before anything moves, so a later failure can put it back
 - `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
   `.md` or a title another task of the same directory already has; it renames the `.md`
   before the folder, or the old file path stops resolving
@@ -71,18 +89,41 @@ change the name.
   None when the name is not a task folder; it is how the CLI reads the current title of a
   folder the user named, so the CLI never has to know how the name is split
 - `is_task_folder(name)` is a shape check: a real `%y%m%d` date, ` - `, then an ASCII
-  alphanumeric title that does not start with a lowercase letter (`2026` counts)
+  alphanumeric title that does not start with a lowercase letter (`2026` counts) and is
+  not a Windows reserved name. The date prefix keeps `261001 - CON` out of the reserved
+  set as a folder name, but the `.md` inside it would be `CON.md`, so a title the shape
+  check accepted would still be one that cannot be opened
 - `standardize_string` is not idempotent (`BigWord` becomes `Bigword`); never test
   `standardize_string(title) == title`
 - Lookup uses `is_task_folder`; a folder that fails the check is never resumed, and the
   new task is created beside it
-- Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`)
+- Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) on the
+  stem, so `con.txt` and `com1.log` are as reserved as `con`. `create_md_file` checks
+  it, because the `.md` of a title is as reserved as the title, which covers
+  `resume_task` on a folder copied by hand, where no lookup ever ran; `open_or_create_task`
+  and `rename_task` check the title as well. `create_folder` does not, and is not the
+  place for the rule: it never receives a bare title, and a task folder name carries a
+  date prefix, which keeps `261001 - CON` out of the reserved set
 - `create_category(location, raw_name)` makes a plain subdirectory, not a task folder, so
   it does not call `standardize_string`: it folds the accents out (`Produção` becomes
   `Producao`) and leaves the case, the spacing and the punctuation alone; it raises
   `TaskError` on a name that is empty, cannot be made ASCII, carries a path separator, is
   reserved, starts with `.` or looks like a task folder (`260918 - Foo`), because any of
-  those would be missing from the listing; a name that is already there is not an error
+  those would be missing from the listing; a name that is already there is not an error.
+  It also refuses `_reserved_task_title`, which is what `is_task_folder` now rejects, so a
+  category cannot take the name a task folder would have had; a folder like that is a plain
+  directory, visible in the tree, rather than a task and a category that neither open
+- `validate_name` uses the Windows rules on every platform, because Windows is the
+  strictest of the two and a name it takes is taken everywhere: a character from
+  `<>:"/\|?*`, a control character, a name that is empty or only spaces, a name that is not
+  a single component, or one that ends in a dot or a space, which Windows drops. The
+  emptiness check comes first, so `""` and `"   "` give the same message rather than `"   "`
+  being refused as a trailing space, which it also is. It must never let the platform decide,
+  so it never uses `Path`, which follows the system we are on and takes `C:\foo` for a
+  single name on Linux. Refuse with `TaskError`, not with the `OSError` of the machine:
+  an `OSError` from `mkdir` is `[WinError 267]` on Windows and nothing on Linux
+- Reserved names are checked on the stem, so `con.txt` and `com1.log` are as reserved as
+  `con`
 - `standardize_string` and `create_category` share `_without_accents` for the NFKD folding,
   so the accent removal is only implemented once
 - Open files and folders with the OS default application: `os.startfile` on Windows,
@@ -100,10 +141,9 @@ change the name.
   `parser.error()`, so a missing argument still exits with code 2. Do not let that check
   be skipped, or `mktsk` with no arguments creates a folder instead of failing
 - `--rename <folder> <new title>` takes the name of the task folder, not a title to look
-  up, so two tasks with the same title on different dates are told apart; everything
-  after the folder is the new title, which is why a title of several words needs no
-  quoting. It prints the message and does not open the `.md`, because renaming is not
-  working on the task
+  up, so the task you name is the task you rename; everything after the folder is the new
+  title, which is why a title of several words needs no quoting. It prints the message and
+  does not open the `.md`, because renaming is not working on the task
 - `--list` takes no title and opens nothing; it prints each directory as a heading and
   its tasks under it, formatted the way the GUI shows them, which is `DATE_FORMAT`, two
   spaces and `readable_title`. The order is the one `find_task_groups` already gives, so
@@ -130,6 +170,10 @@ change the name.
 - The tree lists folders only, one level deep, and never task folders or hidden
   directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
   and the root does nothing
+- A directory that cannot be read holds nothing and is left out rather than raising, so
+  `_tasks_in` and `list_subdirectories` both return nothing for one and `find_task_groups`
+  lists the categories it can read; this is why `refresh` in the GUI needs no `try` around
+  `_reload_tree`, and it is also why a locked directory disappears instead of complaining
 - A `+` button sits at the right end of the `Directory` header row and creates a category
   in the current directory (`create_category`); the button is a child of the header widget
   and is placed by arithmetic against the header size, because
