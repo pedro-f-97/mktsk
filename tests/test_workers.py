@@ -759,6 +759,17 @@ def test_create_category_rejects_a_reserved_name(tmp_path):
     with pytest.raises(TaskError, match="reserved name"):
         create_category(tmp_path, "con")
 
+@pytest.mark.parametrize(
+    "name",
+    ["foo:bar", "foo?", "foo*", "foo|", "foo.", "foo ", r"C:\foo", "con.txt"],
+)
+def test_create_category_reports_a_name_windows_would_refuse(tmp_path, name):
+    # a domain error, not the raw OSError of whichever machine we are on
+    with pytest.raises(TaskError):
+        create_category(tmp_path, name)
+
+    assert list(tmp_path.iterdir()) == []
+
 def test_create_category_rejects_a_hidden_name(tmp_path):
     with pytest.raises(TaskError, match="invalid category name"):
         create_category(tmp_path, ".hidden")

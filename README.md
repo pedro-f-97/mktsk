@@ -178,8 +178,12 @@ stripped of accents (`Produção` becomes `Producao`) and is otherwise left as y
 it, spaces and punctuation included. A name that is already there is not an error, since
 the point is to have the folder rather than to be the first to make it.
 
-The name is refused when it is empty, a Windows reserved name, hidden, carries a path
-separator, or looks like a task folder (`260918 - Foo`).
+The name is refused when it is empty, hidden, looks like a task folder (`260918 - Foo`), or
+carries anything Windows refuses in a name. That last rule is checked on every platform,
+not just Windows, so a category you create on Linux is still one you can open on Windows.
+It covers a Windows reserved name (`con`, and also `con.txt`, because Windows reserves the
+name before the extension), a path separator, a character from `<>:"/\|?*`, and a name
+ending in a dot or a space, which Windows drops.
 
 Then create tasks inside it by running `mktsk` from there, and `--list` will show them
 under its own heading.
