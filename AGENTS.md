@@ -162,6 +162,10 @@ change the name.
 - The tree lists folders only, one level deep, and never task folders or hidden
   directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
   and the root does nothing
+- A directory that cannot be read holds nothing and is left out rather than raising, so
+  `_tasks_in` and `list_subdirectories` both return nothing for one and `find_task_groups`
+  lists the categories it can read; this is why `refresh` in the GUI needs no `try` around
+  `_reload_tree`, and it is also why a locked directory disappears instead of complaining
 - A `+` button sits at the right end of the `Directory` header row and creates a category
   in the current directory (`create_category`); the button is a child of the header widget
   and is placed by arithmetic against the header size, because

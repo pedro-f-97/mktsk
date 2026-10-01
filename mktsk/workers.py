@@ -321,18 +321,26 @@ def list_subdirectories(location: Path) -> list[Path]:
 
     Hidden directories are left out, so a listing does not walk into `.git` and
     friends. The list stays one level deep, so a subdirectory of a
-    subdirectory is never a category.
+    subdirectory is never a category. A directory that cannot be read holds no
+    subdirectories, and is left out rather than raising, which is what
+    `_tasks_in` does with the same problem.
 
     Args:
         location: the directory to look in.
 
     Returns:
-        The subdirectories, in alphabetical order.
+        The subdirectories, in alphabetical order, or nothing when the
+        directory cannot be read.
     """
+    try:
+        entries = list(location.iterdir())
+    except OSError:
+        return []
+
     return sorted(
         (
             entry
-            for entry in location.iterdir()
+            for entry in entries
             if entry.is_dir()
             and not entry.name.startswith(".")
             and not is_task_folder(entry.name)

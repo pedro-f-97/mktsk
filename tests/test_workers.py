@@ -614,6 +614,18 @@ def test_list_subdirectories_stops_one_level_down(tmp_path):
 
     assert [path.name for path in list_subdirectories(tmp_path)] == ["SteelMountain"]
 
+def test_list_subdirectories_unreadable_directory(tmp_path, monkeypatch):
+    real_iterdir = Path.iterdir
+
+    def guarded_iterdir(self):
+        if self.name == "private":
+            raise PermissionError
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
+
+    assert list_subdirectories(tmp_path / "private") == []
+
 def test_find_task_groups_skips_unreadable_subdirectory(
     tmp_path, make_task, monkeypatch
 ):
@@ -628,6 +640,26 @@ def test_find_task_groups_skips_unreadable_subdirectory(
     monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
 
     assert find_task_groups(tmp_path) == []
+
+def test_find_task_groups_lists_the_readable_categories(
+    tmp_path, make_task, monkeypatch
+):
+    make_task(tmp_path, "260925", "Foo")
+    make_task(tmp_path / "Veritas", "260925", "Bar")
+    (tmp_path / "private").mkdir()
+    real_iterdir = Path.iterdir
+
+    def guarded_iterdir(self):
+        if self.name == "private":
+            raise PermissionError
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
+
+    # the category that cannot be read is left out, the rest is still listed
+    groups = find_task_groups(tmp_path)
+
+    assert [group.category for group in groups] == [None, tmp_path / "Veritas"]
 
 
 @freeze_time("2026-09-30")
