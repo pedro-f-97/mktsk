@@ -45,3 +45,15 @@ pythonPlatform = "All"
 
 [tool.coverage.run]
 branch = true
+
+[tool.ruff]
+# the E3xx blank line rules are still preview, so without this they are selected
+# but never run, and ruff warns that the selection has no effect
+preview = true
+
+[tool.ruff.lint]
+# extend-select alone keeps the 45 default families. Adding a select as well would
+# cut them back to E, F and W
+# DTZ is listed because preview drops seven of its stable rules, DTZ007 among
+# them, which is the one the two noqa comments in workers.py are there for
+extend-select = ["W", "E301", "E302", "E303", "E305", "DTZ"]

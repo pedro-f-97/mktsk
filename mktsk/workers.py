@@ -47,6 +47,7 @@ def _without_accents(value: str) -> str:
     decomposed = unicodedata.normalize("NFKD", value)
     return "".join(char for char in decomposed if not unicodedata.combining(char))
 
+
 def standardize_string(string_: str) -> str:
     """Normalize a string by removing accents, special characters and spacing.
 
@@ -65,7 +66,7 @@ def standardize_string(string_: str) -> str:
 
     # remove spacing
     words = re.split(r"[^A-Za-z0-9]+", joined)
-    
+
     # capitalize and join every word
     capitalized = []
     for word in words:
@@ -74,6 +75,7 @@ def standardize_string(string_: str) -> str:
     result = "".join(capitalized)
 
     return result
+
 
 def build_folder_name(name: str, date_prefix: str | None = None) -> str:
     """Builds a folder name from a date prefix and a name.
@@ -91,6 +93,7 @@ def build_folder_name(name: str, date_prefix: str | None = None) -> str:
 
     name = f"{date_prefix} - {name}"
     return name
+
 
 def create_folder(location: Path, name: str) -> Path:
     """Creates a folder with the given name at the given location.
@@ -116,8 +119,9 @@ def create_folder(location: Path, name: str) -> Path:
     folder_to_create = location / name
 
     folder_to_create.mkdir(parents=True, exist_ok=True)
-    
+
     return folder_to_create
+
 
 def create_md_file(location: Path, name: str) -> Path:
     """Creates an .md file with the given name at the given location
@@ -142,6 +146,7 @@ def create_md_file(location: Path, name: str) -> Path:
     file_to_create.touch()
 
     return file_to_create
+
 
 def sign_md_file(file: Path, title: str) -> bool:
     """Writes given title and the current date as headings in the given .md file.
@@ -179,6 +184,7 @@ def sign_md_file(file: Path, title: str) -> bool:
         return True
 
     return False
+
 
 def is_task_folder(name: str) -> bool:
     """Tells whether a directory name is a task folder.
@@ -219,6 +225,7 @@ def is_task_folder(name: str) -> bool:
         and not helpers.is_reserved_name(title)
     )
 
+
 def _reserved_task_title(name: str) -> bool:
     """Tells whether a task folder name carries a title Windows reserves.
 
@@ -243,6 +250,7 @@ def _reserved_task_title(name: str) -> bool:
         and date_prefix.isdigit()
         and helpers.is_reserved_name(title)
     )
+
 
 def find_task_folder(
     location: Path, title: str, exclude: Path | None = None
@@ -295,6 +303,7 @@ def find_task_folder(
     # a folder copied in by hand leaves the date, so the newest wins
     return max(matches, key=lambda match: match[0])[1]
 
+
 def _task_date_and_title(name: str) -> tuple[datetime.date, str] | None:
     """Splits a task folder name into its date and its standardized title.
 
@@ -314,6 +323,7 @@ def _task_date_and_title(name: str) -> tuple[datetime.date, str] | None:
 
     return parsed.date(), title
 
+
 def task_folder_title(name: str) -> str | None:
     """Returns the standardized title a task folder name carries.
 
@@ -326,6 +336,7 @@ def task_folder_title(name: str) -> str | None:
     parts = _task_date_and_title(name)
 
     return None if parts is None else parts[1]
+
 
 def _tasks_in(directory: Path) -> list[TaskEntry]:
     """Collects the task folders of a directory, newest first.
@@ -363,6 +374,7 @@ def _tasks_in(directory: Path) -> list[TaskEntry]:
 
     return sorted(entries, key=lambda entry: (-entry.date.toordinal(), entry.title))
 
+
 def list_subdirectories(location: Path) -> list[Path]:
     """Lists the immediate subdirectories that are not task folders.
 
@@ -394,6 +406,7 @@ def list_subdirectories(location: Path) -> list[Path]:
         ),
         key=lambda path: path.name.lower(),
     )
+
 
 def find_task_groups(location: Path) -> list[TaskGroup]:
     """Finds the tasks in a directory and in its immediate subdirectories.
@@ -427,6 +440,7 @@ def find_task_groups(location: Path) -> list[TaskGroup]:
 
     return groups
 
+
 def append_date_section(file: Path, date: datetime.date) -> bool:
     """Adds a second level heading with the given date at the end of the .md file.
 
@@ -452,6 +466,7 @@ def append_date_section(file: Path, date: datetime.date) -> bool:
     file.write_text(f"{content.rstrip()}\n\n## {formatted}\n\n", encoding="utf-8")
 
     return True
+
 
 def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
     """Prepares an existing task folder for a new visit.
@@ -483,6 +498,7 @@ def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
         return TaskResult(file, f"Opened: {folder.name} (added ## {formatted})")
 
     return TaskResult(file, f"Opened: {folder.name} (## {formatted} already there)")
+
 
 def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
     """Finds the task for a title, or creates it, and returns its .md file.
@@ -525,6 +541,7 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
 
     return TaskResult(created_file, f"Created: {folder_name}")
 
+
 def resume_task(folder: Path, title: str) -> TaskResult:
     """Adds a dated section to a task folder and returns its .md file.
 
@@ -541,6 +558,7 @@ def resume_task(folder: Path, title: str) -> TaskResult:
     today = datetime.datetime.now().astimezone().date()
 
     return _resume_task(folder, title, today)
+
 
 def _retitled(content: str, title: str, new_title: str) -> str | None:
     """Returns the content with its leading heading rewritten when it names the task.
@@ -573,6 +591,7 @@ def _retitled(content: str, title: str, new_title: str) -> str | None:
         return None
 
     return None
+
 
 def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     """Renames a task folder and its .md file, keeping the date of the task.

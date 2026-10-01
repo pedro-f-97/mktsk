@@ -66,6 +66,7 @@ def parse_arguments() -> argparse.Namespace:
 
     return args
 
+
 def main() -> int:
     args = parse_arguments()
 
@@ -92,6 +93,7 @@ def main() -> int:
 
     return 0
 
+
 def _list(location: Path) -> int:
     """Prints the tasks of a directory and of its categories, and opens nothing.
 
@@ -114,6 +116,7 @@ def _list(location: Path) -> int:
             print(f"  {date}  {helpers.readable_title(entry.title)}")
 
     return 0
+
 
 def _new_category(location: Path, raw_name: str) -> int:
     """Creates a category folder in the given directory, and reports it.
@@ -138,6 +141,7 @@ def _new_category(location: Path, raw_name: str) -> int:
     print(f"Created: {category}")
 
     return 0
+
 
 def _rename(location: Path, folder_name: str, raw_title: str) -> int:
     """Renames a task folder given its name, and reports what happened.
@@ -174,6 +178,7 @@ def _rename(location: Path, folder_name: str, raw_title: str) -> int:
     print(result.message)
 
     return 0
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())

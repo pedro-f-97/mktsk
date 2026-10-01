@@ -243,6 +243,14 @@ change the name.
 - `snake_case` functions and variables, `PascalCase` classes, `UPPER_CASE` constants
 - Type hints on public functions; docstrings with `Args:` / `Returns:` / `Raises:`
 - Small functions; imports sorted by isort (`ruff check . --fix`)
+- Two blank lines between top-level definitions, no whitespace on a blank line, and a
+  newline at the end of the file. `W` and the `E3xx` rules enforce it from `pyproject.toml`,
+  where `preview` is on because the `E3xx` rules are still preview. `preview` drops seven
+  stable `DTZ` rules, `DTZ007` among them, so `DTZ` is listed explicitly and the two
+  `# noqa: DTZ007` in `workers.py` are load-bearing: `RUF100` will report them as unused
+  the moment the config stops selecting `DTZ007`
+- Keep the ruff `select` and `extend-select` out of each other's way: a `select` next to
+  `extend-select` cuts the default families back to `E`, `F` and `W`
 - Comment only when it adds value; never delete existing comments
 - Tests in `tests/test_*.py`; never write to real user folders (`tmp_path`)
 - One test file per subject, named after it (`test_gui_listing.py`, `test_gui_target.py`,

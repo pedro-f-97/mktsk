@@ -19,6 +19,7 @@ _TITLE_WORD = re.compile(r"[A-Z]?[a-z]*|\d+")
 # the characters Windows refuses in a name, whatever the platform we run on
 _WINDOWS_FORBIDDEN = frozenset('<>:"/\\|?*')
 
+
 def is_reserved_name(name: str) -> bool:
     """Checks if the given name is reserved by Windows.
 
@@ -33,8 +34,10 @@ def is_reserved_name(name: str) -> bool:
     """
     return PureWindowsPath(name).stem.upper() in WINDOWS_RESERVED_NAMES
 
+
 class TaskError(Exception):
     """Error raised when a task domain rule is violated."""
+
 
 def validate_name(name: str) -> None:
     """Validates that the given name is usable on every platform.
@@ -70,6 +73,7 @@ def validate_name(name: str) -> None:
 
     if name != name.rstrip(" ."):
         raise TaskError(f"'{name}' ends in a dot or a space, which Windows drops")
+
 
 def readable_title(title: str) -> str:
     """Separates the words of a standardized title with spaces.

@@ -227,7 +227,7 @@ class _CategoryTree(QTreeWidget):
         )
         self.header_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.header_button.setIconSize(QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE))
-        self.header_button.clicked.connect(lambda: self.category_requested.emit())
+        self.header_button.clicked.connect(self.category_requested.emit)
         self.header().geometriesChanged.connect(self._place_header_button)
         self.header_button.show()
         self._place_header_button()
