@@ -50,11 +50,14 @@ def validate_name(name: str) -> None:
         name: Name to be validated.
 
     Raises:
-        TaskError: If the name carries a character Windows does not allow, is
-            not a single path component, or ends in a dot or a space, which
-            Windows drops rather than keeps.
+        TaskError: If the name is empty or only spaces, carries a character
+            Windows does not allow, is not a single path component, or ends in
+            a dot or a space, which Windows drops rather than keeps.
     """
-    # the component check comes first, so a name that is a path says so rather
+    if not name.strip():
+        raise TaskError("Name must not be empty")
+
+    # the component check comes next, so a name that is a path says so rather
     # than naming the separator as just another forbidden character
     if PureWindowsPath(name).name != name:
         raise TaskError(f"Name must be a single path component, got: {name!r}")

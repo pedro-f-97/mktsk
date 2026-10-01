@@ -65,6 +65,11 @@ def test_validate_name_accepts_a_portable_name(name):
     # a task folder carries spaces and a hyphen, and stays valid
     helpers.validate_name(name)
 
+@pytest.mark.parametrize("name", ["", " ", "   "])
+def test_validate_name_refuses_an_empty_name(name):
+    with pytest.raises(TaskError, match="must not be empty"):
+        helpers.validate_name(name)
+
 def test_validate_name_says_when_a_name_is_a_path():
     with pytest.raises(TaskError, match="single path component"):
         helpers.validate_name("foo/bar")

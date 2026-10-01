@@ -109,8 +109,10 @@ change the name.
   those would be missing from the listing; a name that is already there is not an error
 - `validate_name` uses the Windows rules on every platform, because Windows is the
   strictest of the two and a name it takes is taken everywhere: a character from
-  `<>:"/\|?*`, a control character, a name that is not a single component, or one that
-  ends in a dot or a space, which Windows drops. It must never let the platform decide,
+  `<>:"/\|?*`, a control character, a name that is empty or only spaces, a name that is not
+  a single component, or one that ends in a dot or a space, which Windows drops. The
+  emptiness check comes first, so `""` and `"   "` give the same message rather than `"   "`
+  being refused as a trailing space, which it also is. It must never let the platform decide,
   so it never uses `Path`, which follows the system we are on and takes `C:\foo` for a
   single name on Linux. Refuse with `TaskError`, not with the `OSError` of the machine:
   an `OSError` from `mkdir` is `[WinError 267]` on Windows and nothing on Linux
