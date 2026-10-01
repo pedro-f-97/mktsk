@@ -94,7 +94,13 @@ change the name.
   `standardize_string(title) == title`
 - Lookup uses `is_task_folder`; a folder that fails the check is never resumed, and the
   new task is created beside it
-- Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`)
+- Reject reserved Windows names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) on the
+  stem, so `con.txt` and `com1.log` are as reserved as `con`. `create_md_file` checks
+  it, because the `.md` of a title is as reserved as the title, which covers
+  `resume_task` on a folder copied by hand, where no lookup ever ran; `open_or_create_task`
+  and `rename_task` check the title as well. `create_folder` does not, and is not the
+  place for the rule: it never receives a bare title, and a task folder name carries a
+  date prefix, which keeps `261001 - CON` out of the reserved set
 - `create_category(location, raw_name)` makes a plain subdirectory, not a task folder, so
   it does not call `standardize_string`: it folds the accents out (`Produção` becomes
   `Producao`) and leaves the case, the spacing and the punctuation alone; it raises

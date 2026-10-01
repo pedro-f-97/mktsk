@@ -95,12 +95,21 @@ def build_folder_name(name: str, date_prefix: str | None = None) -> str:
 def create_folder(location: Path, name: str) -> Path:
     """Creates a folder with the given name at the given location.
 
+    The name is taken as it is given, so a name Windows reserves is only
+    refused by the caller that knows it is a title. A task folder carries a
+    date prefix, which `261001 - CON` shows is enough to keep the name out of
+    the reserved set, so nothing is lost by leaving the check out here.
+
     Args:
         location: path where the folder will be created
         name: name to give the folder
 
     Returns:
         the path of the created folder
+
+    Raises:
+        TaskError: If the name is not a single path component, or carries a
+            character, or ends in a way, that Windows does not accept.
     """
     helpers.validate_name(name)
 
@@ -119,8 +128,16 @@ def create_md_file(location: Path, name: str) -> Path:
 
     Returns:
         the path of the created .md file
+
+    Raises:
+        TaskError: If the name is a single path component Windows accepts, or
+            is a reserved name, which `CON.md` is as much as `CON` is.
     """
     helpers.validate_name(name)
+
+    if helpers.is_reserved_name(name):
+        raise helpers.TaskError(f"'{name}' is a reserved name")
+
     file_to_create = location / f"{name}.md"
     file_to_create.touch()
 

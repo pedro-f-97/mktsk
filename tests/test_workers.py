@@ -94,6 +94,25 @@ def test_create_md_file_path_error(tmp_path):
     with pytest.raises(TaskError):
         create_md_file(folder, name)
 
+@pytest.mark.parametrize("name", ["CON", "com1.log"])
+def test_create_md_file_reserved_name(tmp_path, name):
+    folder = (tmp_path / "my_folder")
+    folder.mkdir()
+
+    # a task folder copied by hand can carry a title Windows reserves, and the
+    # .md of that title is as reserved as the folder name
+    with pytest.raises(TaskError):
+        create_md_file(folder, name)
+
+    assert list(folder.iterdir()) == []
+
+def test_create_folder_takes_a_reserved_name(tmp_path):
+    # the date prefix keeps a task folder name out of the reserved set, so
+    # create_folder is not the place the rule belongs and does not check it
+    created = create_folder(tmp_path, "CON")
+
+    assert created.exists()
+
 @freeze_time("2026-09-22")
 def test_sign_md_file(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
@@ -632,6 +651,19 @@ def test_resume_task_ignores_the_current_directory(tmp_path, make_task):
 
     assert result.file == folder / "FSociety.md"
     assert list(elsewhere.iterdir()) == []
+
+
+@freeze_time("2026-09-30")
+def test_resume_task_refuses_a_reserved_title(tmp_path):
+    # a folder the lookup would never have created, so a copy by hand or a
+    # restore from a backup, which is what the GUI Resume button can be given
+    folder = tmp_path / "260918 - CON"
+    folder.mkdir()
+
+    with pytest.raises(TaskError):
+        resume_task(folder, "CON")
+
+    assert list(folder.iterdir()) == []
 
 
 @freeze_time("2026-09-30")
