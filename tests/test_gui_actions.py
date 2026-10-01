@@ -17,6 +17,7 @@ def test_action_bar_stays_hidden_without_a_selection(window, tmp_path, make_task
 
     assert task_listing(window).action_bar.isVisible() is False
 
+
 def test_action_bar_follows_the_selected_task(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
@@ -25,6 +26,7 @@ def test_action_bar_follows_the_selected_task(window, tmp_path, make_task):
 
     assert bar.isVisible() is True
     assert len(bar.buttons()) == 3
+
 
 def test_action_bar_sits_over_the_selected_row(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
@@ -36,6 +38,7 @@ def test_action_bar_sits_over_the_selected_row(window, tmp_path, make_task):
     assert listing.action_bar.geometry() == QRect(
         row.left(), row.top(), listing.inset, row.height()
     )
+
 
 def test_action_bar_shows_icons_and_not_labels(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
@@ -52,6 +55,7 @@ def test_action_bar_shows_icons_and_not_labels(window, tmp_path, make_task):
         assert button.text() == ""
         assert button.icon().isNull() is False
 
+
 def test_action_bar_tooltips_name_the_actions(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
@@ -63,6 +67,7 @@ def test_action_bar_tooltips_name_the_actions(window, tmp_path, make_task):
         "Add a note for today",
         "Rename this task",
     ]
+
 
 def test_action_bar_is_left_aligned(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
@@ -78,6 +83,7 @@ def test_action_bar_is_left_aligned(window, tmp_path, make_task):
     assert bar.width() < row.width() / 2
     assert bar.buttons()[-1].geometry().right() <= bar.width()
 
+
 def test_only_the_selected_row_gets_room_for_the_buttons(window, tmp_path, make_task):
     make_task(tmp_path, "260918", "Foo")
     make_task(tmp_path, "260917", "Bar")
@@ -88,6 +94,7 @@ def test_only_the_selected_row_gets_room_for_the_buttons(window, tmp_path, make_
 
     assert listing.delegate.inset_row == 0
     assert listing.itemDelegate() is listing.delegate
+
 
 def test_the_room_for_the_buttons_goes_away_with_the_selection(
     window, tmp_path, make_task
@@ -100,6 +107,7 @@ def test_the_room_for_the_buttons_goes_away_with_the_selection(
 
     assert listing.delegate.inset_row == -1
 
+
 def test_action_bar_hides_again_when_the_selection_goes(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
@@ -108,6 +116,7 @@ def test_action_bar_hides_again_when_the_selection_goes(window, tmp_path, make_t
     listing.setCurrentItem(None)
 
     assert listing.action_bar.isVisible() is False
+
 
 def test_action_bar_never_appears_over_a_heading(window, tmp_path, make_task):
     make_task(tmp_path, "260918", "Foo")
@@ -125,6 +134,7 @@ def test_action_bar_never_appears_over_a_heading(window, tmp_path, make_task):
     assert listing.selected_entry() is None
     assert listing.action_bar.isVisible() is False
 
+
 def test_buttons_do_nothing_without_a_selection(
     window, tmp_path, fake_open, make_task
 ):
@@ -138,6 +148,7 @@ def test_buttons_do_nothing_without_a_selection(
 
     assert fake_open == []
 
+
 def test_open_button_reveals_the_task_folder(window, tmp_path, fake_open, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
@@ -145,6 +156,7 @@ def test_open_button_reveals_the_task_folder(window, tmp_path, fake_open, make_t
     action_bar(window, file).open_button.click()
 
     assert fake_open == [file.parent]
+
 
 def test_open_button_reveals_a_task_from_a_category_tab(
     window, tmp_path, fake_open, make_task
@@ -156,6 +168,7 @@ def test_open_button_reveals_a_task_from_a_category_tab(
     action_bar(window, file, "Veritas").open_button.click()
 
     assert fake_open == [file.parent]
+
 
 def test_revealing_the_folder_leaves_the_task_untouched(
     window, tmp_path, fake_open, make_task
@@ -169,6 +182,7 @@ def test_revealing_the_folder_leaves_the_task_untouched(
     assert fake_open == [file.parent]
     assert file.read_text(encoding="utf-8") == "# FSociety\n\n## 18/09/2026\n\n"
 
+
 def test_double_click_on_a_task_does_nothing(qtbot, window, tmp_path, fake_open, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
@@ -176,6 +190,7 @@ def test_double_click_on_a_task_does_nothing(qtbot, window, tmp_path, fake_open,
     task_listing(window).itemDoubleClicked.emit(find_task(window, file))
 
     assert fake_open == []
+
 
 @freeze_time("2026-09-30")
 def test_resume_button_adds_today_and_opens(window, tmp_path, fake_open, make_task):
@@ -189,6 +204,7 @@ def test_resume_button_adds_today_and_opens(window, tmp_path, fake_open, make_ta
         "# FSociety\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
     )
     assert fake_open == [file]
+
 
 @freeze_time("2026-09-30")
 def test_resume_button_resumes_a_task_outside_the_current_directory(
@@ -204,6 +220,7 @@ def test_resume_button_resumes_a_task_outside_the_current_directory(
     assert "## 30/09/2026" in file.read_text(encoding="utf-8")
     assert fake_open == [file]
 
+
 def test_resume_button_reports_a_missing_file(
     window, tmp_path, monkeypatch, fake_messages, make_task
 ):
@@ -217,6 +234,7 @@ def test_resume_button_reports_a_missing_file(
     action_bar(window, file).resume_button.click()
 
     assert fake_messages["critical"] == ["boom"]
+
 
 def test_rename_button_keeps_the_date_and_updates_the_list(
     window, tmp_path, make_task, monkeypatch
@@ -233,6 +251,7 @@ def test_rename_button_keeps_the_date_and_updates_the_list(
     assert renamed.read_text(encoding="utf-8") == "# FSocietyEverbind\n"
     assert tab_labels(window) == [tmp_path.name, "18/09/2026  F Society Everbind"]
 
+
 def test_rename_button_keeps_the_active_tab(
     window, tmp_path, make_task, monkeypatch
 ):
@@ -247,6 +266,7 @@ def test_rename_button_keeps_the_active_tab(
 
     assert window.tabs.tabText(window.tabs.currentIndex()) == "Veritas"
 
+
 def test_cancelling_the_rename_changes_nothing(
     window, tmp_path, make_task, monkeypatch
 ):
@@ -259,6 +279,7 @@ def test_cancelling_the_rename_changes_nothing(
     assert file.is_file()
     assert tab_labels(window) == [tmp_path.name, "18/09/2026  F Society"]
 
+
 def test_blank_rename_changes_nothing(window, tmp_path, make_task, monkeypatch):
     file = make_task(tmp_path, "260918", "FSociety")
     window.navigate_to(tmp_path)
@@ -268,6 +289,7 @@ def test_blank_rename_changes_nothing(window, tmp_path, make_task, monkeypatch):
 
     assert file.is_file()
     assert tab_labels(window) == [tmp_path.name, "18/09/2026  F Society"]
+
 
 def test_rename_button_reports_a_collision(
     window, tmp_path, fake_messages, make_task, monkeypatch
@@ -283,4 +305,3 @@ def test_rename_button_reports_a_collision(
 
     assert fake_messages["critical"] == ["'FSocietyEverbind' is already a task here"]
     assert file.is_file()
-

@@ -63,11 +63,20 @@ change the name.
 - The title of a task is unique within its directory, or category, so a lookup by title is
   unambiguous there. Lookup runs before any creation, in the current directory only, and
   ignores the date: `260918 - Foo` is what `mktsk Foo` resumes weeks later. The same title
-  in another directory is a different task, and that is what makes it legitimate
-- Renaming to a title the directory already holds is refused, on any date, so `rename_task`
-  cannot be the way to end up with two of one title. A folder copied by hand, or restored
-  from a backup, can, and `find_task_folder` then takes the most recent rather than
-  whichever came first out of `iterdir()`
+  in another directory is a different task, and that is what makes it legitimate. The
+  comparison ignores the case, because `standardize_string` lowers the capitals inside a
+  title and a folder renamed by hand keeps them, so pasting a folder name into the terminal
+  has to reach the task it names rather than create a second one
+- The `.md` of a task is always named after the title its folder carries, so
+  `_resume_task` reads that title out of the folder name and hands it to both
+  `create_md_file` and `sign_md_file`. A folder renamed by hand keeps the capitals of its own
+  name, and the normalized title would otherwise point at a `.md` that does not exist and a
+  heading that names another task
+- Renaming to a title the directory already holds is refused, on any date and in any case, so
+  `rename_task` cannot be the way to end up with two of one title. It passes `exclude` so the
+  folder it is renaming never clashes with itself over the case alone. A folder copied by
+  hand, or restored from a backup, can, and `find_task_folder` then takes the most recent
+  rather than whichever came first out of `iterdir()`
 - Resuming signs first, then appends `## <today>` at the end of the `.md` unless that
   date is already there; the dated section never rewrites the body, only trailing
   whitespace is dropped; headings are matched loosely, so `##  05/08/2026 ` counts as
@@ -234,6 +243,14 @@ change the name.
 - `snake_case` functions and variables, `PascalCase` classes, `UPPER_CASE` constants
 - Type hints on public functions; docstrings with `Args:` / `Returns:` / `Raises:`
 - Small functions; imports sorted by isort (`ruff check . --fix`)
+- Two blank lines between top-level definitions, no whitespace on a blank line, and a
+  newline at the end of the file. `W` and the `E3xx` rules enforce it from `pyproject.toml`,
+  where `preview` is on because the `E3xx` rules are still preview. `preview` drops seven
+  stable `DTZ` rules, `DTZ007` among them, so `DTZ` is listed explicitly and the two
+  `# noqa: DTZ007` in `workers.py` are load-bearing: `RUF100` will report them as unused
+  the moment the config stops selecting `DTZ007`
+- Keep the ruff `select` and `extend-select` out of each other's way: a `select` next to
+  `extend-select` cuts the default families back to `E`, `F` and `W`
 - Comment only when it adds value; never delete existing comments
 - Tests in `tests/test_*.py`; never write to real user folders (`tmp_path`)
 - One test file per subject, named after it (`test_gui_listing.py`, `test_gui_target.py`,

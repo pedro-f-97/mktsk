@@ -17,6 +17,7 @@ def test_choose_directory(window, tmp_path, monkeypatch, qtbot):
 
     assert window.current_directory == tmp_path.resolve()
 
+
 def test_choose_directory_cancelled(window, monkeypatch, qtbot):
     monkeypatch.setattr(
         "PySide6.QtWidgets.QFileDialog.getExistingDirectory",
@@ -27,6 +28,7 @@ def test_choose_directory_cancelled(window, monkeypatch, qtbot):
 
     assert window.current_directory == before
 
+
 def test_up_button_navigates_up(window, tmp_path, qtbot):
     sub = tmp_path / "sub"
     sub.mkdir()
@@ -36,6 +38,7 @@ def test_up_button_navigates_up(window, tmp_path, qtbot):
 
     assert window.current_directory == tmp_path.resolve()
 
+
 def test_refresh_button_reloads(window, tmp_path, qtbot, make_task):
     window.navigate_to(tmp_path)
     make_task(tmp_path, "260918", "Foo")
@@ -43,6 +46,7 @@ def test_refresh_button_reloads(window, tmp_path, qtbot, make_task):
     qtbot.mouseClick(window.refresh_button, Qt.MouseButton.LeftButton)
 
     assert tab_labels(window, tmp_path.name) == ["18/09/2026  Foo"]
+
 
 def test_refresh_keeps_the_active_tab(window, tmp_path, make_task):
     make_task(tmp_path / "Veritas", "260925", "Foo")
@@ -52,6 +56,7 @@ def test_refresh_keeps_the_active_tab(window, tmp_path, make_task):
     window.refresh()
 
     assert window.tabs.tabText(window.tabs.currentIndex()) == "Veritas"
+
 
 def test_refresh_falls_back_to_all_when_the_tab_is_gone(window, tmp_path, make_task):
     make_task(tmp_path / "Veritas", "260925", "Foo")
@@ -63,6 +68,7 @@ def test_refresh_falls_back_to_all_when_the_tab_is_gone(window, tmp_path, make_t
 
     assert window.tabs.tabText(window.tabs.currentIndex()) == "All"
 
+
 def test_refresh_missing_directory(window, tmp_path):
     window.current_directory = tmp_path / "a.md"
 
@@ -71,16 +77,20 @@ def test_refresh_missing_directory(window, tmp_path):
     assert window.tabs.count() == 0
     assert window.directory_tree.topLevelItemCount() == 0
 
+
 def test_close_saves_last_path(window, tmp_path):
     window.navigate_to(tmp_path)
     window.close()
 
     assert window.settings.value("last_path") == str(tmp_path.resolve())
 
+
 def test_module_entry_point_uses_gui_main():
     from mktsk import __main__ as module
 
     assert module.main is gui_main
+
+
 def test_rows_are_tall_enough_for_the_action_bar(window, tmp_path, make_task):
     make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
