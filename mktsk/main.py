@@ -24,6 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="rename a task folder, given its name and the new title",
     )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="list the tasks here and in the categories below, and open nothing",
+    )
     return parser
 
 
@@ -31,7 +36,14 @@ def parse_arguments() -> argparse.Namespace:
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.rename:
+    if args.rename and args.list:
+        parser.error("--rename and --list do not go together")
+
+    if args.list:
+        # the list is of what is here, so a title alongside it is a mistake
+        if args.title:
+            parser.error("--list takes no title")
+    elif args.rename:
         # the new title is every argument after the folder, so a title made of
         # several words needs no quoting, the same way a task title does not
         if len(args.title) < _RENAME_MINIMUM_ARGUMENTS:
@@ -43,6 +55,9 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_arguments()
+
+    if args.list:
+        return _list(Path.cwd())
 
     try:
         if args.rename:
@@ -58,6 +73,29 @@ def main() -> int:
         helpers.open_file(result.file)
     except OSError as error:
         print(f"Warning: {error}")
+
+    return 0
+
+def _list(location: Path) -> int:
+    """Prints the tasks of a directory and of its categories, and opens nothing.
+
+    Each category is a heading of its own name, the directory here included, and
+    the tasks under it read as they do in the GUI: the date, two spaces, then the
+    title read as words. A directory with no tasks prints nothing at all.
+
+    Args:
+        location: the directory to list.
+
+    Returns:
+        0.
+    """
+    for group in workers.find_task_groups(location):
+        name = location.name or str(location)
+        print(f"{name if group.category is None else group.category.name}/")
+
+        for entry in group.entries:
+            date = entry.date.strftime(workers.DATE_FORMAT)
+            print(f"  {date}  {helpers.readable_title(entry.title)}")
 
     return 0
 

@@ -205,6 +205,100 @@ def test_parse_arguments_for_rename_keeps_a_new_title_of_several_words(monkeypat
 
     assert args.title == ["260918 - Foo", "Back", "to", "the", "Future"]
 
+def test_parse_arguments_for_list(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    args = parse_arguments()
+
+    assert args.list is True
+    assert args.title == []
+
+def test_parse_arguments_for_list_with_a_title(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list", "Foo"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_list_and_rename(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list", "--rename", "260918 - Foo", "Bar"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_main_list(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path, "260923", "ItsAlive")
+    make_task(tmp_path / "Veritas", "260924", "FSocietyEverbind")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
+
+    result = main()
+
+    assert result == 0
+    assert capsys.readouterr().out == (
+        f"{tmp_path.name}/\n"
+        "  23/09/2026  Its Alive\n"
+        "  18/09/2026  Foo\n"
+        "Veritas/\n"
+        "  24/09/2026  F Society Everbind\n"
+    )
+    assert opened == []
+
+def test_main_list_reads_the_title_as_words(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260923", "Task2")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    main()
+
+    assert "  23/09/2026  Task 2\n" in capsys.readouterr().out
+
+def test_main_list_keeps_the_categories_apart(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path / "Able", "260919", "Foo")
+    make_task(tmp_path / "Veritas", "260920", "Foo")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    main()
+
+    # the same title is a different task in each directory, and each gets its own
+    assert capsys.readouterr().out == (
+        f"{tmp_path.name}/\n"
+        "  18/09/2026  Foo\n"
+        "Able/\n"
+        "  19/09/2026  Foo\n"
+        "Veritas/\n"
+        "  20/09/2026  Foo\n"
+    )
+
+def test_main_list_of_a_directory_without_tasks(monkeypatch, tmp_path, capsys):
+    (tmp_path / "Veritas").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    result = main()
+
+    assert result == 0
+    assert capsys.readouterr().out == ""
+
+def test_main_list_skips_a_task_folder_without_md(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    (tmp_path / "260919 - Bar").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    main()
+
+    assert "Bar" not in capsys.readouterr().out
+
 def test_main_rename(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     folder = tmp_path / "260918 - OldTitle"

@@ -104,6 +104,11 @@ change the name.
   after the folder is the new title, which is why a title of several words needs no
   quoting. It prints the message and does not open the `.md`, because renaming is not
   working on the task
+- `--list` takes no title and opens nothing; it prints each directory as a heading and
+  its tasks under it, formatted the way the GUI shows them, which is `DATE_FORMAT`, two
+  spaces and `readable_title`. The order is the one `find_task_groups` already gives, so
+  a directory with no tasks prints nothing. Never format a date or a title in the CLI by
+  hand, or the two listings drift apart
 
 ## GUI
 

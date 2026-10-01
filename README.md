@@ -136,6 +136,31 @@ on different dates you always rename the one you mean. A name that is not a task
 is refused, as is a new title that is empty, a Windows reserved name, or one another
 task already has.
 
+## Listing tasks
+
+Pass `--list` to see what is there, without opening anything:
+
+```bash
+mktsk --list
+```
+
+```text
+tasks/
+  23/09/2026  Its Alive
+  18/09/2026  F Society
+Able/
+  19/09/2026  Foo
+Veritas/
+  24/09/2026  F Society Everbind
+```
+
+Each directory is a heading, the one you are in first, and the tasks under it read the
+same way the GUI shows them: the date, two spaces, then the title read as words
+(`FSocietyEverbind` shows as `F Society Everbind`). Newest first inside each directory,
+and the directories themselves in alphabetical order.
+
+A task folder without its Markdown file is left out, since there is nothing to open.
+
 ## Desktop GUI
 
 Launch with:
