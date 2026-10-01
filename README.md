@@ -115,6 +115,75 @@ tasks/
 from there creates `tasks/260930 - FSociety`, because the Veritas one lives in another
 directory. To resume a task, run the command from the directory that holds it.
 
+## Renaming a task
+
+Pass `--rename` with the name of the task folder and the title you want instead:
+
+```bash
+mktsk --rename "260923 - ItsAlive" "It's Still Alive"
+```
+
+```text
+Renamed: 260923 - ItSStillAlive
+```
+
+The date stays, so the task keeps its place in the history, and only the `#` heading at
+the top of the file is rewritten. The notes are left exactly as they were, and the file
+is not opened, because renaming is not working on the task.
+
+The folder is named rather than looked up by title, so with two tasks of the same title
+on different dates you always rename the one you mean. A name that is not a task folder
+is refused, as is a new title that is empty, a Windows reserved name, or one another
+task already has.
+
+## Listing tasks
+
+Pass `--list` to see what is there, without opening anything:
+
+```bash
+mktsk --list
+```
+
+```text
+tasks/
+  23/09/2026  Its Alive
+  18/09/2026  F Society
+Able/
+  19/09/2026  Foo
+Veritas/
+  24/09/2026  F Society Everbind
+```
+
+Each directory is a heading, the one you are in first, and the tasks under it read the
+same way the GUI shows them: the date, two spaces, then the title read as words
+(`FSocietyEverbind` shows as `F Society Everbind`). Newest first inside each directory,
+and the directories themselves in alphabetical order.
+
+A task folder without its Markdown file is left out, since there is nothing to open.
+
+## Creating a category
+
+Pass `--new-category` with a name, and the folder is made in the directory you are in:
+
+```bash
+mktsk --new-category "Produção"
+```
+
+```text
+Created: /home/you/tasks/Producao
+```
+
+A category is a plain folder for keeping tasks apart, not a task, so its name is only
+stripped of accents (`Produção` becomes `Producao`) and is otherwise left as you typed
+it, spaces and punctuation included. A name that is already there is not an error, since
+the point is to have the folder rather than to be the first to make it.
+
+The name is refused when it is empty, a Windows reserved name, hidden, carries a path
+separator, or looks like a task folder (`260918 - Foo`).
+
+Then create tasks inside it by running `mktsk` from there, and `--list` will show them
+under its own heading.
+
 ## Desktop GUI
 
 Launch with:

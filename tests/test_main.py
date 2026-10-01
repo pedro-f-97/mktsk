@@ -170,9 +170,423 @@ def test_parse_arguments(monkeypatch):
     args = parse_arguments()
 
     assert args.title == ["Back", "to", "the", "Future"]
+    assert args.rename is False
 
 def test_parse_arguments_without_title(monkeypatch):
     monkeypatch.setattr("sys.argv", ["mktsk"])
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as failure:
         parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_rename(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Foo", "Bar"])
+
+    args = parse_arguments()
+
+    assert args.rename is True
+    assert args.title == ["260918 - Foo", "Bar"]
+
+def test_parse_arguments_for_rename_without_a_new_title(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Foo"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_rename_keeps_a_new_title_of_several_words(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv", ["mktsk", "--rename", "260918 - Foo", "Back", "to", "the", "Future"]
+    )
+
+    args = parse_arguments()
+
+    assert args.title == ["260918 - Foo", "Back", "to", "the", "Future"]
+
+def test_parse_arguments_for_list(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    args = parse_arguments()
+
+    assert args.list is True
+    assert args.title == []
+
+def test_parse_arguments_for_list_with_a_title(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list", "Foo"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_list_and_rename(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list", "--rename", "260918 - Foo", "Bar"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_new_category(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "My Category"])
+
+    args = parse_arguments()
+
+    assert args.new_category == "My Category"
+    assert args.title == []
+
+def test_parse_arguments_for_new_category_with_a_title(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "My", "Category"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_new_category_without_a_name(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_new_category_and_list(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Foo", "--list"])
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_parse_arguments_for_new_category_and_rename(monkeypatch):
+    monkeypatch.setattr(
+        "sys.argv", ["mktsk", "--new-category", "Foo", "--rename", "260918 - A", "B"]
+    )
+
+    with pytest.raises(SystemExit) as failure:
+        parse_arguments()
+
+    assert failure.value.code == 2
+
+def test_main_new_category(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "Veritas").is_dir()
+    assert capsys.readouterr().out == f"Created: {tmp_path / 'Veritas'}\n"
+    # making somewhere to put tasks is not working on one
+    assert opened == []
+
+def test_main_new_category_keeps_the_case_and_the_spaces(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "My Clients"])
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "My Clients").is_dir()
+
+def test_main_new_category_strips_the_accents(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Produção"])
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "Producao").is_dir()
+
+def test_main_new_category_takes_a_name_that_is_already_there(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Veritas").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "Veritas").is_dir()
+    assert f"Created: {tmp_path / 'Veritas'}" in capsys.readouterr().out
+
+@pytest.mark.parametrize(
+    "name",
+    ["  ", "con", "260918 - Foo", ".hidden", "a/b"],
+)
+def test_main_new_category_refuses_a_name_it_cannot_use(monkeypatch, tmp_path, capsys, name):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", name])
+
+    result = main()
+
+    assert result == 1
+    assert "Error:" in capsys.readouterr().out
+    assert list(tmp_path.iterdir()) == []
+
+def test_main_new_category_keeps_the_punctuation(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Its-Alive!"])
+
+    result = main()
+
+    # a category is not a task, so its name is not standardized
+    assert result == 0
+    assert (tmp_path / "Its-Alive!").is_dir()
+
+@freeze_time("2026-09-30")
+def test_main_new_category_can_hold_a_task(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    assert main() == 0
+
+    # the task lands inside the category, not beside it
+    category = tmp_path / "Veritas"
+    monkeypatch.chdir(category)
+    monkeypatch.setattr("sys.argv", ["mktsk", "New", "Task"])
+
+    assert main() == 0
+    assert (category / "260930 - NewTask" / "NewTask.md").is_file()
+    assert not (tmp_path / "260930 - NewTask").exists()
+
+def test_main_new_category_reports_a_failure_to_create(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--new-category", "Veritas"])
+
+    def raise_error(*args):
+        raise OSError("test error")
+
+    monkeypatch.setattr("mktsk.workers.create_category", raise_error)
+
+    result = main()
+
+    assert result == 1
+    assert "Error: test error" in capsys.readouterr().out
+
+def test_main_list(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path, "260923", "ItsAlive")
+    make_task(tmp_path / "Veritas", "260924", "FSocietyEverbind")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
+
+    result = main()
+
+    assert result == 0
+    assert capsys.readouterr().out == (
+        f"{tmp_path.name}/\n"
+        "  23/09/2026  Its Alive\n"
+        "  18/09/2026  Foo\n"
+        "Veritas/\n"
+        "  24/09/2026  F Society Everbind\n"
+    )
+    assert opened == []
+
+def test_main_list_reads_the_title_as_words(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260923", "Task2")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    main()
+
+    assert "  23/09/2026  Task 2\n" in capsys.readouterr().out
+
+def test_main_list_keeps_the_categories_apart(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path / "Able", "260919", "Foo")
+    make_task(tmp_path / "Veritas", "260920", "Foo")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    main()
+
+    # the same title is a different task in each directory, and each gets its own
+    assert capsys.readouterr().out == (
+        f"{tmp_path.name}/\n"
+        "  18/09/2026  Foo\n"
+        "Able/\n"
+        "  19/09/2026  Foo\n"
+        "Veritas/\n"
+        "  20/09/2026  Foo\n"
+    )
+
+def test_main_list_of_a_directory_without_tasks(monkeypatch, tmp_path, capsys):
+    (tmp_path / "Veritas").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    result = main()
+
+    assert result == 0
+    assert capsys.readouterr().out == ""
+
+def test_main_list_skips_a_task_folder_without_md(monkeypatch, tmp_path, capsys, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    (tmp_path / "260919 - Bar").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--list"])
+
+    main()
+
+    assert "Bar" not in capsys.readouterr().out
+
+def test_main_rename(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - OldTitle"
+    folder.mkdir()
+    file = folder / "OldTitle.md"
+    file.write_text("# OldTitle\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "New Title"])
+
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
+
+    result = main()
+
+    renamed_folder = tmp_path / "260918 - NewTitle"
+    renamed_file = renamed_folder / "NewTitle.md"
+
+    assert result == 0
+    assert renamed_file.is_file()
+    assert not folder.exists()
+    assert renamed_file.read_text(encoding="utf-8") == (
+        "# NewTitle\n\n## 18/09/2026\n\nnotes\n"
+    )
+    assert capsys.readouterr().out == f"Renamed: {renamed_folder.name}\n"
+    # renaming is not working on the task, so nothing is opened
+    assert opened == []
+
+def test_main_rename_joins_a_new_title_given_in_words(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - OldTitle"
+    folder.mkdir()
+    (folder / "OldTitle.md").write_text("# OldTitle\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "sys.argv", ["mktsk", "--rename", folder.name, "Back", "to", "the", "Future"]
+    )
+
+    result = main()
+
+    assert result == 0
+    assert (tmp_path / "260918 - BackToTheFuture" / "BackToTheFuture.md").is_file()
+
+def test_main_rename_to_the_title_it_already_has(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - OldTitle"
+    folder.mkdir()
+    file = folder / "OldTitle.md"
+    file.write_text("# OldTitle\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Old Title"])
+
+    result = main()
+
+    assert result == 0
+    assert file.is_file()
+    assert capsys.readouterr().out == f"Renamed: {folder.name}\n"
+
+def test_main_rename_refuses_a_name_that_is_not_a_task_folder(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Veritas").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "Veritas", "Foo"])
+
+    result = main()
+
+    assert result == 1
+    assert "Error: 'Veritas' is not a task folder" in capsys.readouterr().out
+
+def test_main_rename_refuses_an_invalid_date_prefix(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "261318 - Foo").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "261318 - Foo", "Bar"])
+
+    result = main()
+
+    assert result == 1
+    assert "is not a task folder" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_folder_that_is_not_there(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Missing", "Foo"])
+
+    result = main()
+
+    assert result == 1
+    assert "Error: '260918 - Missing' is not there" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_collision(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    taken = tmp_path / "260901 - Bar"
+    taken.mkdir()
+    (taken / "Bar.md").write_text("# Bar\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Bar"])
+
+    result = main()
+
+    assert result == 1
+    assert "'Bar' is already a task here" in capsys.readouterr().out
+    assert (folder / "Foo.md").is_file()
+
+def test_main_rename_refuses_a_blank_new_title(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "!!!"])
+
+    result = main()
+
+    assert result == 1
+    assert "invalid task description" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_reserved_new_title(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "con"])
+
+    result = main()
+
+    assert result == 1
+    assert "'Con' is a reserved name" in capsys.readouterr().out
+
+def test_main_rename_refuses_a_task_without_markdown(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "260918 - Foo").mkdir()
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", "260918 - Foo", "Bar"])
+
+    result = main()
+
+    assert result == 1
+    assert "'Foo' has no Markdown file" in capsys.readouterr().out
+
+def test_main_rename_reports_a_failure_to_rename(monkeypatch, tmp_path, capsys):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Bar"])
+
+    def raise_error(*args):
+        raise OSError("test error")
+
+    monkeypatch.setattr("mktsk.workers.rename_task", raise_error)
+
+    result = main()
+
+    assert result == 1
+    assert "Error: test error" in capsys.readouterr().out
