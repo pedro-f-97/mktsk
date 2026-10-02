@@ -279,8 +279,11 @@ Opens a window where you can:
 * see on the right every existing task, including the ones in subfolders. Each category
   gets its own tab, the current folder included, plus an `All` tab that lists everything
   under a heading per category. By last activity, so the task you worked on last comes
-  first, with the date of the folder as `dd/mm/yyyy` and the title read as words
-  (`260923 - FSocietyEverbind` shows as `23/09/2026  F Society Everbind`);
+  first;
+* read each task as three columns under their headings: the task itself, the date of the
+  folder as `dd/mm/yyyy` with the title read as words (`260923 - FSocietyEverbind` shows
+  as `23/09/2026  F Society Everbind`), the number of interventions, and how long ago the
+  last of them was, as `today`, `yesterday` or `N days ago`;
 * create a task with the same rules as the CLI, opening the resulting Markdown file with
   the default application;
 * act on an existing task by selecting it, which brings a bar of buttons over its row.
