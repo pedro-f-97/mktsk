@@ -1,8 +1,10 @@
 import datetime
-import re
 from pathlib import Path
 
-from . import helpers, standards
+from . import helpers, parsing, standards
+
+# the command that converts a tree of tasks to the format mktsk writes
+_MIGRATION_COMMAND = "python -m mktsk.migration"
 
 
 def create_folder(location: Path, name: str) -> Path:
@@ -58,50 +60,21 @@ def create_md_file(location: Path, name: str) -> Path:
     return file_to_create
 
 
-def sign_md_file(file: Path, title: str) -> bool:
-    """Writes given title and the current date as headings in the given .md file.
-
-    The title becomes the first level heading and the date, in `dd/mm/yyyy`
-    format, the second level heading. A blank line follows, so the body can be
-    typed straight away.
-
-    A file whose leading heading already names the task is left untouched. A
-    file carrying something else, which is content from a folder copied by hand
-    or restored from a backup, gains the missing heading at the start and keeps
-    everything below it as it was; nothing is ever rewritten or dropped, so the
-    content of another task is never mistaken for the identity of this one.
-
-    Args:
-        file: file to be signed
-        title: string to use as the heading, e.g. the standardized task title
-
-    Returns:
-        True when the file carried no dated section of its own and the date
-        written here is the first, False when there was content to keep.
-    """
-    content = file.read_text(encoding="utf-8")
-    date = datetime.datetime.now().astimezone().strftime(helpers.DATE_FORMAT)
-
-    # a heading that already names the task, or nothing to insert one before
-    if _retitled(content, title, title) is None:
-        body = content.lstrip()
-
-        if body:
-            file.write_text(f"# {title}\n\n{body}", encoding="utf-8")
-            return False
-
-        file.write_text(f"# {title}\n\n## {date}\n\n", encoding="utf-8")
-        return True
-
-    return False
-
-
 def append_date_section(file: Path, date: datetime.date) -> bool:
-    """Adds a second level heading with the given date at the end of the .md file.
+    """Adds a first level heading with the given date to the given .md file.
 
-    Each visit to a task keeps its own dated section. Existing content is never
-    rewritten, only trailing whitespace is dropped, and a section for a date
-    that is already there is not added twice.
+    The date of a visit is a level 1 heading, because the title of the task is
+    the name of the folder and of the file rather than something inside it. The
+    first section is the one a file is born with, and every visit after it is
+    appended at the end.
+
+    Existing content is never rewritten, only trailing whitespace is dropped, and
+    a date that already has a section is not added twice. Whether it has one is
+    read with `parse_task`, so a date written in another of the accepted forms,
+    with stray spacing or inside a code block, counts the way it reads.
+
+    A file in the old format is refused rather than read as the new one, so its
+    title is never mistaken for an intervention. Nothing is written in that case.
 
     Args:
         file: file to append to.
@@ -109,51 +82,35 @@ def append_date_section(file: Path, date: datetime.date) -> bool:
 
     Returns:
         True if the section was added, False if the date was already there.
+
+    Raises:
+        TaskError: If the file is in the old format.
     """
     formatted = date.strftime(helpers.DATE_FORMAT)
-
     content = file.read_text(encoding="utf-8")
 
-    # the heading may carry stray spacing, as hand written ones do
-    if re.search(rf"^##\s+{re.escape(formatted)}\s*$", content, re.MULTILINE):
+    if parsing.is_legacy(content):
+        raise helpers.TaskError(
+            f"'{file.name}' is in the old format: run "
+            f"'{_MIGRATION_COMMAND} <folder>' to convert it"
+        )
+
+    if any(
+        intervention.date == date
+        for intervention in parsing.parse_task(content).interventions
+    ):
         return False
 
-    file.write_text(f"{content.rstrip()}\n\n## {formatted}\n\n", encoding="utf-8")
+    body = content.rstrip()
+
+    # a file with nothing in it is born with the section and a blank line, so
+    # the body can be typed straight away
+    if not body:
+        file.write_text(f"# {formatted}\n\n", encoding="utf-8")
+    else:
+        file.write_text(f"{body}\n\n# {formatted}\n\n", encoding="utf-8")
 
     return True
-
-
-def _retitled(content: str, title: str, new_title: str) -> str | None:
-    """Returns the content with its leading heading rewritten when it names the task.
-
-    Only a first level heading that matches the title the file was created with
-    is touched. Everything else, hand written text and dated sections alike, is
-    left exactly as it was, and None says so, so the caller leaves the file alone
-    rather than rewriting it with the same text.
-
-    Args:
-        content: the text of the .md file.
-        title: the standardized title the heading is expected to carry.
-        new_title: the standardized title to write in its place.
-
-    Returns:
-        The rewritten content, or None when there is no heading to rewrite.
-    """
-    heading = f"# {title}"
-
-    lines = content.split("\n")
-
-    for index, line in enumerate(lines):
-        if not line.strip():
-            continue
-
-        if line.strip() == heading:
-            lines[index] = f"# {new_title}"
-            return "\n".join(lines)
-
-        return None
-
-    return None
 
 
 def create_category(location: Path, raw_name: str) -> Path:

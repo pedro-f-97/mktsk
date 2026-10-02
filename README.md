@@ -5,8 +5,8 @@ CLI tool and desktop GUI for quickly setting up task folders.
 ## Features
 
 * Creates task folders using the `YYMMDD - TaskName` naming convention.
-* Creates an associated Markdown file.
-* Adds the task title to the Markdown file, as a heading, followed by the task date.
+* Creates an associated Markdown file, born with a heading holding today's date. The title
+  of the task is the folder and file name, so it is not repeated inside the file.
 * Finds an existing task by title in the current directory, on any date, and starts a new
   dated section in it.
 * Can be run from any directory.
@@ -56,9 +56,7 @@ Creates:
 The Markdown file contains:
 
 ```markdown
-# ItsAlive
-
-## 23/09/2026
+# 23/09/2026
 
 Your notes go here.
 ```
@@ -80,21 +78,19 @@ mktsk It's Alive!
 ```
 
 ```text
-Opened: 260923 - ItsAlive (added ## 30/09/2026)
+Opened: 260923 - ItsAlive (added # 30/09/2026)
 ```
 
-No new folder is created. A second level heading with today's date is appended as a new
+No new folder is created. A first level heading with today's date is appended as a new
 section at the end of the existing Markdown file, so each day you work on a task keeps
 its own notes:
 
 ```markdown
-# ItsAlive
-
-## 23/09/2026
+# 23/09/2026
 
 Your notes go here.
 
-## 30/09/2026
+# 30/09/2026
 
 ```
 
@@ -128,9 +124,10 @@ mktsk --rename "260923 - ItsAlive" "It's Still Alive"
 Renamed: 260923 - ItsStillAlive
 ```
 
-The date stays, so the task keeps its place in the history, and only the `#` heading at
-the top of the file is rewritten. The notes are left exactly as they were, and the file
-is not opened, because renaming is not working on the task.
+The date stays, so the task keeps its place in the history. Only the names move, the
+file inside the folder and the folder itself: the file is never read and never written,
+because the title of a task is not inside it. The file is not opened either, because
+renaming is not working on the task.
 
 The folder is named rather than looked up by title, so the task you name is the task you
 rename. A name that is not a task folder is refused, as is a new title that is empty, a
@@ -194,9 +191,10 @@ under its own heading.
 
 ## Migrating existing task files
 
-The Markdown of a task is moving to a format without the `#` title heading, with each
-visit dated by a first level heading instead of a second level one. To convert the tasks
-you already have, run the migration over the folder that holds them:
+A task used to open its Markdown with a `# <title>` heading and date each visit with a
+second level one. The format mktsk writes has neither: the title is the folder and file
+name, and each visit is a first level heading. To convert the tasks you created before,
+run the migration over the folder that holds them:
 
 ```bash
 python -m mktsk.migration ~/tasks
@@ -240,6 +238,10 @@ never leaves one of them half converted, and the line breaks each file was writt
 are kept. Running the migration again over the same folder reports every file as
 `already new`.
 
+A task still in the old format is refused rather than misread: opening or resuming it
+fails with an error naming the file and this command, and nothing is written to it, so
+it can still be migrated.
+
 ## Desktop GUI
 
 Launch with:
@@ -276,9 +278,9 @@ Opens a window where you can:
   The room for the buttons appears only on the row you clicked:
   * `Open` reveals the task folder in the file manager, without touching the task;
   * `Resume` adds a section for today, wherever the task lives, and opens it;
-  * `Rename` asks for a new title, renames the folder and the file keeping the date, and
-    rewrites the `#` heading at the top of the file. The body is left alone, and a title
-    another task already has is refused.
+  * `Rename` asks for a new title and renames the folder and the file, keeping the date.
+    The content is left exactly as it was, and a title another task already has is
+    refused.
 
   The buttons show an icon each, and the name of the action on hover.
 

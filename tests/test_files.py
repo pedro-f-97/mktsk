@@ -1,13 +1,11 @@
 import datetime
 
 import pytest
-from freezegun import freeze_time
 
 from mktsk.files import (
     append_date_section,
     create_folder,
     create_md_file,
-    sign_md_file,
 )
 from mktsk.helpers import TaskError
 
@@ -81,158 +79,126 @@ def test_create_folder_takes_a_reserved_name(tmp_path):
     assert created.exists()
 
 
-@freeze_time("2026-09-22")
-def test_sign_md_file(tmp_path):
+def test_append_date_section_borns_the_first_one(tmp_path):
     folder = tmp_path / "260922 - ThisTest"
     folder.mkdir()
 
     file = folder / "ThisTest.md"
     file.touch()
 
-    sign_md_file(file, "ThisTest")
+    assert append_date_section(file, datetime.date(2026, 9, 22)) is True
 
-    assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 22/09/2026\n\n"
-
-
-@freeze_time("2026-09-22")
-def test_sign_md_file_existing_ok(tmp_path):
-    folder = tmp_path / "260922 - ThisTest"
-    folder.mkdir()
-
-    file = folder / "ThisTest.md"
-    file.touch()
-
-    # a different date, so a rewrite would be visible in the assertion
-    file.write_text("# ThisTest\n\n## 20/09/2026\n\n", encoding="utf-8")
-
-    sign_md_file(file, "ThisTest")
-
-    assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 20/09/2026\n\n"
+    # the date of a visit is a level 1 heading, the title is the file name
+    assert file.read_text(encoding="utf-8") == "# 22/09/2026\n\n"
 
 
-def test_sign_md_file_completes_foreign_content(tmp_path):
-    folder = tmp_path / "260922 - ThisTest"
-    folder.mkdir()
-
-    file = folder / "ThisTest.md"
-    file.touch()
-
-    # a folder copied by hand, so the heading names a different task
-    file.write_text("# This is some other text\n", encoding="utf-8")
-
-    assert sign_md_file(file, "ThisTest") is False
-
-    assert (
-        file.read_text(encoding="utf-8")
-        == "# ThisTest\n\n# This is some other text\n"
-    )
-
-
-def test_sign_md_file_completes_content_without_a_heading(tmp_path):
-    folder = tmp_path / "260922 - ThisTest"
-    folder.mkdir()
-
-    file = folder / "ThisTest.md"
-    file.write_text("some content\n", encoding="utf-8")
-
-    assert sign_md_file(file, "ThisTest") is False
-
-    assert file.read_text(encoding="utf-8") == "# ThisTest\n\nsome content\n"
-
-
-def test_sign_md_file_leaves_a_matching_heading_alone(tmp_path):
-    folder = tmp_path / "260922 - ThisTest"
-    folder.mkdir()
-
-    file = folder / "ThisTest.md"
-    original = "# ThisTest\n\n## 20/09/2026\n\nnotes\n"
-    file.write_text(original, encoding="utf-8")
-
-    assert sign_md_file(file, "ThisTest") is False
-
-    assert file.read_text(encoding="utf-8") == original
-
-
-@freeze_time("2026-09-22")
-def test_sign_md_file_existing_space(tmp_path):
-    folder = tmp_path / "260922 - ThisTest"
-    folder.mkdir()
-
-    file = folder / "ThisTest.md"
-
+def test_append_date_section_on_a_blank_file(tmp_path):
+    file = tmp_path / "Foo.md"
     file.write_text(" \n", encoding="utf-8")
 
-    sign_md_file(file, "ThisTest")
+    assert append_date_section(file, datetime.date(2026, 9, 22)) is True
 
-    assert file.read_text(encoding="utf-8") == "# ThisTest\n\n## 22/09/2026\n\n"
+    assert file.read_text(encoding="utf-8") == "# 22/09/2026\n\n"
 
 
 def test_append_date_section(tmp_path):
     file = tmp_path / "Foo.md"
-    file.write_text("# Foo\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
 
     assert append_date_section(file, datetime.date(2026, 9, 30)) is True
 
     assert file.read_text(encoding="utf-8") == (
-        "# Foo\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
     )
 
 
 def test_append_date_section_without_trailing_newline(tmp_path):
     file = tmp_path / "Foo.md"
-    file.write_text("# Foo\n\n## 18/09/2026\n\nnotes", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\nnotes", encoding="utf-8")
 
     append_date_section(file, datetime.date(2026, 9, 30))
 
     assert file.read_text(encoding="utf-8") == (
-        "# Foo\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
     )
 
 
 def test_append_date_section_keeps_previous_sections(tmp_path):
     file = tmp_path / "Foo.md"
     file.write_text(
-        "# Foo\n\n## 18/09/2026\n\nfirst\n\n## 25/09/2026\n\nsecond\n",
+        "# 18/09/2026\n\nfirst\n\n# 25/09/2026\n\nsecond\n",
         encoding="utf-8",
     )
 
     append_date_section(file, datetime.date(2026, 9, 30))
 
     assert file.read_text(encoding="utf-8") == (
-        "# Foo\n\n## 18/09/2026\n\nfirst\n\n"
-        "## 25/09/2026\n\nsecond\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nfirst\n\n# 25/09/2026\n\nsecond\n\n# 30/09/2026\n\n"
     )
 
 
 def test_append_date_section_existing_date(tmp_path):
     file = tmp_path / "Foo.md"
-    file.write_text("# Foo\n\n## 30/09/2026\n\nnotes\n", encoding="utf-8")
+    file.write_text("# 30/09/2026\n\nnotes\n", encoding="utf-8")
 
     assert append_date_section(file, datetime.date(2026, 9, 30)) is False
 
-    assert file.read_text(encoding="utf-8") == "# Foo\n\n## 30/09/2026\n\nnotes\n"
+    assert file.read_text(encoding="utf-8") == "# 30/09/2026\n\nnotes\n"
 
 
 def test_append_date_section_existing_date_with_stray_spacing(tmp_path):
     file = tmp_path / "Foo.md"
-    file.write_text("# Foo\n\n##  30/09/2026 \n\nnotes\n", encoding="utf-8")
+    file.write_text("#  30/09/2026 \n\nnotes\n", encoding="utf-8")
 
     assert append_date_section(file, datetime.date(2026, 9, 30)) is False
 
-    assert file.read_text(encoding="utf-8") == "# Foo\n\n##  30/09/2026 \n\nnotes\n"
+    assert file.read_text(encoding="utf-8") == "#  30/09/2026 \n\nnotes\n"
 
 
-def test_append_date_section_ignores_date_in_body_text(tmp_path):
+def test_append_date_section_recognises_another_accepted_date_form(tmp_path):
+    # the parser reads five forms, so a section written by hand in one of them is
+    # the section of that date and is not written a second time
+    file = tmp_path / "Foo.md"
+    file.write_text("# 2026-09-30\n\nnotes\n", encoding="utf-8")
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is False
+
+    assert file.read_text(encoding="utf-8") == "# 2026-09-30\n\nnotes\n"
+
+
+def test_append_date_section_ignores_a_date_in_body_text(tmp_path):
     file = tmp_path / "Foo.md"
     file.write_text(
-        "# Foo\n\n## 18/09/2026\n\nworked on 30/09/2026\n", encoding="utf-8"
+        "# 18/09/2026\n\nworked on 30/09/2026\n", encoding="utf-8"
     )
 
     assert append_date_section(file, datetime.date(2026, 9, 30)) is True
 
 
-def test_append_date_section_ignores_other_heading_levels(tmp_path):
+def test_append_date_section_ignores_a_date_in_a_code_block(tmp_path):
     file = tmp_path / "Foo.md"
-    file.write_text("# Foo\n\n# 30/09/2026\n\n", encoding="utf-8")
+    file.write_text(
+        "# 18/09/2026\n\n```\n# 30/09/2026\n```\n", encoding="utf-8"
+    )
 
     assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+
+def test_append_date_section_ignores_a_second_level_heading(tmp_path):
+    # a `##` is free for notes, so it dates nothing
+    file = tmp_path / "Foo.md"
+    file.write_text("# 18/09/2026\n\n## 30/09/2026\n", encoding="utf-8")
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+
+def test_append_date_section_refuses_a_file_in_the_old_format(tmp_path):
+    file = tmp_path / "Foo.md"
+    content = "# Foo\n\n## 18/09/2026\n\nnotes\n"
+    file.write_text(content, encoding="utf-8")
+
+    with pytest.raises(TaskError, match=r"python -m mktsk\.migration"):
+        append_date_section(file, datetime.date(2026, 9, 30))
+
+    # nothing was written, so the migration can still convert the file
+    assert file.read_text(encoding="utf-8") == content

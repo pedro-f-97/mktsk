@@ -19,13 +19,13 @@ workflow interactively.
 - `mktsk/standards.py` — the rules of a task name: standardization, recognition of
   the folder shape, reading a title back. No I/O
 - `mktsk/files.py` — everything that writes: creating the folder, creating the
-  `.md`, signing, appending a dated section, creating a category
+  `.md`, appending a dated section, creating a category
 - `mktsk/listing.py` — everything that reads a directory: finding, listing,
   grouping
 - `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume,
   rename
-- `mktsk/parsing.py` — reads the text of a `.md` in the format the tasks are
-  moving to: interventions, state events, last activity. Pure functions, no I/O
+- `mktsk/parsing.py` — reads the text of a `.md` in the new format: interventions,
+  state events, last activity. Pure functions, no I/O
 - `mktsk/migration.py` — converts the text of a `.md` from the old format to the
   new one, and the command line that applies it to a tree of tasks
 - `tests/` — pytest suite
@@ -65,12 +65,9 @@ change the name.
   still separates, so `Sigur Rós` gives `SigurRos` and `bJÖrk_naÏve-fAçAde!!` gives
   `BjorkNaiveFacade`
 - Folder: `<date> - <StandardizedTitle>`; file: `<StandardizedTitle>.md`
-- Sign an empty `.md` with `# <StandardizedTitle>`, a blank line, then `## <dd/mm/YYYY>`
-  from `strftime("%d/%m/%Y")`, and a blank line. A `.md` whose leading heading is not
-  `# <StandardizedTitle>` gains the missing heading at the start and keeps everything
-  below it, so content from another task, in a folder copied by hand or restored from a
-  backup, is never mistaken for the identity of this one. Nothing is ever rewritten or
-  dropped; `sign_md_file` returns whether it dated a file that had no date of its own
+- The `.md` carries no title: the folder and the file name say which task it is. A new one is
+  born with `# <dd/mm/YYYY>` from `strftime("%d/%m/%Y")` and a blank line, so the body can be
+  typed straight away. Nothing is ever rewritten or dropped to make room for it
 - The title of a task is unique within its directory, or category, so a lookup by title is
   unambiguous there. Lookup runs before any creation, in the current directory only, and
   ignores the date: `260918 - Foo` is what `mktsk Foo` resumes weeks later. The same title
@@ -78,30 +75,31 @@ change the name.
   comparison ignores the case, because `standardize_string` lowers the capitals inside a
   title and a folder renamed by hand keeps them, so pasting a folder name into the terminal
   has to reach the task it names rather than create a second one
-- The `.md` of a task is always named after the title its folder carries, so
-  `_resume_task` reads that title out of the folder name and hands it to both
-  `create_md_file` and `sign_md_file`. A folder renamed by hand keeps the capitals of its own
-  name, and the normalized title would otherwise point at a `.md` that does not exist and a
-  heading that names another task
+- The `.md` of a task is always named after the title its folder carries, so `_resume_task`
+  reads that title out of the folder name and hands it to `create_md_file`. A folder renamed
+  by hand keeps the capitals of its own name, and the normalized title would otherwise point
+  at a `.md` that does not exist
 - Renaming to a title the directory already holds is refused, on any date and in any case, so
   `rename_task` cannot be the way to end up with two of one title. It passes `exclude` so the
   folder it is renaming never clashes with itself over the case alone. A folder copied by
   hand, or restored from a backup, can, and `find_task_folder` then takes the most recent
   rather than whichever came first out of `iterdir()`
-- Resuming signs first, then appends `## <today>` at the end of the `.md` unless that
-  date is already there; the dated section never rewrites the body, only trailing
-  whitespace is dropped; headings are matched loosely, so `##  05/08/2026 ` counts as
-  05/08/2026. Signing a file that had nothing in it dates it, so the append is skipped
-  for that file, which is the only case in which resuming adds no dated section
+- Resuming appends `# <today>` at the end of the `.md`, after a blank line, unless
+  `parse_task` already shows an intervention for that date; a file with nothing in it is
+  dated instead of appended to. The section never rewrites the body, only trailing whitespace
+  is dropped, and the date is recognised the way the parser reads it, so a heading written by
+  hand in another of the accepted forms, with stray spacing or inside a code block, counts
+- A `.md` in the old format is refused rather than read: `append_date_section` raises
+  `TaskError` naming the file and `python -m mktsk.migration`, and nothing is written, so the
+  migration can still convert it. `is_legacy` is what recognises one
 - `resume_task(folder, title)` resumes the folder it is given, wherever that folder
   lives; unlike `open_or_create_task`, it does no lookup and takes no directory
-- `rename_task(folder, title, raw_title)` keeps the date prefix, renames the folder and
-  the `.md`, and rewrites only the first non-empty line, and only when it is exactly
-  `# <old title>`; a heading it does not recognise, and everything after it, is left
-  alone; renaming to the title the task already has does nothing
+- `rename_task(folder, title, raw_title)` keeps the date prefix and renames the `.md` and the
+  folder, names only: the content is never read and never written, because the title of a
+  task is not inside the file any more. Renaming to the title the task already has does
+  nothing
 - `rename_task` undoes a step that fails, in reverse, so it never leaves the task as
-  `260918 - OldTitle/NewTitle.md` nor with a heading that disagrees with its folder.
-  The `.md` is read before anything moves, so a later failure can put it back
+  `260918 - OldTitle/NewTitle.md`
 - `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
   `.md` or a title another task of the same directory already has; it renames the `.md`
   before the folder, or the old file path stops resolving
@@ -155,12 +153,11 @@ change the name.
 
 ## The new .md format
 
-Nothing of the task modules writes or reads this format yet: `mktsk/migration.py`
-converts files into it and `mktsk/parsing.py` reads it, while the rest of `mktsk/`
-carries on with the old one, which is the format `files.py` still writes: a
-`# <StandardizedTitle>` heading and a `## <dd/mm/YYYY>` heading per visit. The plan
-that introduces the new format is in `PLAN.md`, and the steps that write it and
-resume it come after the migration.
+This is the format mktsk writes: `files.append_date_section` writes it and reads it
+back with `mktsk/parsing.py`, and `mktsk/migration.py` converts a file that was
+written in the old one, a `# <StandardizedTitle>` heading and a
+`## <dd/mm/YYYY>` heading per visit. The plan the steps come from is in
+`PLAN.md`.
 
 ```markdown
 # 18/09/2026

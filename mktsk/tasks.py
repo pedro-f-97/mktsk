@@ -22,26 +22,25 @@ def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
 
     Returns:
         The .md file to open and a message describing what happened.
+
+    Raises:
+        TaskError: If the .md is in the old format, which the migration has to
+            convert first.
     """
     # the title is the one the folder carries rather than the one the lookup was
     # given: a folder renamed by hand keeps the capitals of its own name, and the
-    # .md and the heading inside it both follow that name. `resume_task` can also
-    # be handed a folder that is not a task folder, a copy by hand, and there the
-    # title given is the only one there is.
+    # .md follows that name. `resume_task` can also be handed a folder that is
+    # not a task folder, a copy by hand, and there the title given is the only
+    # one there is.
     folder_title = standards.task_folder_title(folder.name) or title
 
     file = files.create_md_file(folder, folder_title)
-
-    # signing a file with nothing in it dates it, so there is no visit to add
-    if files.sign_md_file(file, folder_title):
-        return TaskResult(file, f"Opened: {folder.name}")
-
     formatted = date.strftime(helpers.DATE_FORMAT)
 
     if files.append_date_section(file, date):
-        return TaskResult(file, f"Opened: {folder.name} (added ## {formatted})")
+        return TaskResult(file, f"Opened: {folder.name} (added # {formatted})")
 
-    return TaskResult(file, f"Opened: {folder.name} (## {formatted} already there)")
+    return TaskResult(file, f"Opened: {folder.name} (# {formatted} already there)")
 
 
 def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
@@ -81,7 +80,9 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
     folder_name = standards.build_folder_name(title)
     created_folder = files.create_folder(location, folder_name)
     created_file = files.create_md_file(created_folder, title)
-    files.sign_md_file(created_file, title)
+
+    # the file is born with the first section, the one that dates this visit
+    files.append_date_section(created_file, today)
 
     return TaskResult(created_file, f"Created: {folder_name}")
 
@@ -107,12 +108,13 @@ def resume_task(folder: Path, title: str) -> TaskResult:
 def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     """Renames a task folder and its .md file, keeping the date of the task.
 
-    The date prefix stays put, so a renamed task keeps its place in the history,
-    and only the leading `#` heading is rewritten, and only when it matches the
-    title the task had. Renaming to the title it already has does nothing.
+    The date prefix stays put, so a renamed task keeps its place in the history.
+    Only the names move: the title of a task lives in them, and the .md carries
+    no heading naming it. The content is never read and never written, and
+    renaming to the title the task already has does nothing.
 
     A step that fails is undone, in reverse, so the task is never left holding a
-    file whose name and heading disagree with the folder it sits in.
+    .md whose name disagrees with the folder it sits in.
 
     Args:
         folder: the task folder to rename.
@@ -154,10 +156,6 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     if listing.find_task_folder(folder.parent, new_title, exclude=folder) is not None:
         raise helpers.TaskError(f"'{new_title}' is already a task here")
 
-    # read before anything moves, so a step that fails later can put the file back
-    content = file.read_text(encoding="utf-8")
-    retitled = files._retitled(content, title, new_title)
-
     new_file = folder / f"{new_title}.md"
 
     # the file moves inside the folder first, or its old path stops resolving
@@ -171,16 +169,5 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
         raise
 
     renamed_file = renamed_folder / f"{new_title}.md"
-
-    if retitled is not None:
-        try:
-            renamed_file.write_text(retitled, encoding="utf-8")
-        except OSError:
-            # the heading could not be written, so the whole rename is undone
-            # rather than left with a name and a heading that disagree
-            renamed_file.write_text(content, encoding="utf-8")
-            renamed_folder.rename(folder)
-            new_file.rename(file)
-            raise
 
     return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")

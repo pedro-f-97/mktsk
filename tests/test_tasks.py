@@ -9,7 +9,7 @@ from mktsk.tasks import (
 
 
 @freeze_time("2026-09-30")
-def test_open_or_create_task_signs_foreign_md(tmp_path):
+def test_open_or_create_task_appends_to_foreign_content(tmp_path):
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
     (folder / "Foo.md").write_text("# AnotherTask\n\nsome content\n", encoding="utf-8")
@@ -18,7 +18,7 @@ def test_open_or_create_task_signs_foreign_md(tmp_path):
 
     assert (
         result.file.read_text(encoding="utf-8")
-        == "# Foo\n\n# AnotherTask\n\nsome content\n\n## 30/09/2026\n\n"
+        == "# AnotherTask\n\nsome content\n\n# 30/09/2026\n\n"
     )
 
 
@@ -30,7 +30,8 @@ def test_open_or_create_task_creates(tmp_path):
 
     assert result.file == file
     assert result.message == "Created: 260930 - ItsAlive"
-    assert file.read_text(encoding="utf-8") == "# ItsAlive\n\n## 30/09/2026\n\n"
+    # the file is born with the section that dates this visit, and no title
+    assert file.read_text(encoding="utf-8") == "# 30/09/2026\n\n"
 
 
 @freeze_time("2026-09-30")
@@ -38,14 +39,14 @@ def test_open_or_create_task_finds_existing_by_title(tmp_path):
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
     file = folder / "Foo.md"
-    file.write_text("# Foo\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
 
     result = open_or_create_task(tmp_path, "Foo")
 
     assert result.file == file
-    assert result.message == "Opened: 260918 - Foo (added ## 30/09/2026)"
+    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
     assert file.read_text(encoding="utf-8") == (
-        "# Foo\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
     )
     assert list(tmp_path.iterdir()) == [folder]
 
@@ -56,7 +57,7 @@ def test_open_or_create_task_ignores_task_in_subdirectory(tmp_path):
     subdirectory.mkdir()
     folder = subdirectory / "260925 - Foo"
     folder.mkdir()
-    (folder / "Foo.md").write_text("# Foo\n\n## 25/09/2026\n\n", encoding="utf-8")
+    (folder / "Foo.md").write_text("# 25/09/2026\n\n", encoding="utf-8")
 
     result = open_or_create_task(tmp_path, "Foo")
 
@@ -68,7 +69,7 @@ def test_open_or_create_task_ignores_task_in_subdirectory(tmp_path):
 def test_open_or_create_task_creates_when_date_prefix_is_not_a_date(tmp_path):
     folder = tmp_path / "999999 - Foo"
     folder.mkdir()
-    (folder / "Foo.md").write_text("# Foo\n\n## 30/09/2026\n\n", encoding="utf-8")
+    (folder / "Foo.md").write_text("# 30/09/2026\n\n", encoding="utf-8")
 
     result = open_or_create_task(tmp_path, "Foo")
 
@@ -80,20 +81,20 @@ def test_open_or_create_task_creates_when_date_prefix_is_not_a_date(tmp_path):
 def test_open_or_create_task_resumes_a_task_with_a_valid_date(tmp_path):
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
-    (folder / "Foo.md").write_text("# Foo\n\n## 18/09/2026\n\n", encoding="utf-8")
+    (folder / "Foo.md").write_text("# 18/09/2026\n\n", encoding="utf-8")
 
     result = open_or_create_task(tmp_path, "Foo")
 
     assert result.file == folder / "Foo.md"
-    assert result.message == "Opened: 260918 - Foo (added ## 30/09/2026)"
+    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
 
 
 @freeze_time("2026-09-30")
 def test_open_or_create_task_resumes_the_most_recent_of_several(tmp_path):
-    for date in ("260918", "260930"):
-        folder = tmp_path / f"{date} - Foo"
+    for prefix, date in (("260918", "18/09/2026"), ("260930", "30/09/2026")):
+        folder = tmp_path / f"{prefix} - Foo"
         folder.mkdir()
-        (folder / "Foo.md").write_text(f"# Foo\n\n## {date}\n\n", encoding="utf-8")
+        (folder / "Foo.md").write_text(f"# {date}\n\n", encoding="utf-8")
 
     result = open_or_create_task(tmp_path, "Foo")
 
@@ -105,36 +106,52 @@ def test_open_or_create_task_same_day_only_once(tmp_path):
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
     file = folder / "Foo.md"
-    file.write_text("# Foo\n\n## 18/09/2026\n\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\n", encoding="utf-8")
 
     first = open_or_create_task(tmp_path, "Foo")
     second = open_or_create_task(tmp_path, "Foo")
 
-    assert first.message == "Opened: 260918 - Foo (added ## 30/09/2026)"
-    assert second.message == "Opened: 260918 - Foo (## 30/09/2026 already there)"
-    assert file.read_text(encoding="utf-8").count("## 30/09/2026") == 1
+    assert first.message == "Opened: 260918 - Foo (added # 30/09/2026)"
+    assert second.message == "Opened: 260918 - Foo (# 30/09/2026 already there)"
+    assert file.read_text(encoding="utf-8").count("# 30/09/2026") == 1
 
 
 @freeze_time("2026-09-30")
-def test_open_or_create_task_signs_missing_md(tmp_path):
+def test_open_or_create_task_dates_a_missing_md(tmp_path):
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
 
     result = open_or_create_task(tmp_path, "Foo")
 
-    assert result.message == "Opened: 260918 - Foo"
-    assert result.file.read_text(encoding="utf-8") == "# Foo\n\n## 30/09/2026\n\n"
+    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
+    assert result.file.read_text(encoding="utf-8") == "# 30/09/2026\n\n"
 
 
 @freeze_time("2026-09-30")
-def test_open_or_create_task_signs_blank_md(tmp_path):
+def test_open_or_create_task_dates_a_blank_md(tmp_path):
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
     (folder / "Foo.md").write_text(" \n", encoding="utf-8")
 
     result = open_or_create_task(tmp_path, "Foo")
 
-    assert result.file.read_text(encoding="utf-8") == "# Foo\n\n## 30/09/2026\n\n"
+    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
+    assert result.file.read_text(encoding="utf-8") == "# 30/09/2026\n\n"
+
+
+@freeze_time("2026-09-30")
+def test_open_or_create_task_refuses_a_file_in_the_old_format(tmp_path):
+    folder = tmp_path / "260918 - Foo"
+    folder.mkdir()
+    file = folder / "Foo.md"
+    content = "# Foo\n\n## 18/09/2026\n\nnotes\n"
+    file.write_text(content, encoding="utf-8")
+
+    with pytest.raises(TaskError, match=r"python -m mktsk\.migration"):
+        open_or_create_task(tmp_path, "Foo")
+
+    # the file is left as it was, so the migration can still convert it
+    assert file.read_text(encoding="utf-8") == content
 
 
 def test_open_or_create_task_empty_title(tmp_path):
@@ -166,7 +183,7 @@ def test_resume_task_uses_the_given_folder(tmp_path, make_task):
     result = resume_task(folder, "FSociety")
 
     assert result.file == folder / "FSociety.md"
-    assert "## 30/09/2026" in result.file.read_text(encoding="utf-8")
+    assert "# 30/09/2026" in result.file.read_text(encoding="utf-8")
 
 
 @freeze_time("2026-09-30")
@@ -174,18 +191,29 @@ def test_resume_task_keeps_the_caps_the_folder_carries(tmp_path):
     folder = tmp_path / "260918 - EmbalagemAlteracaoFormulario"
     folder.mkdir()
     original = folder / "EmbalagemAlteracaoFormulario.md"
-    original.write_text(
-        "# EmbalagemAlteracaoFormulario\n\n## 18/09/2026\n\nnotas\n", encoding="utf-8"
-    )
+    original.write_text("# 18/09/2026\n\nnotas\n", encoding="utf-8")
 
     result = resume_task(folder, "Embalagemalteracaoformulario")
 
-    # the .md is the one that was there, and nothing was signed on top of it
+    # the .md is the one that was there, and no other file was created
     assert [path.name for path in folder.iterdir()] == [original.name]
     assert result.file == original
     assert result.file.read_text(encoding="utf-8") == (
-        "# EmbalagemAlteracaoFormulario\n\n## 18/09/2026\n\nnotas\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotas\n\n# 30/09/2026\n\n"
     )
+
+
+@freeze_time("2026-09-30")
+def test_resume_task_refuses_a_file_in_the_old_format(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    content = "# FSociety\n\n## 18/09/2026\n\nnotas\n"
+    file.write_text(content, encoding="utf-8")
+
+    with pytest.raises(TaskError, match=r"python -m mktsk\.migration"):
+        resume_task(tmp_path / "260918 - FSociety", "FSociety")
+
+    # nothing was written, so the migration can still convert the file
+    assert file.read_text(encoding="utf-8") == content
 
 
 @freeze_time("2026-09-30")
@@ -193,7 +221,7 @@ def test_open_or_create_task_reaches_a_folder_renamed_by_hand(tmp_path):
     folder = tmp_path / "260918 - EmbalagemAlteracaoFormulario"
     folder.mkdir()
     (folder / "EmbalagemAlteracaoFormulario.md").write_text(
-        "# EmbalagemAlteracaoFormulario\n\nnotas\n", encoding="utf-8"
+        "# 18/09/2026\n\nnotas\n", encoding="utf-8"
     )
 
     # pasting the folder name is what a user reaching for the task does

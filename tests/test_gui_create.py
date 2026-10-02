@@ -25,7 +25,7 @@ def test_create_task(qtbot, window, tmp_path, fake_open):
     folder = tmp_path / "260928 - TestTask"
     file = folder / "TestTask.md"
     assert file.is_file()
-    assert file.read_text(encoding="utf-8") == "# TestTask\n\n## 28/09/2026\n\n"
+    assert file.read_text(encoding="utf-8") == "# 28/09/2026\n\n"
     assert fake_open == [file]
     assert window.title_input.text() == ""
     assert "28/09/2026  Test Task" in tab_labels(window, tmp_path.name)
@@ -64,16 +64,14 @@ def test_create_task_resumes_existing_task(window, tmp_path, fake_open):
     existing_folder = tmp_path / "260928 - TestTask"
     existing_folder.mkdir()
     existing_file = existing_folder / "TestTask.md"
-    # a heading from another task, so signing completes it at the start
-    existing_file.write_text("# existing notes\n", encoding="utf-8")
+    # a file with nothing in it is dated, so the visit has a section of its own
+    existing_file.write_text("", encoding="utf-8")
     window.navigate_to(tmp_path)
     window.title_input.setText("Test Task")
 
     window.create_task()
 
-    assert existing_file.read_text(encoding="utf-8") == (
-        "# TestTask\n\n# existing notes\n\n## 28/09/2026\n\n"
-    )
+    assert existing_file.read_text(encoding="utf-8") == "# 28/09/2026\n\n"
     assert fake_open == [existing_file]
 
 
@@ -82,14 +80,14 @@ def test_create_task_finds_existing_task_by_title(window, tmp_path, fake_open):
     folder = tmp_path / "260918 - TestTask"
     folder.mkdir()
     file = folder / "TestTask.md"
-    file.write_text("# TestTask\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
     window.navigate_to(tmp_path)
     window.title_input.setText("Test Task")
 
     window.create_task()
 
     assert file.read_text(encoding="utf-8") == (
-        "# TestTask\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
     )
     assert fake_open == [file]
     assert window.title_input.text() == ""
@@ -103,7 +101,7 @@ def test_create_task_creates_when_task_is_in_a_subdirectory(window, tmp_path, fa
     folder = subdirectory / "260918 - TestTask"
     folder.mkdir()
     existing = folder / "TestTask.md"
-    existing.write_text("# TestTask\n\n## 18/09/2026\n\n", encoding="utf-8")
+    existing.write_text("# 18/09/2026\n\n", encoding="utf-8")
     window.navigate_to(tmp_path)
     window.title_input.setText("Test Task")
 
@@ -113,7 +111,7 @@ def test_create_task_creates_when_task_is_in_a_subdirectory(window, tmp_path, fa
 
     assert created.is_file()
     assert fake_open == [created]
-    assert existing.read_text(encoding="utf-8") == "# TestTask\n\n## 18/09/2026\n\n"
+    assert existing.read_text(encoding="utf-8") == "# 18/09/2026\n\n"
 
 
 @freeze_time("2026-09-30")
@@ -190,7 +188,7 @@ def test_create_task_looks_the_title_up_inside_the_selected_category(
     folder = tmp_path / "260918 - TestTask"
     folder.mkdir()
     outside = folder / "TestTask.md"
-    outside.write_text("# TestTask\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    outside.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
     window.navigate_to(tmp_path)
     select_directory(window, category.resolve())
     window.title_input.setText("Test Task")
@@ -200,9 +198,7 @@ def test_create_task_looks_the_title_up_inside_the_selected_category(
     created = category / "260930 - TestTask" / "TestTask.md"
     assert created.is_file()
     assert fake_open == [created]
-    assert outside.read_text(encoding="utf-8") == (
-        "# TestTask\n\n## 18/09/2026\n\nnotes\n"
-    )
+    assert outside.read_text(encoding="utf-8") == "# 18/09/2026\n\nnotes\n"
 
 
 @freeze_time("2026-09-30")
