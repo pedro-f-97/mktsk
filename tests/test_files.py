@@ -146,6 +146,16 @@ def test_append_date_section_existing_date(tmp_path):
     assert file.read_text(encoding="utf-8") == "# 30/09/2026\n\nnotes\n"
 
 
+def test_append_date_section_existing_date_on_a_file_that_starts_with_a_bom(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text("\ufeff# 30/09/2026\n\nnotes\n", encoding="utf-8")
+
+    # the section for today is the one the file already opens with
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is False
+
+    assert file.read_text(encoding="utf-8") == "\ufeff# 30/09/2026\n\nnotes\n"
+
+
 def test_append_date_section_existing_date_with_stray_spacing(tmp_path):
     file = tmp_path / "Foo.md"
     file.write_text("#  30/09/2026 \n\nnotes\n", encoding="utf-8")

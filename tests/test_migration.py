@@ -2,6 +2,9 @@ import pytest
 
 from mktsk.migration import Migration, main, migrate_content
 
+# what a text file written by some editors starts with, and that is not text
+BOM = "\ufeff"
+
 OLD_FORMAT = """\
 # SupplierReply
 
@@ -37,6 +40,22 @@ def test_migrate_content_removes_the_title():
     migration = migrate_content(OLD_FORMAT, "SupplierReply")
 
     assert migration.content == NEW_FORMAT
+    assert migration.review == []
+
+
+def test_migrate_content_keeps_a_bom_and_removes_the_title():
+    migration = migrate_content(f"{BOM}{OLD_FORMAT}", "SupplierReply")
+
+    # the mark is not part of the heading, so the heading goes and the mark stays
+    # at the top of the file
+    assert migration.content == f"{BOM}{NEW_FORMAT}"
+    assert migration.review == []
+
+
+def test_migrate_content_leaves_a_new_file_that_starts_with_a_bom():
+    migration = migrate_content(f"{BOM}{NEW_FORMAT}", "SupplierReply")
+
+    assert migration.content == f"{BOM}{NEW_FORMAT}"
     assert migration.review == []
 
 
@@ -324,6 +343,17 @@ def test_main_keeps_the_line_break_of_the_file(monkeypatch, tmp_path):
     assert run_migration(monkeypatch, tmp_path, apply=True) == 0
 
     assert file.read_bytes() == NEW_FORMAT.replace("\n", "\r\n").encode()
+
+
+def test_main_keeps_the_bom_of_the_file(monkeypatch, tmp_path):
+    folder = tmp_path / "260918 - SupplierReply"
+    folder.mkdir()
+    file = folder / "SupplierReply.md"
+    file.write_bytes(f"{BOM}{OLD_FORMAT}".encode())
+
+    assert run_migration(monkeypatch, tmp_path, apply=True) == 0
+
+    assert file.read_bytes() == f"{BOM}{NEW_FORMAT}".encode()
 
 
 def test_main_reports_a_file_it_cannot_read_and_carries_on(monkeypatch, tmp_path, capsys):

@@ -3,6 +3,9 @@ from pathlib import Path
 
 from mktsk.listing import find_task_groups
 
+# what a text file written by some editors starts with, and that is not text
+BOM = "\ufeff"
+
 
 def _entry(tmp_path):
     """The single task entry of a directory, which the tests below check."""
@@ -102,6 +105,16 @@ def test_file_that_is_not_utf8_keeps_the_task_in_the_listing(tmp_path):
     # a file saved by something other than mktsk is still a task file
     assert entry.last_activity == datetime.date(2026, 9, 18)
     assert entry.interventions == 0
+
+
+def test_file_that_starts_with_a_bom_carries_its_interventions(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    file.write_text(f"{BOM}# 30/09/2026\n\nnotes\n", encoding="utf-8")
+
+    entry = _entry(tmp_path)
+
+    assert entry.last_activity == datetime.date(2026, 9, 30)
+    assert entry.interventions == 1
 
 
 def test_task_resumed_later_moves_up_the_order(tmp_path, make_task):

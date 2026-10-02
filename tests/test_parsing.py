@@ -2,7 +2,10 @@ import datetime
 
 import pytest
 
-from mktsk.parsing import ParsedTask, StateEvent, is_legacy, parse_task
+from mktsk.parsing import ParsedTask, StateEvent, is_legacy, parse_task, without_bom
+
+# what a text file written by some editors starts with, and that is not text
+BOM = "\ufeff"
 
 NEW_FORMAT = """\
 # 18/09/2026
@@ -17,6 +20,18 @@ Free text.
 
 Supplier replied.
 """
+
+
+def test_without_bom_removes_the_mark_a_file_starts_with():
+    assert without_bom(f"{BOM}# 18/09/2026\n") == "# 18/09/2026\n"
+
+
+def test_without_bom_leaves_text_that_starts_with_no_mark():
+    assert without_bom("# 18/09/2026\n") == "# 18/09/2026\n"
+
+
+def test_without_bom_removes_only_the_mark_at_the_start():
+    assert without_bom(f"# 18/09/2026\n\n{BOM}note\n") == f"# 18/09/2026\n\n{BOM}note\n"
 
 
 def test_parse_task_of_an_empty_file():
@@ -241,6 +256,22 @@ def test_parse_task_reads_windows_line_breaks():
     assert parsed.last_activity == datetime.date(2026, 10, 2)
 
 
+def test_parse_task_reads_a_file_that_starts_with_a_bom():
+    parsed = parse_task(f"{BOM}# 18/09/2026\n\n# 02/10/2026\n")
+
+    assert [intervention.date for intervention in parsed.interventions] == [
+        datetime.date(2026, 9, 18),
+        datetime.date(2026, 10, 2),
+    ]
+    assert parsed.last_activity == datetime.date(2026, 10, 2)
+
+
+def test_parse_task_ignores_a_mark_that_is_not_at_the_start():
+    parsed = parse_task(f"\n{BOM}# 18/09/2026\n")
+
+    assert parsed.interventions == []
+
+
 OLD_FORMAT = """\
 # SupplierReply
 
@@ -288,3 +319,7 @@ def test_is_legacy_needs_the_heading_to_be_the_first_one():
 
 def test_is_legacy_ignores_a_dated_heading_inside_a_code_block():
     assert not is_legacy("# SupplierReply\n\n```\n## 18/09/2026\n```\n")
+
+
+def test_is_legacy_reads_an_old_file_that_starts_with_a_bom():
+    assert is_legacy(f"{BOM}{OLD_FORMAT}")

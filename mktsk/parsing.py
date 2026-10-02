@@ -34,6 +34,25 @@ _EVENT = re.compile(r'^\[mktsk:(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})\]: # "([^"]*)"$')
 
 _FENCE_CHARACTERS = ("```", "~~~")
 
+# what a text file written by some editors starts with, and that is not text
+BOM = "\ufeff"
+
+
+def without_bom(content: str) -> str:
+    """Removes the byte order mark the text of a .md may start with.
+
+    Reading with `utf-8` leaves the mark in the text, where it hides the first
+    heading from every reader. Nothing that writes a file adds one or takes one
+    away, so a file keeps the mark it was written with.
+
+    Args:
+        content: the text of the .md file.
+
+    Returns:
+        The same text without a leading mark.
+    """
+    return content.removeprefix(BOM)
+
 
 class Intervention(NamedTuple):
     """A visit to a task, as the level 1 heading that dates it.
@@ -239,7 +258,7 @@ def parse_task(content: str) -> ParsedTask:
     interventions: list[Intervention] = []
     events: list[StateEvent] = []
 
-    for number, line in _readable_lines(content):
+    for number, line in _readable_lines(without_bom(content)):
         intervention = _intervention(number, line)
 
         if intervention is not None:
@@ -312,7 +331,7 @@ def is_legacy(content: str) -> bool:
     Returns:
         True when the file is in the old format.
     """
-    lines = [line for _number, line in _readable_lines(content)]
+    lines = [line for _number, line in _readable_lines(without_bom(content))]
 
     if _first_title(lines) is None:
         return False

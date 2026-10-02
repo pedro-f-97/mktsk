@@ -136,12 +136,19 @@ def migrate_content(content: str, title: str) -> Migration:
         The text in the new format and what a human has to review.
     """
     review: list[str] = []
-    lines = content.splitlines()
-    newline = _line_break(content)
+
+    # the mark a file may start with is not text, so it is taken off to read the
+    # file and put back in front of whatever ends up first: a file that carried
+    # one carries it still, and nothing here adds one
+    body = parsing.without_bom(content)
+    mark = parsing.BOM if body != content else ""
+
+    lines = body.splitlines()
+    newline = _line_break(body)
 
     # the parser is what knows a code block from the task it is written in, so
     # its lines are the only ones the format applies to
-    readable = {number for number, _line in parsing._readable_lines(content)}
+    readable = {number for number, _line in parsing._readable_lines(body)}
 
     result: list[str] = []
     old_section = False
@@ -184,7 +191,7 @@ def migrate_content(content: str, title: str) -> Migration:
     while result and not result[-1].strip():
         result.pop()
 
-    joined = newline.join(result)
+    joined = f"{mark}{newline.join(result)}"
 
     return Migration(content=f"{joined}{newline}" if joined else "", review=review)
 

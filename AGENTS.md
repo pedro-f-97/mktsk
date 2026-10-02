@@ -208,6 +208,12 @@ Free text, with levels 2 to 6 available.
 - Code blocks (``` and `~~~`, closed with the same character) are ignored everywhere, so a
   date or an event written in an example is not one of the task. A fence that is never
   closed runs to the end of the file
+- A file may start with a utf-8 byte order mark, which `utf-8` reads as U+FEFF rather than
+  taking off, and a mark is not text: left in place it hides the first heading from
+  `parse_task`, `is_legacy` and the migration. `parsing.without_bom` takes it off, and it is
+  the one place that does, so every reader goes through it. Nothing that writes adds a mark
+  or takes one away, so a file keeps the one it was written with, and the migration puts it
+  back in front of what it writes
 - `is_legacy` recognises the old format: the first non-empty line is a level 1 heading
   with no date on it, and the file has a level 2 heading with a date. It is never read as
   the new one, so the title is not mistaken for an intervention
