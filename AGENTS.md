@@ -14,8 +14,8 @@ workflow interactively.
 - `mktsk/gui/` — PySide6 interface, one module per responsibility: `__init__.py` is the
   entry point and re-exports `MainWindow` and `main`, `__main__.py` runs it with
   `python -m mktsk.gui`, `icons.py` draws the icons, `tree.py` is the directory tree,
-  `tasklist.py` the tasks of a category with the action bar over the selected row, and
-  `window.py` the main window
+  `tasklist.py` the tasks of a category under their column headings, with the action bar
+  over the selected row, and `window.py` the main window
 - `mktsk/__main__.py` — module entry point and PyInstaller target; keep the absolute
   import, relative imports fail once frozen
 - `mktsk/helpers.py` — name validation, reserved Windows names, opening files, the
@@ -269,11 +269,11 @@ Free text, with levels 2 to 6 available.
 - `--list` takes no title and opens nothing; it prints each directory as a heading and
   its tasks under it. A row is `_task_label`: `DATE_FORMAT`, two spaces,
   `readable_title`, then two spaces and `(3 interventions, last activity 18/09/2026)`,
-  with `intervention` in the singular for one. The first three are the row the GUI shows;
-  the count and the activity are CLI only, until the GUI shows them too. The order is the
-  one `find_task_groups` already gives, which is by last activity, so a directory with no
-  tasks prints nothing. Never format a date or a title in the CLI by hand, or the two
-  listings drift apart
+  with `intervention` in the singular for one. The first three are the task column of the
+  GUI row; the count and the date are the CLI wording, because the GUI counts in words
+  rather than in dates. The order is the one `find_task_groups` already gives, which is by
+  last activity, so a directory with no tasks prints nothing. Never format a date or a
+  title in the CLI by hand, or the two listings drift apart
 - `--new-category <name>` creates a category in the current directory and prints the path;
   it opens nothing, because making somewhere to put tasks is not working on one. The name
   is one argument, so a name with spaces in it has to be quoted, unlike a task title or a
@@ -286,8 +286,8 @@ Free text, with levels 2 to 6 available.
 
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
-  `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py` and
-  `tests/test_gui_window.py` with pytest-qt
+  `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
+  `tests/test_gui_activity.py` and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
   window imports the widgets it is built from, and a widget only reports what it was
@@ -333,11 +333,30 @@ Free text, with levels 2 to 6 available.
 - The active tab survives a refresh or a new task; when its category is gone, `All`
   takes over again
 - Within a category, by last activity, newest first, alphabetical for tasks of the same
-  last activity. The row still shows the date of the folder, so the date on a row and the
-  order of the rows can disagree, until the GUI shows the activity too
+  last activity. The task column shows the date of the folder and the last activity column
+  says how long ago the last intervention was, so the date on a row and the order of the
+  rows can disagree
 - A task folder with no `.md` is not listed; a task two levels down is not found
-- A task label is `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as
-  tooltip
+- A task row is three columns, `Task`, `Interventions` and `Last activity`. The task is
+  `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as tooltip; the
+  interventions are the count from the `.md`, `0` when there are none; the activity is
+  `_relative_age`, which says `today`, `yesterday` or `N days ago`, and reads a date that
+  has not come yet as `today`
+- `TaskPanel` is what a tab holds: `_ColumnHeader` over `TaskListing`. The two right columns
+  are measured from the bold application font (`_column_widths`) and split by
+  `_column_rects`, which the header and the delegate both ask, so a heading never sits over a
+  value of another column. A row too narrow for all three shares what is left by weight, the
+  task counting a share against one for each column of its activity, so a task never
+  disappears for the sake of its own numbers and no column is ever given a negative width
+- The headings are placed over the width of a row of the list, not over the width of the
+  header, because a scrollbar takes its width from the rows: `set_row_width` is what puts
+  them back, and the panel filters the viewport of the list to call it
+- The count and the age reach the delegate in the item roles `_COUNT_ROLE` and `_AGE_ROLE`,
+  so painting reads no file and holds no date of its own. The window takes one day per
+  reload and hands it to every row, so a refresh that runs as the date turns does not date
+  half of the tasks to yesterday
+- A row without those roles is a heading, which has no activity of its own and is painted
+  where it stands, across the row
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons; it moves with the selection and disappears with
   it
@@ -353,7 +372,9 @@ Free text, with levels 2 to 6 available.
   manager and touches nothing, `Resume` opens the `.md`, `Rename` does not open it, it
   just refreshes the list
 - `Resume` is the only browse action that appends a date, and it appends it to the task
-  it was asked for, not to one looked up in the current directory
+  it was asked for, not to one looked up in the current directory. It refreshes the listing
+  as well, because the row carries the count and the age that the new intervention has
+  changed
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
   what was created; the warning carries the error as it is, `helpers.open_file` already

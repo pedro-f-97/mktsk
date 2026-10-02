@@ -19,8 +19,17 @@ def tab_titles(window):
     return [window.tabs.tabText(index) for index in range(window.tabs.count())]
 
 
-def task_listing(window, title="All"):
+def task_panel(window, title="All"):
     return window.tabs.widget(tab_index(window, title))
+
+
+def task_listing(window, title="All"):
+    return task_panel(window, title).listing
+
+
+def header_labels(window, title="All"):
+    """The names of the columns above a tab of tasks."""
+    return [label.text() for label in task_panel(window, title).header.labels()]
 
 
 def tab_labels(window, title="All"):

@@ -1,5 +1,6 @@
 """The main window, over the task logic the CLI uses."""
 
+import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
@@ -24,7 +25,14 @@ from PySide6.QtWidgets import (
 
 from mktsk import files, helpers, listing, tasks
 
-from .tasklist import _ENTRY_ROLE, TaskListing
+from .tasklist import (
+    _AGE_ROLE,
+    _COUNT_ROLE,
+    _ENTRY_ROLE,
+    TaskListing,
+    TaskPanel,
+    _relative_age,
+)
 from .tree import _PATH_ROLE, _CategoryTree
 
 _ALL_TAB = "All"
@@ -172,6 +180,9 @@ class MainWindow(QMainWindow):
         self.target_label.show()
 
     def _reload_tasks(self) -> None:
+        # one day for the whole listing, so a refresh that runs as the date turns
+        # does not date half of the tasks to yesterday
+        today = datetime.datetime.now().astimezone().date()
         sections = self._sections()
         active = self.tabs.tabText(self.tabs.currentIndex()) if self.tabs.count() else ""
 
@@ -181,13 +192,13 @@ class MainWindow(QMainWindow):
         for title, group in sections:
             self._add_heading(every, title)
             for entry in group.entries:
-                self._add_task(every, entry)
+                self._add_task(every, entry, today)
         self._add_tab(_ALL_TAB, every)
 
         for title, group in sections:
             tab = self._new_listing()
             for entry in group.entries:
-                self._add_task(tab, entry)
+                self._add_task(tab, entry, today)
             self._add_tab(title, tab)
 
         self._select_tab(active)
@@ -218,8 +229,8 @@ class MainWindow(QMainWindow):
         tab.rename_requested.connect(self.rename_task)
         return tab
 
-    def _add_tab(self, title: str, tab: QListWidget) -> None:
-        self.tabs.addTab(tab, title)
+    def _add_tab(self, title: str, tab: TaskListing) -> None:
+        self.tabs.addTab(TaskPanel(tab), title)
 
     def _select_tab(self, title: str) -> None:
         for index in range(self.tabs.count()):
@@ -237,10 +248,14 @@ class MainWindow(QMainWindow):
         item.setFlags(Qt.ItemFlag.NoItemFlags)
         tab.addItem(item)
 
-    def _add_task(self, tab: QListWidget, entry: listing.TaskEntry) -> None:
+    def _add_task(
+        self, tab: QListWidget, entry: listing.TaskEntry, today: datetime.date
+    ) -> None:
         date = entry.date.strftime(helpers.DATE_FORMAT)
         item = QListWidgetItem(f"{date}  {helpers.readable_title(entry.title)}")
         item.setData(_ENTRY_ROLE, entry)
+        item.setData(_COUNT_ROLE, str(entry.interventions))
+        item.setData(_AGE_ROLE, _relative_age(entry.last_activity, today))
         item.setToolTip(str(entry.file))
         tab.addItem(item)
 
@@ -296,7 +311,8 @@ class MainWindow(QMainWindow):
         """Adds a dated section to a task and opens it.
 
         The task is resumed where it is, which is not necessarily the current
-        directory.
+        directory. The listing is refreshed either way, because the row now
+        carries the count and the age the new intervention has changed.
 
         Args:
             entry: the selected task.
@@ -307,6 +323,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "mktsk", str(error))
             return
 
+        self.refresh()
         self.open_with_default_app(result.file)
 
     def rename_task(self, entry: listing.TaskEntry) -> None:
