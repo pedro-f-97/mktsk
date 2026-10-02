@@ -24,6 +24,8 @@ workflow interactively.
   grouping
 - `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume,
   rename
+- `mktsk/parsing.py` — reads the text of a `.md` in the format the tasks are
+  moving to: interventions, state events, last activity. Pure functions, no I/O
 - `tests/` — pytest suite
 
 ## Commands
@@ -148,6 +150,57 @@ change the name.
 - Reading a title back for display (`readable_title`): every uppercase letter starts a
   word and a digit starts one too, so `FSocietyEverbind` reads as `F Society Everbind`
   and `Task2` as `Task 2`; consecutive digits stay together, so `2026` survives
+
+## The new .md format
+
+Nothing writes or reads this format yet. `mktsk/parsing.py` reads it and the rest of
+`mktsk/` carries on with the old one, which is the format `files.py` still writes: a
+`# <StandardizedTitle>` heading and a `## <dd/mm/YYYY>` heading per visit. The plan that
+introduces the new format is in `PLAN.md`, and the steps that write it, migrate to it and
+resume it come after the parser.
+
+```markdown
+# 18/09/2026
+
+Customer request, see attachment.
+
+## Problem
+
+Free text, with levels 2 to 6 available.
+
+# 02/10/2026
+
+[mktsk:2026-09-18T10:02]: # "open"
+[mktsk:2026-10-02T09:40]: # "in-progress"
+```
+
+- No `# <title>`: the folder and the `.md` name say which task it is
+- `STATES` is `("open", "in-progress", "waiting", "closed")`
+- An intervention is a level 1 heading: a single `#`, a space and up to three spaces of
+  indentation, so `#hashtag` and `## 12/01/2026` are not one. Its line holds a date and
+  may hold text after it (`# 29/09/2026 - reply`), and the first valid date of the line
+  is the one that counts
+- `dd/mm/yyyy` is the canonical form and `DATE_FORMAT` is what a writer uses; `dd-mm-yyyy`,
+  `dd.mm.yyyy`, `dd/mm/yy` and `yyyy-mm-dd` are only tolerated when reading, and a two
+  digit year means 2000 plus the year. A date glued to another number is not a date, which
+  is what keeps `2026-10-02` from being read as the `26-10-02` inside it
+- A date that never happened is not a date, so `# 31/02/2026` is a heading like any
+  other and not an intervention
+- A state event is a whole line `[mktsk:YYYY-MM-DDTHH:MM]: # "state"`, local time with no
+  zone, anywhere in the file. mktsk writes them in a block at the end, after a blank line,
+  or Markdown renders them as text. The last event in file order is the current state; an
+  event that cannot be read is left out and never an error, because a hand edited file is
+  still a task file
+- `last_activity` is the most recent date of the interventions, not the last one in the
+  file, and `None` when there are none
+- Code blocks (``` and `~~~`, closed with the same character) are ignored everywhere, so a
+  date or an event written in an example is not one of the task. A fence that is never
+  closed runs to the end of the file
+- `is_legacy` recognises the old format: the first non-empty line is a level 1 heading
+  with no date on it, and the file has a level 2 heading with a date. It is never read as
+  the new one, so the title is not mistaken for an intervention
+- `parse_task` takes text, not a `Path`, so it never opens anything, and it accepts either
+  line break. `line` is the line of the file, counting from 1, code blocks included
 
 ## CLI
 
