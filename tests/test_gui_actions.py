@@ -242,7 +242,7 @@ def test_rename_button_keeps_the_date_and_updates_the_list(
     file = make_task(tmp_path, "260918", "FSociety")
     window.navigate_to(tmp_path)
     monkeypatch.setattr(
-        "mktsk.gui.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
+        "mktsk.gui.window.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
     )
 
     action_bar(window, file).rename_button.click()
@@ -260,7 +260,7 @@ def test_rename_button_keeps_the_active_tab(
     window.navigate_to(tmp_path)
     select_tab(window, "Veritas")
     monkeypatch.setattr(
-        "mktsk.gui.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
+        "mktsk.gui.window.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
     )
 
     action_bar(window, file, "Veritas").rename_button.click()
@@ -273,7 +273,7 @@ def test_cancelling_the_rename_changes_nothing(
 ):
     file = make_task(tmp_path, "260918", "FSociety")
     window.navigate_to(tmp_path)
-    monkeypatch.setattr("mktsk.gui.QInputDialog.getText", lambda *args: ("", False))
+    monkeypatch.setattr("mktsk.gui.window.QInputDialog.getText", lambda *args: ("", False))
 
     action_bar(window, file).rename_button.click()
 
@@ -284,7 +284,7 @@ def test_cancelling_the_rename_changes_nothing(
 def test_blank_rename_changes_nothing(window, tmp_path, make_task, monkeypatch):
     file = make_task(tmp_path, "260918", "FSociety")
     window.navigate_to(tmp_path)
-    monkeypatch.setattr("mktsk.gui.QInputDialog.getText", lambda *args: ("  ", True))
+    monkeypatch.setattr("mktsk.gui.window.QInputDialog.getText", lambda *args: ("  ", True))
 
     action_bar(window, file).rename_button.click()
 
@@ -299,7 +299,7 @@ def test_rename_button_reports_a_collision(
     file = make_task(tmp_path, "260918", "FSociety")
     window.navigate_to(tmp_path)
     monkeypatch.setattr(
-        "mktsk.gui.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
+        "mktsk.gui.window.QInputDialog.getText", lambda *args: ("F Society Everbind", True)
     )
 
     action_bar(window, file).rename_button.click()

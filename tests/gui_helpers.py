@@ -4,7 +4,8 @@ Plain functions rather than fixtures, because they read from a window that
 the test already asks for and give a result straight back.
 """
 
-from mktsk.gui import _ENTRY_ROLE, _PATH_ROLE
+from mktsk.gui.listing import _ENTRY_ROLE
+from mktsk.gui.tree import _PATH_ROLE
 
 
 def tab_index(window, title):
@@ -77,7 +78,7 @@ def select_directory(window, path):
 
 def answer_dialog(monkeypatch, answer):
     """Makes the next name dialog answer with the given text."""
-    monkeypatch.setattr("mktsk.gui.QInputDialog.getText", lambda *args: answer)
+    monkeypatch.setattr("mktsk.gui.window.QInputDialog.getText", lambda *args: answer)
 
 
 def select_task(window, path, title="All"):
