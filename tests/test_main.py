@@ -163,7 +163,7 @@ def test_main_error(monkeypatch, tmp_path, capsys):
     def raise_error(*args):
         raise OSError("test error")
 
-    monkeypatch.setattr("mktsk.workers.create_folder", raise_error)
+    monkeypatch.setattr("mktsk.files.create_folder", raise_error)
 
     result = main()
 
@@ -392,7 +392,7 @@ def test_main_new_category_reports_a_failure_to_create(monkeypatch, tmp_path, ca
     def raise_error(*args):
         raise OSError("test error")
 
-    monkeypatch.setattr("mktsk.workers.create_category", raise_error)
+    monkeypatch.setattr("mktsk.files.create_category", raise_error)
 
     result = main()
 
@@ -630,7 +630,7 @@ def test_main_rename_reports_a_failure_to_rename(monkeypatch, tmp_path, capsys):
     def raise_error(*args):
         raise OSError("test error")
 
-    monkeypatch.setattr("mktsk.workers.rename_task", raise_error)
+    monkeypatch.setattr("mktsk.tasks.rename_task", raise_error)
 
     result = main()
 

@@ -14,9 +14,16 @@ workflow interactively.
 - `mktsk/gui.py` — PySide6 interface
 - `mktsk/__main__.py` — module entry point and PyInstaller target; keep the absolute
   import, relative imports fail once frozen
-- `mktsk/helpers.py` — name validation, reserved Windows names, opening files
-- `mktsk/workers.py` — task logic: standardization, recognition, lookup, creation,
-  signing, resuming
+- `mktsk/helpers.py` — name validation, reserved Windows names, opening files, the
+  date format the CLI and the GUI share
+- `mktsk/standards.py` — the rules of a task name: standardization, recognition of
+  the folder shape, reading a title back. No I/O
+- `mktsk/files.py` — everything that writes: creating the folder, creating the
+  `.md`, signing, appending a dated section, creating a category
+- `mktsk/listing.py` — everything that reads a directory: finding, listing,
+  grouping
+- `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume,
+  rename
 - `tests/` — pytest suite
 
 ## Commands
@@ -247,7 +254,7 @@ change the name.
   newline at the end of the file. `W` and the `E3xx` rules enforce it from `pyproject.toml`,
   where `preview` is on because the `E3xx` rules are still preview. `preview` drops seven
   stable `DTZ` rules, `DTZ007` among them, so `DTZ` is listed explicitly and the two
-  `# noqa: DTZ007` in `workers.py` are load-bearing: `RUF100` will report them as unused
+  `# noqa: DTZ007` in `standards.py` are load-bearing: `RUF100` will report them as unused
   the moment the config stops selecting `DTZ007`
 - Keep the ruff `select` and `extend-select` out of each other's way: a `select` next to
   `extend-select` cuts the default families back to `E`, `F` and `W`

@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path, PureWindowsPath
 
+DATE_FORMAT = "%d/%m/%Y"
+
 WINDOWS_RESERVED_NAMES = {
     "CON",
     "PRN",

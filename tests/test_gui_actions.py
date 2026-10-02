@@ -230,7 +230,7 @@ def test_resume_button_reports_a_missing_file(
     def raise_error(folder, title):
         raise OSError("boom")
 
-    monkeypatch.setattr("mktsk.workers.resume_task", raise_error)
+    monkeypatch.setattr("mktsk.tasks.resume_task", raise_error)
     action_bar(window, file).resume_button.click()
 
     assert fake_messages["critical"] == ["boom"]

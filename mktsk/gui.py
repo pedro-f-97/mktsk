@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import helpers, workers
+from . import files, helpers, listing, tasks
 
 _PATH_ROLE = Qt.ItemDataRole.UserRole
 _ENTRY_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -343,7 +343,7 @@ class TaskListing(QListWidget):
         self.currentItemChanged.connect(lambda *_: self._sync_action_bar())
         self.action_bar.hide()
 
-    def selected_entry(self) -> workers.TaskEntry | None:
+    def selected_entry(self) -> listing.TaskEntry | None:
         """Returns the task of the selected row, or None when none is."""
         item = self.currentItem()
         return item.data(_ENTRY_ROLE) if item else None
@@ -482,7 +482,7 @@ class MainWindow(QMainWindow):
         self.directory_tree.clear()
         name = self.current_directory.name or str(self.current_directory)
         root = QTreeWidgetItem([name])
-        for subdirectory in workers.list_subdirectories(self.current_directory):
+        for subdirectory in listing.list_subdirectories(self.current_directory):
             child = QTreeWidgetItem([subdirectory.name])
             child.setData(0, _PATH_ROLE, str(subdirectory))
             root.addChild(child)
@@ -542,14 +542,14 @@ class MainWindow(QMainWindow):
         self._add_tab(_ALL_TAB, every)
 
         for title, group in sections:
-            listing = self._new_listing()
+            tab = self._new_listing()
             for entry in group.entries:
-                self._add_task(listing, entry)
-            self._add_tab(title, listing)
+                self._add_task(tab, entry)
+            self._add_tab(title, tab)
 
         self._select_tab(active)
 
-    def _sections(self) -> list[tuple[str, workers.TaskGroup]]:
+    def _sections(self) -> list[tuple[str, listing.TaskGroup]]:
         """Pairs every task group with the title of its tab.
 
         Returns:
@@ -561,7 +561,7 @@ class MainWindow(QMainWindow):
                 self._base_title() if group.category is None else group.category.name,
                 group,
             )
-            for group in workers.find_task_groups(self.current_directory)
+            for group in listing.find_task_groups(self.current_directory)
         ]
 
     def _base_title(self) -> str:
@@ -569,14 +569,14 @@ class MainWindow(QMainWindow):
         return self.current_directory.name or str(self.current_directory)
 
     def _new_listing(self) -> TaskListing:
-        listing = TaskListing()
-        listing.open_requested.connect(self.open_task)
-        listing.resume_requested.connect(self.resume_task)
-        listing.rename_requested.connect(self.rename_task)
-        return listing
+        tab = TaskListing()
+        tab.open_requested.connect(self.open_task)
+        tab.resume_requested.connect(self.resume_task)
+        tab.rename_requested.connect(self.rename_task)
+        return tab
 
-    def _add_tab(self, title: str, listing: QListWidget) -> None:
-        self.tabs.addTab(listing, title)
+    def _add_tab(self, title: str, tab: QListWidget) -> None:
+        self.tabs.addTab(tab, title)
 
     def _select_tab(self, title: str) -> None:
         for index in range(self.tabs.count()):
@@ -586,20 +586,20 @@ class MainWindow(QMainWindow):
 
         self.tabs.setCurrentIndex(0)
 
-    def _add_heading(self, listing: QListWidget, text: str) -> None:
+    def _add_heading(self, tab: QListWidget, text: str) -> None:
         item = QListWidgetItem(text)
         font = item.font()
         font.setBold(True)
         item.setFont(font)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
-        listing.addItem(item)
+        tab.addItem(item)
 
-    def _add_task(self, listing: QListWidget, entry: workers.TaskEntry) -> None:
-        date = entry.date.strftime(workers.DATE_FORMAT)
+    def _add_task(self, tab: QListWidget, entry: listing.TaskEntry) -> None:
+        date = entry.date.strftime(helpers.DATE_FORMAT)
         item = QListWidgetItem(f"{date}  {helpers.readable_title(entry.title)}")
         item.setData(_ENTRY_ROLE, entry)
         item.setToolTip(str(entry.file))
-        listing.addItem(item)
+        tab.addItem(item)
 
     def choose_directory(self) -> None:
         selected = QFileDialog.getExistingDirectory(
@@ -633,7 +633,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            category = workers.create_category(self.current_directory, raw_name)
+            category = files.create_category(self.current_directory, raw_name)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return
@@ -641,7 +641,7 @@ class MainWindow(QMainWindow):
         self.refresh()
         self.directory_tree.select_subdirectory(category)
 
-    def open_task(self, entry: workers.TaskEntry) -> None:
+    def open_task(self, entry: listing.TaskEntry) -> None:
         """Reveals the folder of a task with the file manager.
 
         Args:
@@ -649,7 +649,7 @@ class MainWindow(QMainWindow):
         """
         self.open_with_default_app(entry.file.parent)
 
-    def resume_task(self, entry: workers.TaskEntry) -> None:
+    def resume_task(self, entry: listing.TaskEntry) -> None:
         """Adds a dated section to a task and opens it.
 
         The task is resumed where it is, which is not necessarily the current
@@ -659,14 +659,14 @@ class MainWindow(QMainWindow):
             entry: the selected task.
         """
         try:
-            result = workers.resume_task(entry.file.parent, entry.title)
+            result = tasks.resume_task(entry.file.parent, entry.title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return
 
         self.open_with_default_app(result.file)
 
-    def rename_task(self, entry: workers.TaskEntry) -> None:
+    def rename_task(self, entry: listing.TaskEntry) -> None:
         """Renames a task, keeping the date it was created on.
 
         Args:
@@ -684,7 +684,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            workers.rename_task(entry.file.parent, entry.title, raw_title)
+            tasks.rename_task(entry.file.parent, entry.title, raw_title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return
@@ -704,7 +704,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            result = workers.open_or_create_task(self.creation_directory(), raw_title)
+            result = tasks.open_or_create_task(self.creation_directory(), raw_title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return
