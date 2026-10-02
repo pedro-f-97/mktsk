@@ -1,7 +1,7 @@
 """The desktop interface, over the task logic the CLI uses.
 
 The modules below carry one responsibility each: `icons` draws the icons,
-`tree` lists the categories, `listing` lists the tasks of one of them and
+`tree` lists the categories, `tasklist` lists the tasks of one of them and
 `window` puts the three together.
 """
 

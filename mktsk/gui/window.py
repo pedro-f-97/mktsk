@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from mktsk import files, helpers, listing, tasks
 
-from .listing import _ENTRY_ROLE, TaskListing
+from .tasklist import _ENTRY_ROLE, TaskListing
 from .tree import _PATH_ROLE, _CategoryTree
 
 _ALL_TAB = "All"

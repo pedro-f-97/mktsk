@@ -14,7 +14,7 @@ workflow interactively.
 - `mktsk/gui/` — PySide6 interface, one module per responsibility: `__init__.py` is the
   entry point and re-exports `MainWindow` and `main`, `__main__.py` runs it with
   `python -m mktsk.gui`, `icons.py` draws the icons, `tree.py` is the directory tree,
-  `listing.py` the tasks of a category with the action bar over the selected row, and
+  `tasklist.py` the tasks of a category with the action bar over the selected row, and
   `window.py` the main window
 - `mktsk/__main__.py` — module entry point and PyInstaller target; keep the absolute
   import, relative imports fail once frozen
@@ -291,7 +291,9 @@ Free text, with levels 2 to 6 available.
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
   window imports the widgets it is built from, and a widget only reports what it was
-  asked for, so new code goes in the module that matches what it does
+  asked for, so new code goes in the module that matches what it does. No module of
+  the package takes the name of one in `mktsk/`, which is why the widget that lists
+  tasks is `tasklist.py` and not `listing.py`
 - Two panes in a `QSplitter`: a `QTreeWidget` on the left holding the current directory
   and its immediate subdirectories, so it shows where new tasks are created; a
   `QTabWidget` on the right holding one `QListWidget` per task category
