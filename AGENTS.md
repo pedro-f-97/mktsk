@@ -26,6 +26,8 @@ workflow interactively.
   rename
 - `mktsk/parsing.py` — reads the text of a `.md` in the format the tasks are
   moving to: interventions, state events, last activity. Pure functions, no I/O
+- `mktsk/migration.py` — converts the text of a `.md` from the old format to the
+  new one, and the command line that applies it to a tree of tasks
 - `tests/` — pytest suite
 
 ## Commands
@@ -153,11 +155,12 @@ change the name.
 
 ## The new .md format
 
-Nothing writes or reads this format yet. `mktsk/parsing.py` reads it and the rest of
-`mktsk/` carries on with the old one, which is the format `files.py` still writes: a
-`# <StandardizedTitle>` heading and a `## <dd/mm/YYYY>` heading per visit. The plan that
-introduces the new format is in `PLAN.md`, and the steps that write it, migrate to it and
-resume it come after the parser.
+Nothing of the task modules writes or reads this format yet: `mktsk/migration.py`
+converts files into it and `mktsk/parsing.py` reads it, while the rest of `mktsk/`
+carries on with the old one, which is the format `files.py` still writes: a
+`# <StandardizedTitle>` heading and a `## <dd/mm/YYYY>` heading per visit. The plan
+that introduces the new format is in `PLAN.md`, and the steps that write it and
+resume it come after the migration.
 
 ```markdown
 # 18/09/2026
@@ -201,6 +204,37 @@ Free text, with levels 2 to 6 available.
   the new one, so the title is not mistaken for an intervention
 - `parse_task` takes text, not a `Path`, so it never opens anything, and it accepts either
   line break. `line` is the line of the file, counting from 1, code blocks included
+
+## The migration
+
+- `python -m mktsk.migration <folder>` walks a folder and its immediate subdirectories, like
+  `find_task_groups`, so only the tasks `is_task_folder` recognises are converted, each through
+  the `.md` named after the title of its folder. Without `--apply` it prints the status of
+  every file and its unified diff, and writes nothing; with `--apply` it writes each file and
+  first says to keep a backup
+- The order is the one to hand to the person running it: zip the folder, simulate, read the
+  diff, then apply
+- The status of a file is `migrated`, `already new` or `review`, and `review` wins over the
+  other two: a file with something to look at in it is the one a person has to read
+- A file that cannot be read or written is reported and the run goes on to the next one, and
+  the exit code is 1 when any of them failed
+- Files are read and written with `newline=""`, so a file keeps the line break it was written
+  with
+- A write goes to a `.<name>.md.part` beside the file and is renamed over it with
+  `os.replace`, so a failure halfway leaves the original as it was and the temporary file is
+  removed
+- `migrate_content(content, title)` is pure and idempotent: a file already in the new format
+  comes back the way it went in, with nothing to review
+- It drops the leading `# <title>` when the heading names the title of the folder, comparing
+  the case apart, because a folder renamed by hand keeps its capitals. A heading naming
+  another task is content rather than the identity of this one, so it stays and is reported
+- It turns each `## <date>` into `# <date>` and moves the headings of level 3 to 6 under it up
+  one level, and the first `# <date>` it finds closes that section, so the notes of an
+  intervention that was already written are left alone
+- A `##` carrying no date under a section it did not date stays where it is and goes into
+  `review`, which is what the status of the file then says
+- Code blocks are the ones `parsing._readable_lines` leaves out, so an example is never
+  converted, and the result always ends with a single line break
 
 ## CLI
 
@@ -314,8 +348,8 @@ Free text, with levels 2 to 6 available.
 - Comment only when it adds value; never delete existing comments
 - Tests in `tests/test_*.py`; never write to real user folders (`tmp_path`)
 - One test file per subject, named after it (`test_gui_listing.py`, `test_gui_target.py`,
-  `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py`, `test_gui_window.py`);
-  a file that grows past a few hundred lines is split, never extended
+  `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py`, `test_gui_window.py`,
+  `test_migration.py`); a file that grows past a few hundred lines is split, never extended
 - Fixtures go in `tests/conftest.py`; the plain helpers shared across GUI test files live
   in `tests/gui_helpers.py` and are imported as `from tests.gui_helpers import ...`, because
   `tests/__init__.py` makes `tests/` a package
