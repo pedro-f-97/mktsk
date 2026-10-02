@@ -94,12 +94,36 @@ def main() -> int:
     return 0
 
 
+def _task_label(entry: listing.TaskEntry) -> str:
+    """Formats one task as the listing shows it.
+
+    The date of the folder, two spaces and the title read as words are what the
+    GUI shows, and what goes after them is what the .md carries: how many times
+    the task was worked on and the last of those days. A task whose .md cannot
+    be read is still listed, with the date of its folder as its last activity.
+
+    Args:
+        entry: the task to format.
+
+    Returns:
+        The line that goes under a directory heading.
+    """
+    date = entry.date.strftime(helpers.DATE_FORMAT)
+    activity = entry.last_activity.strftime(helpers.DATE_FORMAT)
+    title = helpers.readable_title(entry.title)
+    noun = "intervention" if entry.interventions == 1 else "interventions"
+
+    return f"{date}  {title}  ({entry.interventions} {noun}, last activity {activity})"
+
+
 def _list(location: Path) -> int:
     """Prints the tasks of a directory and of its categories, and opens nothing.
 
     Each category is a heading of its own name, the directory here included, and
     the tasks under it read as they do in the GUI: the date, two spaces, then the
-    title read as words. A directory with no tasks prints nothing at all.
+    title read as words. The tasks of a category come by last activity, so the
+    one you worked on last is the first. A directory with no tasks prints nothing
+    at all.
 
     Args:
         location: the directory to list.
@@ -112,8 +136,7 @@ def _list(location: Path) -> int:
         print(f"{name if group.category is None else group.category.name}/")
 
         for entry in group.entries:
-            date = entry.date.strftime(helpers.DATE_FORMAT)
-            print(f"  {date}  {helpers.readable_title(entry.title)}")
+            print(f"  {_task_label(entry)}")
 
     return 0
 

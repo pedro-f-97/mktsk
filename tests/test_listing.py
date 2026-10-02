@@ -24,7 +24,13 @@ def test_find_task_groups_unpacks_date_title_and_file(tmp_path, make_task):
     assert len(groups) == 1
     assert groups[0].category is None
     assert groups[0].entries == [
-        TaskEntry(datetime.date(2026, 9, 18), "FSocietyEverbind", file)
+        TaskEntry(
+            datetime.date(2026, 9, 18),
+            "FSocietyEverbind",
+            file,
+            datetime.date(2026, 9, 18),
+            1,
+        )
     ]
 
 

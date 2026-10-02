@@ -9,6 +9,7 @@ CLI tool and desktop GUI for quickly setting up task folders.
   of the task is the folder and file name, so it is not repeated inside the file.
 * Finds an existing task by title in the current directory, on any date, and starts a new
   dated section in it.
+* Lists tasks by when they were last worked on, not by the date in the folder name.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
 
@@ -147,20 +148,28 @@ mktsk --list
 
 ```text
 tasks/
-  23/09/2026  Its Alive
-  18/09/2026  F Society
+  18/09/2026  Its Alive  (2 interventions, last activity 30/09/2026)
+  23/09/2026  F Society  (1 intervention, last activity 23/09/2026)
 Able/
-  19/09/2026  Foo
+  19/09/2026  Foo  (1 intervention, last activity 19/09/2026)
 Veritas/
-  24/09/2026  F Society Everbind
+  25/09/2026  F Society Everbind  (1 intervention, last activity 25/09/2026)
 ```
 
 Each directory is a heading, the one you are in first, and the tasks under it read the
-same way the GUI shows them: the date, two spaces, then the title read as words
-(`FSocietyEverbind` shows as `F Society Everbind`). Newest first inside each directory,
-and the directories themselves in alphabetical order.
+same way the GUI shows them: the date of the folder, two spaces, then the title read as
+words (`FSocietyEverbind` shows as `F Society Everbind`). What the Markdown file knows
+comes after it: how many dated sections the file has, the one the task was born with
+counted, and the date of the last of them.
 
-A task folder without its Markdown file is left out, since there is nothing to open.
+Tasks come by last activity, so the one you worked on last is the first, whichever day it
+was created, and coming back to a task moves it to the top. Tasks of the same last activity
+are alphabetical, and the directories themselves are in alphabetical order.
+
+A task folder without its Markdown file is left out, since there is nothing to open. A
+Markdown file that cannot be read keeps its task in the list, and so does one with no
+dated section, or one still in the old format: the date of the folder stands in as its
+last activity, since there is nothing in the file to read it from.
 
 ## Creating a category
 
@@ -269,9 +278,9 @@ Opens a window where you can:
   until you select another one;
 * see on the right every existing task, including the ones in subfolders. Each category
   gets its own tab, the current folder included, plus an `All` tab that lists everything
-  under a heading per category. Newest first, with the date as `dd/mm/yyyy` and the
-  title read as words (`260923 - FSocietyEverbind` shows as `23/09/2026  F Society
-  Everbind`);
+  under a heading per category. By last activity, so the task you worked on last comes
+  first, with the date of the folder as `dd/mm/yyyy` and the title read as words
+  (`260923 - FSocietyEverbind` shows as `23/09/2026  F Society Everbind`);
 * create a task with the same rules as the CLI, opening the resulting Markdown file with
   the default application;
 * act on an existing task by selecting it, which brings a bar of buttons over its row.
