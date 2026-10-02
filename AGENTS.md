@@ -11,7 +11,11 @@ workflow interactively.
 ## Structure
 
 - `mktsk/main.py` — CLI entry point
-- `mktsk/gui.py` — PySide6 interface
+- `mktsk/gui/` — PySide6 interface, one module per responsibility: `__init__.py` is the
+  entry point and re-exports `MainWindow` and `main`, `__main__.py` runs it with
+  `python -m mktsk.gui`, `icons.py` draws the icons, `tree.py` is the directory tree,
+  `listing.py` the tasks of a category with the action bar over the selected row, and
+  `window.py` the main window
 - `mktsk/__main__.py` — module entry point and PyInstaller target; keep the absolute
   import, relative imports fail once frozen
 - `mktsk/helpers.py` — name validation, reserved Windows names, opening files, the
@@ -279,6 +283,9 @@ Free text, with levels 2 to 6 available.
   `tests/test_gui_actions.py`, `tests/test_gui_create.py` and `tests/test_gui_window.py`
   with pytest-qt
 - No Qt imports in the CLI or the business logic
+- One module per responsibility, and a widget never takes over from its neighbour: the
+  window imports the widgets it is built from, and a widget only reports what it was
+  asked for, so new code goes in the module that matches what it does
 - Two panes in a `QSplitter`: a `QTreeWidget` on the left holding the current directory
   and its immediate subdirectories, so it shows where new tasks are created; a
   `QTabWidget` on the right holding one `QListWidget` per task category
@@ -328,7 +335,7 @@ Free text, with levels 2 to 6 available.
   it
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
   `Open`, a plus for `Resume` and a pencil for `Rename`, all drawn with `QPainter` in
-  `gui.py`, so no image file has to be collected for a frozen build
+  `gui/icons.py`, so no image file has to be collected for a frozen build
 - The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
   checks the item holds a `TaskEntry` before showing or placing the bar
 - Only the selected row is inset to make room for the bar, so the space appears when the
