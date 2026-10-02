@@ -21,7 +21,7 @@ workflow interactively.
 - `mktsk/files.py` — everything that writes: creating the folder, creating the
   `.md`, appending a dated section, creating a category
 - `mktsk/listing.py` — everything that reads a directory: finding, listing,
-  grouping
+  grouping, and the activity of each task
 - `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume,
   rename
 - `mktsk/parsing.py` — reads the text of a `.md` in the new format: interventions,
@@ -147,6 +147,18 @@ change the name.
 - Open files and folders with the OS default application: `os.startfile` on Windows,
   `xdg-open` on Linux when it is there, `gio open` otherwise
 - Folder and file names are ASCII only
+- `TaskEntry` carries two dates: `date` is the one in the name of the folder, the day the task
+  was created, and `last_activity` is the one the `.md` knows. The listing reads every `.md`
+  with `parse_task`, and `interventions` is how many interventions it found. `last_activity`
+  falls back to the folder date when the file is in the old format, when it carries no
+  intervention, or when it cannot be read, and `interventions` is then 0: a task is still a
+  task when nothing can be read out of it. An old file is never read as the new one, so a
+  dated heading a conversion left in the body is content rather than a visit. A `.md` that
+  cannot be read never brings the listing down, the same rule as a directory that cannot be
+  read
+- Tasks of a category are listed by `last_activity`, newest first, and alphabetical for tasks
+  of the same last activity. Coming back to a task moves it to the top, whichever day it was
+  created
 - Reading a title back for display (`readable_title`): every uppercase letter starts a
   word and a digit starts one too, so `FSocietyEverbind` reads as `F Society Everbind`
   and `Task2` as `Task 2`; consecutive digits stay together, so `2026` survives
@@ -245,10 +257,13 @@ Free text, with levels 2 to 6 available.
   title, which is why a title of several words needs no quoting. It prints the message and
   does not open the `.md`, because renaming is not working on the task
 - `--list` takes no title and opens nothing; it prints each directory as a heading and
-  its tasks under it, formatted the way the GUI shows them, which is `DATE_FORMAT`, two
-  spaces and `readable_title`. The order is the one `find_task_groups` already gives, so
-  a directory with no tasks prints nothing. Never format a date or a title in the CLI by
-  hand, or the two listings drift apart
+  its tasks under it. A row is `_task_label`: `DATE_FORMAT`, two spaces,
+  `readable_title`, then two spaces and `(3 interventions, last activity 18/09/2026)`,
+  with `intervention` in the singular for one. The first three are the row the GUI shows;
+  the count and the activity are CLI only, until the GUI shows them too. The order is the
+  one `find_task_groups` already gives, which is by last activity, so a directory with no
+  tasks prints nothing. Never format a date or a title in the CLI by hand, or the two
+  listings drift apart
 - `--new-category <name>` creates a category in the current directory and prints the path;
   it opens nothing, because making somewhere to put tasks is not working on one. The name
   is one argument, so a name with spaces in it has to be quoted, unlike a task title or a
@@ -302,7 +317,9 @@ Free text, with levels 2 to 6 available.
   selectable; a category tab lists just its own tasks, with no heading
 - The active tab survives a refresh or a new task; when its category is gone, `All`
   takes over again
-- Within a category, newest first, alphabetical for tasks of the same date
+- Within a category, by last activity, newest first, alphabetical for tasks of the same
+  last activity. The row still shows the date of the folder, so the date on a row and the
+  order of the rows can disagree, until the GUI shows the activity too
 - A task folder with no `.md` is not listed; a task two levels down is not found
 - A task label is `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as
   tooltip

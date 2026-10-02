@@ -1,8 +1,7 @@
 """Converts task .md files from the old format to the new one.
 
-The rules of both formats are in PLAN.md. mktsk keeps writing the old format
-until a later step, and this module is the only thing that reads the new one:
-nothing here changes what the task modules do.
+The rules of both formats are in PLAN.md. `parsing` is what tells the two apart, and
+this module only converts files; nothing here changes what the task modules do.
 
 Run it over a folder of tasks with `python -m mktsk.migration <folder>`, which
 only shows what it would do. Adding `--apply` writes the files, so read the
