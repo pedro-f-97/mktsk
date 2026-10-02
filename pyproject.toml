@@ -55,5 +55,5 @@ preview = true
 # extend-select alone keeps the 45 default families. Adding a select as well would
 # cut them back to E, F and W
 # DTZ is listed because preview drops seven of its stable rules, DTZ007 among
-# them, which is the one the two noqa comments in workers.py are there for
+# them, which is the one the two noqa comments in standards.py are there for
 extend-select = ["W", "E301", "E302", "E303", "E305", "DTZ"]

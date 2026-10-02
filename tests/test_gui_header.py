@@ -153,7 +153,7 @@ def test_the_header_button_reports_a_failure_to_create(window, tmp_path, fake_me
     def raise_error(location, name):
         raise OSError("boom")
 
-    monkeypatch.setattr("mktsk.workers.create_category", raise_error)
+    monkeypatch.setattr("mktsk.files.create_category", raise_error)
     window.navigate_to(tmp_path)
     answer_dialog(monkeypatch, ("Veritas", True))
 

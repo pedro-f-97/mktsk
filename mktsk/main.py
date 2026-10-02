@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from . import helpers, workers
+from . import files, helpers, listing, standards, tasks
 
 _RENAME_MINIMUM_ARGUMENTS = 2
 
@@ -80,7 +80,7 @@ def main() -> int:
         if args.rename:
             return _rename(Path.cwd(), args.title[0], " ".join(args.title[1:]))
 
-        result = workers.open_or_create_task(Path.cwd(), " ".join(args.title))
+        result = tasks.open_or_create_task(Path.cwd(), " ".join(args.title))
         print(result.message)
     except (OSError, helpers.TaskError) as error:
         print(f"Error: {error}")
@@ -107,12 +107,12 @@ def _list(location: Path) -> int:
     Returns:
         0.
     """
-    for group in workers.find_task_groups(location):
+    for group in listing.find_task_groups(location):
         name = location.name or str(location)
         print(f"{name if group.category is None else group.category.name}/")
 
         for entry in group.entries:
-            date = entry.date.strftime(workers.DATE_FORMAT)
+            date = entry.date.strftime(helpers.DATE_FORMAT)
             print(f"  {date}  {helpers.readable_title(entry.title)}")
 
     return 0
@@ -133,7 +133,7 @@ def _new_category(location: Path, raw_name: str) -> int:
         0 on success, 1 when the name cannot be used.
     """
     try:
-        category = workers.create_category(location, raw_name)
+        category = files.create_category(location, raw_name)
     except (OSError, helpers.TaskError) as error:
         print(f"Error: {error}")
         return 1
@@ -157,7 +157,7 @@ def _rename(location: Path, folder_name: str, raw_title: str) -> int:
     Returns:
         0 on success, 1 when the folder cannot be renamed.
     """
-    title = workers.task_folder_title(folder_name)
+    title = standards.task_folder_title(folder_name)
 
     if title is None:
         print(f"Error: '{folder_name}' is not a task folder")
@@ -170,7 +170,7 @@ def _rename(location: Path, folder_name: str, raw_title: str) -> int:
         return 1
 
     try:
-        result = workers.rename_task(folder, title, raw_title)
+        result = tasks.rename_task(folder, title, raw_title)
     except (OSError, helpers.TaskError) as error:
         print(f"Error: {error}")
         return 1
