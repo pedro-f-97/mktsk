@@ -1,7 +1,7 @@
 from freezegun import freeze_time
 from PySide6.QtCore import Qt
 
-from mktsk import gui
+from mktsk.gui.tree import _HEADER_BUTTON_MARGIN
 from tests.gui_helpers import answer_dialog, tree_child_labels
 
 
@@ -14,7 +14,7 @@ def test_the_header_button_sits_at_the_right_end_of_the_header(window):
     button = window.directory_tree.header_button
 
     assert button.x() + button.width() <= header.width()
-    assert button.x() >= header.width() - button.width() - 2 * gui._HEADER_BUTTON_MARGIN
+    assert button.x() >= header.width() - button.width() - 2 * _HEADER_BUTTON_MARGIN
 
 
 def test_the_header_button_is_centred_in_the_header(window):
