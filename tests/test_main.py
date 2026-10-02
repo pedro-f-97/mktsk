@@ -25,7 +25,7 @@ def test_main(monkeypatch, tmp_path):
 
     assert result == 0
     assert final_file.is_file()
-    assert final_file.read_text(encoding="utf-8") == "# TestMain\n\n## 22/09/2026\n\n"
+    assert final_file.read_text(encoding="utf-8") == "# 22/09/2026\n\n"
     assert opened_files == [final_file]
 
 
@@ -69,8 +69,8 @@ def test_main_resumes_existing_task(monkeypatch, tmp_path):
     existing_folder = folder / "260922 - TestMain"
     existing_folder.mkdir()
     existing_file = existing_folder / "TestMain.md"
-    # a heading from another task, so signing completes it at the start
-    existing_file.write_text("# existing notes\n", encoding="utf-8")
+    # a file with nothing in it is dated, so the visit has a section of its own
+    existing_file.write_text("", encoding="utf-8")
 
     opened_files = []
 
@@ -83,9 +83,7 @@ def test_main_resumes_existing_task(monkeypatch, tmp_path):
         result = main()
 
     assert result == 0
-    assert existing_file.read_text(encoding="utf-8") == (
-        "# TestMain\n\n# existing notes\n\n## 22/09/2026\n\n"
-    )
+    assert existing_file.read_text(encoding="utf-8") == "# 22/09/2026\n\n"
     assert opened_files == [existing_file]
 
 
@@ -93,7 +91,7 @@ def test_main_finds_existing_task_by_title(monkeypatch, tmp_path, capsys):
     folder = tmp_path / "260918 - TestMain"
     folder.mkdir()
     file = folder / "TestMain.md"
-    file.write_text("# TestMain\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main"])
 
@@ -106,7 +104,7 @@ def test_main_finds_existing_task_by_title(monkeypatch, tmp_path, capsys):
     assert result == 0
     assert opened_files == [file]
     assert file.read_text(encoding="utf-8") == (
-        "# TestMain\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
     )
     assert "Opened: 260918 - TestMain" in capsys.readouterr().out
     assert not (tmp_path / "260930 - TestMain").exists()
@@ -118,7 +116,7 @@ def test_main_creates_when_task_is_in_a_subdirectory(monkeypatch, tmp_path):
     folder = subdirectory / "260918 - TestMain"
     folder.mkdir()
     existing = folder / "TestMain.md"
-    existing.write_text("# TestMain\n\n## 18/09/2026\n\n", encoding="utf-8")
+    existing.write_text("# 18/09/2026\n\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("sys.argv", ["mktsk", "Test", "Main"])
 
@@ -132,7 +130,7 @@ def test_main_creates_when_task_is_in_a_subdirectory(monkeypatch, tmp_path):
 
     assert result == 0
     assert opened_files == [created]
-    assert existing.read_text(encoding="utf-8") == "# TestMain\n\n## 18/09/2026\n\n"
+    assert existing.read_text(encoding="utf-8") == "# 18/09/2026\n\n"
 
 
 def test_main_open_failure_warns(monkeypatch, tmp_path, capsys):
@@ -480,7 +478,7 @@ def test_main_rename(monkeypatch, tmp_path, capsys):
     folder = tmp_path / "260918 - OldTitle"
     folder.mkdir()
     file = folder / "OldTitle.md"
-    file.write_text("# OldTitle\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
     monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "New Title"])
 
     opened = []
@@ -494,9 +492,8 @@ def test_main_rename(monkeypatch, tmp_path, capsys):
     assert result == 0
     assert renamed_file.is_file()
     assert not folder.exists()
-    assert renamed_file.read_text(encoding="utf-8") == (
-        "# NewTitle\n\n## 18/09/2026\n\nnotes\n"
-    )
+    # renaming moves the names and never touches the content
+    assert renamed_file.read_text(encoding="utf-8") == "# 18/09/2026\n\nnotes\n"
     assert capsys.readouterr().out == f"Renamed: {renamed_folder.name}\n"
     # renaming is not working on the task, so nothing is opened
     assert opened == []
@@ -506,7 +503,7 @@ def test_main_rename_joins_a_new_title_given_in_words(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     folder = tmp_path / "260918 - OldTitle"
     folder.mkdir()
-    (folder / "OldTitle.md").write_text("# OldTitle\n", encoding="utf-8")
+    (folder / "OldTitle.md").write_text("# 18/09/2026\n\n", encoding="utf-8")
     monkeypatch.setattr(
         "sys.argv", ["mktsk", "--rename", folder.name, "Back", "to", "the", "Future"]
     )
@@ -522,7 +519,7 @@ def test_main_rename_to_the_title_it_already_has(monkeypatch, tmp_path, capsys):
     folder = tmp_path / "260918 - OldTitle"
     folder.mkdir()
     file = folder / "OldTitle.md"
-    file.write_text("# OldTitle\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\n", encoding="utf-8")
     monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Old Title"])
 
     result = main()
@@ -570,10 +567,10 @@ def test_main_rename_refuses_a_collision(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
-    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    (folder / "Foo.md").write_text("# 18/09/2026\n\n", encoding="utf-8")
     taken = tmp_path / "260901 - Bar"
     taken.mkdir()
-    (taken / "Bar.md").write_text("# Bar\n", encoding="utf-8")
+    (taken / "Bar.md").write_text("# 18/09/2026\n\n", encoding="utf-8")
     monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Bar"])
 
     result = main()
@@ -587,7 +584,7 @@ def test_main_rename_refuses_a_blank_new_title(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
-    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    (folder / "Foo.md").write_text("# 18/09/2026\n\n", encoding="utf-8")
     monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "!!!"])
 
     result = main()
@@ -600,7 +597,7 @@ def test_main_rename_refuses_a_reserved_new_title(monkeypatch, tmp_path, capsys)
     monkeypatch.chdir(tmp_path)
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
-    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    (folder / "Foo.md").write_text("# 18/09/2026\n\n", encoding="utf-8")
     monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "con"])
 
     result = main()
@@ -624,7 +621,7 @@ def test_main_rename_reports_a_failure_to_rename(monkeypatch, tmp_path, capsys):
     monkeypatch.chdir(tmp_path)
     folder = tmp_path / "260918 - Foo"
     folder.mkdir()
-    (folder / "Foo.md").write_text("# Foo\n", encoding="utf-8")
+    (folder / "Foo.md").write_text("# 18/09/2026\n\n", encoding="utf-8")
     monkeypatch.setattr("sys.argv", ["mktsk", "--rename", folder.name, "Bar"])
 
     def raise_error(*args):

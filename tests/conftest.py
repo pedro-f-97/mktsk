@@ -1,3 +1,4 @@
+import datetime
 import os
 
 import pytest
@@ -11,13 +12,18 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 @pytest.fixture
 def make_task():
-    """Creates a task folder with its .md file, as mktsk would."""
+    """Creates a task folder with its .md file, as mktsk would.
+
+    The .md is born with the section that dates the visit, and carries no
+    title, so `date` is the `yymmdd` of the folder name.
+    """
 
     def create(directory, date, title):
         folder = directory / f"{date} - {title}"
         folder.mkdir(parents=True)
         file = folder / f"{title}.md"
-        file.write_text(f"# {title}\n", encoding="utf-8")
+        visit = datetime.date(2000 + int(date[:2]), int(date[2:4]), int(date[4:]))
+        file.write_text(f"# {visit.strftime('%d/%m/%Y')}\n\n", encoding="utf-8")
         return file
 
     return create

@@ -1,9 +1,9 @@
-"""Reads the text of a task .md, in the format mktsk is moving to.
+"""Reads the text of a task .md, in the format mktsk writes.
 
 The rules of that format live in PLAN.md. Nothing here touches the disk: the
 module takes the text of a file and gives data back, so every step that reads a
-task can go through it. Nothing reads a .md yet; the task modules still work on
-the old format.
+task can go through it. `files.append_date_section` is what writes the format
+and reads it back to know whether a date is already there.
 """
 
 import datetime

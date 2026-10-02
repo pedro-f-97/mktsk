@@ -174,13 +174,13 @@ def test_revealing_the_folder_leaves_the_task_untouched(
     window, tmp_path, fake_open, make_task
 ):
     file = make_task(tmp_path / "Veritas", "260918", "FSociety")
-    file.write_text("# FSociety\n\n## 18/09/2026\n\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\n", encoding="utf-8")
     window.navigate_to(tmp_path)
 
     action_bar(window, file).open_button.click()
 
     assert fake_open == [file.parent]
-    assert file.read_text(encoding="utf-8") == "# FSociety\n\n## 18/09/2026\n\n"
+    assert file.read_text(encoding="utf-8") == "# 18/09/2026\n\n"
 
 
 def test_double_click_on_a_task_does_nothing(qtbot, window, tmp_path, fake_open, make_task):
@@ -195,13 +195,13 @@ def test_double_click_on_a_task_does_nothing(qtbot, window, tmp_path, fake_open,
 @freeze_time("2026-09-30")
 def test_resume_button_adds_today_and_opens(window, tmp_path, fake_open, make_task):
     file = make_task(tmp_path / "Veritas", "260918", "FSociety")
-    file.write_text("# FSociety\n\n## 18/09/2026\n\nnotes\n", encoding="utf-8")
+    file.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
     window.navigate_to(tmp_path)
 
     action_bar(window, file).resume_button.click()
 
     assert file.read_text(encoding="utf-8") == (
-        "# FSociety\n\n## 18/09/2026\n\nnotes\n\n## 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
     )
     assert fake_open == [file]
 
@@ -217,7 +217,7 @@ def test_resume_button_resumes_a_task_outside_the_current_directory(
     listing.setCurrentItem(find_task(window, file, "Veritas"))
     listing.action_bar.resume_button.click()
 
-    assert "## 30/09/2026" in file.read_text(encoding="utf-8")
+    assert "# 30/09/2026" in file.read_text(encoding="utf-8")
     assert fake_open == [file]
 
 
@@ -248,7 +248,8 @@ def test_rename_button_keeps_the_date_and_updates_the_list(
     action_bar(window, file).rename_button.click()
 
     renamed = tmp_path / "260918 - FSocietyEverbind" / "FSocietyEverbind.md"
-    assert renamed.read_text(encoding="utf-8") == "# FSocietyEverbind\n"
+    # the names move and the content is left as it was
+    assert renamed.read_text(encoding="utf-8") == "# 18/09/2026\n\n"
     assert tab_labels(window) == [tmp_path.name, "18/09/2026  F Society Everbind"]
 
 
