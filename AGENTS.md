@@ -32,6 +32,8 @@ workflow interactively.
   state events, last activity. Pure functions, no I/O
 - `mktsk/migration.py` — converts the text of a `.md` from the old format to the
   new one, and the command line that applies it to a tree of tasks
+- `mktsk/state.py` — state handling: current state, updating state, writing
+  atomically. Pure layer and thin I/O
 - `tests/` — pytest suite
 
 ## Commands
@@ -92,11 +94,12 @@ change the name.
   folder it is renaming never clashes with itself over the case alone. A folder copied by
   hand, or restored from a backup, can, and `find_task_folder` then takes the most recent
   rather than whichever came first out of `iterdir()`
-- Resuming appends `# <today>` at the end of the `.md`, after a blank line, unless
-  `parse_task` already shows an intervention for that date; a file with nothing in it is
-  dated instead of appended to. The section never rewrites the body, only trailing whitespace
-  is dropped, and the date is recognised the way the parser reads it, so a heading written by
-  hand in another of the accepted forms, with stray spacing or inside a code block, counts
+- Resuming appends `# <today>` to the `.md` after a blank line, in front of the final
+  block of state events when the file has one, unless `parse_task` already shows an
+  intervention for that date; a file with nothing in it is dated instead of appended to.
+  The section never rewrites the body, only trailing whitespace is dropped, and the date
+  is recognised the way the parser reads it, so a heading written by hand in another of
+  the accepted forms, with stray spacing or inside a code block, counts
 - A `.md` in the old format is refused rather than read: `append_date_section` raises
   `TaskError` naming the file and `python -m mktsk.migration`, and nothing is written, so the
   migration can still convert it. `is_legacy` is what recognises one
@@ -211,6 +214,12 @@ Free text, with levels 2 to 6 available.
   or Markdown renders them as text. The last event in file order is the current state; an
   event that cannot be read is left out and never an error, because a hand edited file is
   still a task file
+- With no events, `current_state` derives the state from the sections: `open` while the
+  file holds one dated section or none, `in-progress` from the second one on
+- `append_date_section` writes the new section in front of that final block, never after
+  it, so the block stays the end of the file, and follows the heading with two blank lines
+  when a block is there, so a note typed on the first blank line is never glued to the
+  events; without a block the heading is followed by the usual one
 - `last_activity` is the most recent date of the interventions, not the last one in the
   file, and `None` when there are none
 - Code blocks (``` and `~~~`, closed with the same character) are ignored everywhere, so a
@@ -227,37 +236,6 @@ Free text, with levels 2 to 6 available.
   the new one, so the title is not mistaken for an intervention
 - `parse_task` takes text, not a `Path`, so it never opens anything, and it accepts either
   line break. `line` is the line of the file, counting from 1, code blocks included
-
-## The migration
-
-- `python -m mktsk.migration <folder>` walks a folder and its immediate subdirectories, like
-  `find_task_groups`, so only the tasks `is_task_folder` recognises are converted, each through
-  the `.md` named after the title of its folder. Without `--apply` it prints the status of
-  every file and its unified diff, and writes nothing; with `--apply` it writes each file and
-  first says to keep a backup
-- The order is the one to hand to the person running it: zip the folder, simulate, read the
-  diff, then apply
-- The status of a file is `migrated`, `already new` or `review`, and `review` wins over the
-  other two: a file with something to look at in it is the one a person has to read
-- A file that cannot be read or written is reported and the run goes on to the next one, and
-  the exit code is 1 when any of them failed
-- Files are read and written with `newline=""`, so a file keeps the line break it was written
-  with
-- A write goes to a `.<name>.md.part` beside the file and is renamed over it with
-  `os.replace`, so a failure halfway leaves the original as it was and the temporary file is
-  removed
-- `migrate_content(content, title)` is pure and idempotent: a file already in the new format
-  comes back the way it went in, with nothing to review
-- It drops the leading `# <title>` when the heading names the title of the folder, comparing
-  the case apart, because a folder renamed by hand keeps its capitals. A heading naming
-  another task is content rather than the identity of this one, so it stays and is reported
-- It turns each `## <date>` into `# <date>` and moves the headings of level 3 to 6 under it up
-  one level, and the first `# <date>` it finds closes that section, so the notes of an
-  intervention that was already written are left alone
-- A `##` carrying no date under a section it did not date stays where it is and goes into
-  `review`, which is what the status of the file then says
-- Code blocks are the ones `parsing._readable_lines` leaves out, so an example is never
-  converted, and the result always ends with a single line break
 
 ## CLI
 
@@ -282,6 +260,11 @@ Free text, with levels 2 to 6 available.
   it opens nothing, because making somewhere to put tasks is not working on one. The name
   is one argument, so a name with spaces in it has to be quoted, unlike a task title or a
   new title for `--rename`. It refuses to go with `--rename` or `--list`
+- `--state <title> <state>` sets the state of the task with that title in the current
+  directory. It accepts `open`, `in-progress` and `waiting`; `closed` is not accepted from
+  the CLI here. The title is looked up the same way as for `mktsk <title>` (normalized and
+  found by `find_task_folder`). It prints one line with the new state and opens nothing. An
+  unknown title gives `TaskError` and does not create the task
 - Each option checks only what it needs, and only the plain form falls back to the title;
   when a second option arrives alongside, the refusal is about the two options, not about
   the title

@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from . import files, helpers, listing, standards, tasks
+from . import files, helpers, listing, standards, state, tasks
 
 _RENAME_MINIMUM_ARGUMENTS = 2
 
@@ -34,6 +34,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help="create a category folder here, for tasks to be kept apart in",
     )
+    parser.add_argument(
+        "--state",
+        nargs=2,
+        metavar=("TITLE", "STATE"),
+        help="set the state of a task (open, in-progress, waiting)",
+    )
     return parser
 
 
@@ -47,20 +53,23 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("--rename and --list do not go together")
 
     if args.new_category is not None:
-        if args.rename or args.list:
+        if args.rename or args.list or args.state:
             parser.error("--new-category does not go with --rename or --list")
 
         if args.title:
             parser.error("--new-category takes one name, so quote it")
     elif args.list:
         # the list is of what is here, so a title alongside it is a mistake
-        if args.title:
+        if args.title or args.state:
             parser.error("--list takes no title")
     elif args.rename:
         # the new title is every argument after the folder, so a title made of
         # several words needs no quoting, the same way a task title does not
-        if len(args.title) < _RENAME_MINIMUM_ARGUMENTS:
+        if len(args.title) < _RENAME_MINIMUM_ARGUMENTS or args.state:
             parser.error("--rename takes a task folder and a new title")
+    elif args.state is not None:
+        if args.title:
+            parser.error("--state takes TITLE and STATE")
     elif not args.title:
         parser.error("a task title is required")
 
@@ -75,6 +84,9 @@ def main() -> int:
 
     if args.list:
         return _list(Path.cwd())
+
+    if args.state is not None:
+        return _set_state(Path.cwd(), args.state[0], args.state[1])
 
     try:
         if args.rename:
@@ -199,6 +211,49 @@ def _rename(location: Path, folder_name: str, raw_title: str) -> int:
         return 1
 
     print(result.message)
+
+    return 0
+
+
+_STATE_CHOICES = ("open", "in-progress", "waiting")
+
+
+def _set_state(location: Path, raw_title: str, new_state: str) -> int:
+    """Sets the state of a task given its title, and reports it.
+
+    The title is resolved the way `mktsk Foo` resolves it, by normalizing it
+    and looking it up in the current directory, on any date. A title that is
+    not there does not create a task. `closed` is not accepted here: closing
+    is a different operation, for a later step.
+
+    Args:
+        location: the directory the task belongs to.
+        raw_title: the task title, as typed by the user.
+        new_state: the state to set.
+
+    Returns:
+        0 on success, 1 when the task or the state cannot be used.
+    """
+    if new_state not in _STATE_CHOICES:
+        print(f"Error: '{new_state}' is not a state open, in-progress or waiting")
+        return 1
+
+    title = standards.standardize_string(raw_title)
+    folder = listing.find_task_folder(location, title)
+
+    if folder is None:
+        print(f"Error: '{raw_title}' is not a task here")
+        return 1
+
+    file = folder / f"{standards.task_folder_title(folder.name) or title}.md"
+
+    try:
+        state.set_state(file, new_state)
+    except (OSError, helpers.TaskError) as error:
+        print(f"Error: {error}")
+        return 1
+
+    print(f"{folder.name}: {new_state}")
 
     return 0
 

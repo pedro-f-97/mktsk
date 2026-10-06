@@ -82,12 +82,16 @@ Rules:
 3. Levels 2 to 6 are free for notes
 4. State: lines `[mktsk:YYYY-MM-DDTHH:MM]: # "state"`, local time, anywhere in the file.
    mktsk always writes them in a block at the end, after a blank line. Without that blank
-   line, Markdown renders them as text
+   line, Markdown renders them as text. A section written in front of a block is followed
+   by two blank lines, so a note typed right under its heading never touches the block
 5. Current state: the last event in file order. An unknown value is ignored. With no events,
    the state is derived: `open` with at most one intervention, `in-progress` with more
 6. Code blocks (` ``` ` and `~~~`) are ignored everywhere
 7. Old format: the first non-empty line is `# <text without a date>` and the file has at
    least one `## <date>`. It is never read as the new format
+8. A leading UTF-8 byte order mark is tolerated when reading (`without_bom` in `parsing`) and
+   kept as found when writing: never add one, never drop one. A U+FEFF anywhere else is
+   ordinary text
 
 ## Common rules
 
@@ -106,6 +110,16 @@ They apply to every prompt.
 - Before finishing, everything green: `ruff check .`, `pyright mktsk/` and `pytest`, with
   coverage at 100%
 - Tests use `tmp_path` only. Never read from or write to the real task folders
+- Tests call `main()` in-process, as `tests/test_main.py` does. Never start `python -m ...`
+  subprocesses: `python -m mktsk` opens the GUI and blocks, and code run in a subprocess is
+  not counted by coverage
+- The 100% coverage is the target. The CI threshold of 95% is only a floor, never a reason to
+  stop at a lower number
+- Run `pytest -x`, never piped through `tail` or `head`. A command that times out is never
+  repeated unchanged: find out which test blocks first with `-x -v`, then fix or report it
+- Never change an existing test so that new code passes, and never edit a file outside the
+  step's scope. If a test or a rule conflicts with the step, stop and report the conflict
+  instead of deciding. Edit files with the edit tool, not with ad hoc scripts
 - Update `AGENTS.md` (Structure, Domain rules, CLI, GUI) and `README.md` when visible
   behaviour changes. A rule in `AGENTS.md` that the step replaces is rewritten in the same
   commit, never left contradicting the code
@@ -115,6 +129,8 @@ They apply to every prompt.
   there is a risk of losing user data
 - Final report, at most 15 lines: what changed per file, number of tests and coverage,
   decisions taken, open doubts
+  A `Deviations` line is mandatory: every file touched outside the step's scope and every
+  existing test that was changed, each with the reason, or `none`
 
 ---
 
@@ -461,6 +477,8 @@ Details:
   blank line. Events located elsewhere in the file are not touched. Adds nothing if the last
   event already carries that state
 - Time: local, format `YYYY-MM-DDTHH:MM`, no time zone
+- A leading byte order mark: parse through `without_bom`, but write back the text as it was
+  read, so the mark is kept (rule 8 of the format)
 - `append_date_section` now inserts the new date before the final event block, so the block
   always stays at the end. With no block it behaves as today
 - CLI: `--state TITLE STATE`, in the style of `--list`, `--rename` and `--new-category`. The
@@ -511,6 +529,8 @@ Transition rules:
 
 Details:
 - The current state is the one from `current_state`, computed before the section is added
+- A new task is written as `# dd/mm/yyyy`, two blank lines and the `open` event block, so a
+  note typed under the heading is never glued to the block (see rule 4 of the format)
 - The message returned by `open_or_create_task` and `resume_task` mentions the state change,
   when there is one (for example `(state: in-progress)`)
 - If writing the state fails, the task still opens and the message says the state was not

@@ -212,3 +212,129 @@ def test_append_date_section_refuses_a_file_in_the_old_format(tmp_path):
 
     # nothing was written, so the migration can still convert the file
     assert file.read_text(encoding="utf-8") == content
+
+
+def test_append_date_section_inserts_in_front_of_the_final_state_block(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text(
+        '# 18/09/2026\n\nnotes\n\n[mktsk:2026-10-02T09:40]: # "open"\n',
+        encoding="utf-8",
+    )
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # the block of state events is the end of the file, so the new section is
+    # written in front of it and the event keeps its place
+    assert file.read_text(encoding="utf-8") == (
+        '# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n'
+        '[mktsk:2026-10-02T09:40]: # "open"\n'
+    )
+
+
+def test_append_date_section_without_a_state_block(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text("# 18/09/2026\n\n", encoding="utf-8")
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # no block to sit in front of, so the section is appended as ever
+    assert file.read_text(encoding="utf-8") == "# 18/09/2026\n\n# 30/09/2026\n\n"
+
+
+def test_append_date_section_keeps_a_bom_in_front_of_everything(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text("\ufeff# 18/09/2026\n\nnotes\n", encoding="utf-8")
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # the mark opens the file, never the section
+    assert file.read_text(encoding="utf-8") == (
+        "\ufeff# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
+    )
+
+
+def test_append_date_section_leaves_an_event_that_is_not_at_the_end(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text(
+        '# 18/09/2026\n\n[mktsk:2026-10-02T09:40]: # "open"\n\nnotes\n',
+        encoding="utf-8",
+    )
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # only the block at the end of the file is one, so this event is content
+    # and the section goes after it
+    assert file.read_text(encoding="utf-8") == (
+        '# 18/09/2026\n\n[mktsk:2026-10-02T09:40]: # "open"\n\nnotes\n\n'
+        "# 30/09/2026\n\n"
+    )
+
+
+def test_append_date_section_keeps_the_blank_line_before_a_block_of_two(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text(
+        "# 18/09/2026\n\nnotes\n\n"
+        '[mktsk:2026-09-18T10:02]: # "open"\n'
+        '[mktsk:2026-10-02T09:40]: # "in-progress"\n',
+        encoding="utf-8",
+    )
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # the whole final block is recognised, and the blank line that separates it
+    # from the body is what the body still ends with
+    assert file.read_text(encoding="utf-8") == (
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-18T10:02]: # "open"\n'
+        '[mktsk:2026-10-02T09:40]: # "in-progress"\n'
+    )
+
+
+def test_append_date_section_leaves_two_blank_lines_before_the_block(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text(
+        "# 18/09/2026\n\nfirst paragraph\n\nsecond paragraph\n\n"
+        '[mktsk:2026-10-02T09:40]: # "open"\n',
+        encoding="utf-8",
+    )
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # two blank lines follow the heading, so a note typed on the first one is
+    # never glued to the events
+    assert file.read_text(encoding="utf-8") == (
+        "# 18/09/2026\n\nfirst paragraph\n\nsecond paragraph\n\n"
+        '# 30/09/2026\n\n\n'
+        '[mktsk:2026-10-02T09:40]: # "open"\n'
+    )
+
+
+def test_append_date_section_without_a_block_keeps_one_blank_line(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text("# 18/09/2026\n\nnotes\n", encoding="utf-8")
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # the extra room is only for a block, so without one the section ends with
+    # its single blank line
+    content = file.read_text(encoding="utf-8")
+    assert content == "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
+    assert "\n\n\n" not in content
+
+
+def test_append_date_section_keeps_a_bom_in_front_of_the_block(tmp_path):
+    file = tmp_path / "Foo.md"
+    file.write_text(
+        "\ufeff# 18/09/2026\n\nnotes\n\n"
+        '[mktsk:2026-10-02T09:40]: # "open"\n',
+        encoding="utf-8",
+    )
+
+    assert append_date_section(file, datetime.date(2026, 9, 30)) is True
+
+    # the mark opens the file, the section follows it and the block stays at
+    # the end, with the room the section needs in front of it
+    assert file.read_text(encoding="utf-8") == (
+        "\ufeff# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-10-02T09:40]: # "open"\n'
+    )

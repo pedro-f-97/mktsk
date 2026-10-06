@@ -1,10 +1,15 @@
 import datetime
 from pathlib import Path
 
-from . import helpers, parsing, standards
+from . import helpers, parsing, standards, state
 
 # the command that converts a tree of tasks to the format mktsk writes
 _MIGRATION_COMMAND = "python -m mktsk.migration"
+
+
+def _has_bom(content: str) -> bool:
+    """Tells whether the text of a .md starts with a byte order mark."""
+    return content.startswith(parsing.BOM)
 
 
 def create_folder(location: Path, name: str) -> Path:
@@ -68,6 +73,12 @@ def append_date_section(file: Path, date: datetime.date) -> bool:
     first section is the one a file is born with, and every visit after it is
     appended at the end.
 
+    The final block of state events is the end of the file, so a new section is
+    written in front of it and the block never moves from there. The heading of
+    a new section is followed by two blank lines when a block is there, so a
+    note typed on the first blank line is never glued to the events; without a
+    block it is followed by the usual one.
+
     Existing content is never rewritten, only trailing whitespace is dropped, and
     a date that already has a section is not added twice. Whether it has one is
     read with `parse_task`, so a date written in another of the accepted forms,
@@ -101,14 +112,24 @@ def append_date_section(file: Path, date: datetime.date) -> bool:
     ):
         return False
 
-    body = content.rstrip()
+    # a file keeps the mark it was written with, and the block of state events
+    # stays at the end, so the new section goes in front of it
+    bom = parsing.BOM if _has_bom(content) else ""
+    prefix, event_block = state._split_event_block(parsing.without_bom(content))
+    body = prefix.rstrip()
+
+    # two blank lines follow the heading when a block is there, so a note typed
+    # on the first blank line never runs into the events
+    spacing = "\n\n" if event_block else "\n"
 
     # a file with nothing in it is born with the section and a blank line, so
     # the body can be typed straight away
     if not body:
-        file.write_text(f"# {formatted}\n\n", encoding="utf-8")
+        file.write_text(f"{bom}# {formatted}\n{spacing}{event_block}", encoding="utf-8")
     else:
-        file.write_text(f"{body}\n\n# {formatted}\n\n", encoding="utf-8")
+        file.write_text(
+            f"{bom}{body}\n\n# {formatted}\n{spacing}{event_block}", encoding="utf-8"
+        )
 
     return True
 
