@@ -41,6 +41,19 @@ def test_main_state_refuses_closed(monkeypatch, tmp_path, capsys, make_task):
     assert "Error" in capsys.readouterr().out
 
 
+def test_main_state_refuses_a_task_without_a_file(monkeypatch, tmp_path, capsys):
+    # the folder is a task, the .md is not there, and the state cannot be read
+    # from a file that does not exist
+    (tmp_path / "260918 - Foo").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", ["mktsk", "--state", "Foo", "open"])
+
+    result = main()
+
+    assert result == 1
+    assert "Error" in capsys.readouterr().out
+
+
 def test_parse_arguments_for_state(monkeypatch):
     monkeypatch.setattr("sys.argv", ["mktsk", "--state", "Foo", "waiting"])
 
