@@ -86,7 +86,7 @@ def test_close_saves_last_path(window, tmp_path):
 def test_module_entry_point_uses_gui_main():
     from mktsk import __main__ as module
 
-    assert module.main.__code__.co_name == gui_main.__code__.co_name or module.main is gui_main
+    assert module.main is gui_main
 
 
 def test_rows_are_tall_enough_for_the_action_bar(window, tmp_path, make_task):
