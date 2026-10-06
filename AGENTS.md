@@ -90,11 +90,12 @@ change the name.
   folder it is renaming never clashes with itself over the case alone. A folder copied by
   hand, or restored from a backup, can, and `find_task_folder` then takes the most recent
   rather than whichever came first out of `iterdir()`
-- Resuming appends `# <today>` at the end of the `.md`, after a blank line, unless
-  `parse_task` already shows an intervention for that date; a file with nothing in it is
-  dated instead of appended to. The section never rewrites the body, only trailing whitespace
-  is dropped, and the date is recognised the way the parser reads it, so a heading written by
-  hand in another of the accepted forms, with stray spacing or inside a code block, counts
+- Resuming appends `# <today>` to the `.md` after a blank line, in front of the final
+  block of state events when the file has one, unless `parse_task` already shows an
+  intervention for that date; a file with nothing in it is dated instead of appended to.
+  The section never rewrites the body, only trailing whitespace is dropped, and the date
+  is recognised the way the parser reads it, so a heading written by hand in another of
+  the accepted forms, with stray spacing or inside a code block, counts
 - A `.md` in the old format is refused rather than read: `append_date_section` raises
   `TaskError` naming the file and `python -m mktsk.migration`, and nothing is written, so the
   migration can still convert it. `is_legacy` is what recognises one
@@ -209,6 +210,12 @@ Free text, with levels 2 to 6 available.
   or Markdown renders them as text. The last event in file order is the current state; an
   event that cannot be read is left out and never an error, because a hand edited file is
   still a task file
+- With no events, `current_state` derives the state from the sections: `open` while the
+  file holds one dated section or none, `in-progress` from the second one on
+- `append_date_section` writes the new section in front of that final block, never after
+  it, so the block stays the end of the file, and follows the heading with two blank lines
+  when a block is there, so a note typed on the first blank line is never glued to the
+  events; without a block the heading is followed by the usual one
 - `last_activity` is the most recent date of the interventions, not the last one in the
   file, and `None` when there are none
 - Code blocks (``` and `~~~`, closed with the same character) are ignored everywhere, so a

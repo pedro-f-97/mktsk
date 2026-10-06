@@ -83,7 +83,7 @@ Opened: 260923 - ItsAlive (added # 30/09/2026)
 ```
 
 No new folder is created. A first level heading with today's date is appended as a new
-section at the end of the existing Markdown file, so each day you work on a task keeps
+section to the existing Markdown file, so each day you work on a task keeps
 its own notes:
 
 ```markdown
@@ -170,6 +170,35 @@ A task folder without its Markdown file is left out, since there is nothing to o
 Markdown file that cannot be read keeps its task in the list, and so does one with no
 dated section, or one still in the old format: the date of the folder stands in as its
 last activity, since there is nothing in the file to read it from.
+
+## Setting the state of a task
+
+Pass `--state` with the title of the task and the state to give it:
+
+```bash
+mktsk --state "It's Alive!" waiting
+```
+
+```text
+260923 - ItsAlive: waiting
+```
+
+The accepted states are `open`, `in-progress` and `waiting`. `closed` is a state a file
+can carry, but this command does not set it. The title is found the same way as for
+`mktsk <title>`, on any date and in the directory you are in, and a title that is not a
+task there is an error that creates nothing. The file is not opened either, because
+changing the state is not working on the task.
+
+The state lives in the Markdown file as a line at the end of it, after a blank line, so
+Markdown keeps it out of your notes:
+
+```markdown
+[mktsk:2026-10-02T09:40]: # "waiting"
+```
+
+Every change appends one line, stamped with the local time of the moment, and the last
+line in the file is the state the task is in now. A section written by a resume lands in
+front of those lines rather than after them, so the events stay at the end of the file.
 
 ## Creating a category
 
