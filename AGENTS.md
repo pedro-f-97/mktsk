@@ -47,6 +47,10 @@ The `gui` extra is required so pyright resolves Qt imports. CI runs the same che
 enforces coverage ≥ 95%. GUI tests run headless (`tests/conftest.py` forces
 `QT_QPA_PLATFORM=offscreen`). Release tooling lives in the `release` extra.
 
+- Run `pytest -x`, never piped through `tail` or `head`. A command that times out is never
+  repeated unchanged: find which test blocks first with `-x -v`, then fix or report it.
+  After a timeout, look for leftover `python.exe` processes before the next run
+
 Inside the local venv, pyright needs the interpreter spelled out, because it does not
 adopt the `.venv` on its own and reports three unresolved `PySide6` imports:
 
