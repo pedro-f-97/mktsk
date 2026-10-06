@@ -100,7 +100,9 @@ def with_state(content: str, state: str, now: datetime.datetime) -> str:
 def set_state(file: Path, state: str) -> bool:
     """Reads the file, sets the state, writes atomically, returns whether wrote."""
     content = file.read_text(encoding="utf-8")
-    now = datetime.datetime.now().astimezone()
+    # the event line carries no zone, so the wall clock of the machine is
+    # enough and the time is kept naive, the way the format writes it
+    now = datetime.datetime.now()  # noqa: DTZ005
     new_content = with_state(content, state, now)
 
     if new_content == content:
