@@ -531,6 +531,12 @@ Details:
 - The current state is the one from `current_state`, computed before the section is added
 - A new task is written as `# dd/mm/yyyy`, two blank lines and the `open` event block, so a
   note typed under the heading is never glued to the block (see rule 4 of the format)
+- Spacing: writing a state on a file that already has an event block keeps the whitespace in
+  front of the block exactly as it is, so the two blank lines written by creation and by
+  `append_date_section` survive the state write that follows them. If `with_state`
+  collapses them (for example with `rstrip()` followed by a single blank line when a block
+  already exists), fix it there with the smallest change, and list it in Deviations. This
+  is the only change to step 7 code that this step allows
 - The message returned by `open_or_create_task` and `resume_task` mentions the state change,
   when there is one (for example `(state: in-progress)`)
 - If writing the state fails, the task still opens and the message says the state was not
@@ -540,7 +546,9 @@ Details:
 Tests: creating records `open`; a new day from `open` records `in-progress`; a new day from
 `waiting`; same day does not change it; already `in-progress` writes nothing; a task with no
 events (derived state) on a new day; a failed state write does not prevent opening; the
-messages.
+messages; the exact bytes of the file after creating a task, after a new day and after a
+`--state`, showing that the heading of an empty section is still followed by two blank
+lines and then the block.
 
 Documentation: `AGENTS.md` (state rules) and `README.md`.
 

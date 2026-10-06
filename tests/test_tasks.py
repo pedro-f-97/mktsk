@@ -18,7 +18,8 @@ def test_open_or_create_task_appends_to_foreign_content(tmp_path):
 
     assert (
         result.file.read_text(encoding="utf-8")
-        == "# AnotherTask\n\nsome content\n\n# 30/09/2026\n\n"
+        == "# AnotherTask\n\nsome content\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-30T00:00]: # "in-progress"\n'
     )
 
 
@@ -29,9 +30,13 @@ def test_open_or_create_task_creates(tmp_path):
     file = tmp_path / "260930 - ItsAlive" / "ItsAlive.md"
 
     assert result.file == file
-    assert result.message == "Created: 260930 - ItsAlive"
-    # the file is born with the section that dates this visit, and no title
-    assert file.read_text(encoding="utf-8") == "# 30/09/2026\n\n"
+    assert result.message == "Created: 260930 - ItsAlive (state: open)"
+    # the file is born with the section that dates this visit, and no title;
+    # two blank lines stand between the heading and the open event, so a note
+    # typed on the first one never runs into the block
+    assert file.read_text(encoding="utf-8") == (
+        '# 30/09/2026\n\n\n[mktsk:2026-09-30T00:00]: # "open"\n'
+    )
 
 
 @freeze_time("2026-09-30")
@@ -44,9 +49,12 @@ def test_open_or_create_task_finds_existing_by_title(tmp_path):
     result = open_or_create_task(tmp_path, "Foo")
 
     assert result.file == file
-    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
+    assert result.message == (
+        "Opened: 260918 - Foo (added # 30/09/2026) (state: in-progress)"
+    )
     assert file.read_text(encoding="utf-8") == (
-        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-30T00:00]: # "in-progress"\n'
     )
     assert list(tmp_path.iterdir()) == [folder]
 
@@ -62,7 +70,7 @@ def test_open_or_create_task_ignores_task_in_subdirectory(tmp_path):
     result = open_or_create_task(tmp_path, "Foo")
 
     assert result.file == tmp_path / "260930 - Foo" / "Foo.md"
-    assert result.message == "Created: 260930 - Foo"
+    assert result.message == "Created: 260930 - Foo (state: open)"
 
 
 @freeze_time("2026-09-30")
@@ -74,7 +82,7 @@ def test_open_or_create_task_creates_when_date_prefix_is_not_a_date(tmp_path):
     result = open_or_create_task(tmp_path, "Foo")
 
     assert result.file == tmp_path / "260930 - Foo" / "Foo.md"
-    assert result.message == "Created: 260930 - Foo"
+    assert result.message == "Created: 260930 - Foo (state: open)"
 
 
 @freeze_time("2026-09-30")
@@ -86,7 +94,9 @@ def test_open_or_create_task_resumes_a_task_with_a_valid_date(tmp_path):
     result = open_or_create_task(tmp_path, "Foo")
 
     assert result.file == folder / "Foo.md"
-    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
+    assert result.message == (
+        "Opened: 260918 - Foo (added # 30/09/2026) (state: in-progress)"
+    )
 
 
 @freeze_time("2026-09-30")
@@ -111,7 +121,9 @@ def test_open_or_create_task_same_day_only_once(tmp_path):
     first = open_or_create_task(tmp_path, "Foo")
     second = open_or_create_task(tmp_path, "Foo")
 
-    assert first.message == "Opened: 260918 - Foo (added # 30/09/2026)"
+    assert first.message == (
+        "Opened: 260918 - Foo (added # 30/09/2026) (state: in-progress)"
+    )
     assert second.message == "Opened: 260918 - Foo (# 30/09/2026 already there)"
     assert file.read_text(encoding="utf-8").count("# 30/09/2026") == 1
 
@@ -123,8 +135,12 @@ def test_open_or_create_task_dates_a_missing_md(tmp_path):
 
     result = open_or_create_task(tmp_path, "Foo")
 
-    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
-    assert result.file.read_text(encoding="utf-8") == "# 30/09/2026\n\n"
+    assert result.message == (
+        "Opened: 260918 - Foo (added # 30/09/2026) (state: in-progress)"
+    )
+    assert result.file.read_text(encoding="utf-8") == (
+        '# 30/09/2026\n\n\n[mktsk:2026-09-30T00:00]: # "in-progress"\n'
+    )
 
 
 @freeze_time("2026-09-30")
@@ -135,8 +151,12 @@ def test_open_or_create_task_dates_a_blank_md(tmp_path):
 
     result = open_or_create_task(tmp_path, "Foo")
 
-    assert result.message == "Opened: 260918 - Foo (added # 30/09/2026)"
-    assert result.file.read_text(encoding="utf-8") == "# 30/09/2026\n\n"
+    assert result.message == (
+        "Opened: 260918 - Foo (added # 30/09/2026) (state: in-progress)"
+    )
+    assert result.file.read_text(encoding="utf-8") == (
+        '# 30/09/2026\n\n\n[mktsk:2026-09-30T00:00]: # "in-progress"\n'
+    )
 
 
 @freeze_time("2026-09-30")
@@ -199,7 +219,8 @@ def test_resume_task_keeps_the_caps_the_folder_carries(tmp_path):
     assert [path.name for path in folder.iterdir()] == [original.name]
     assert result.file == original
     assert result.file.read_text(encoding="utf-8") == (
-        "# 18/09/2026\n\nnotas\n\n# 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotas\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-30T00:00]: # "in-progress"\n'
     )
 
 

@@ -13,8 +13,10 @@ def test_main_state_sets_state_for_existing_task(monkeypatch, tmp_path, capsys, 
     result = main()
 
     assert result == 0
+    # the heading is followed by two blank lines before the block, so a note
+    # typed on the first one never runs into the events
     assert file.read_text(encoding="utf-8") == (
-        "# 18/09/2026\n\n[mktsk:2026-10-02T09:40]: # \"in-progress\"\n"
+        "# 18/09/2026\n\n\n[mktsk:2026-10-02T09:40]: # \"in-progress\"\n"
     )
     assert capsys.readouterr().out == "260918 - Foo: in-progress\n"
 

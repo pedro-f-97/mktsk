@@ -137,6 +137,78 @@ def test_with_state_on_a_file_of_only_events():
     )
 
 
+def test_with_state_leaves_two_blank_lines_after_an_empty_section():
+    # a section with nothing under it is what a file is born with and what a
+    # resume leaves behind, and the note typed on the first blank line must
+    # never run into the events
+    content = "# 30/09/2026\n\n"
+    result = state.with_state(
+        content, "waiting", datetime.datetime.fromisoformat("2026-10-02T10:00")
+    )
+    assert result == (
+        '# 30/09/2026\n\n\n[mktsk:2026-10-02T10:00]: # "waiting"\n'
+    )
+
+
+def test_with_state_leaves_two_blank_lines_after_a_section_at_the_end():
+    content = "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n"
+    result = state.with_state(
+        content, "in-progress", datetime.datetime.fromisoformat("2026-09-30T10:00")
+    )
+    assert result == (
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-30T10:00]: # "in-progress"\n'
+    )
+
+
+def test_with_state_keeps_the_whitespace_in_front_of_an_existing_block():
+    # the two blank lines a section was written with survive every state
+    # write that follows them
+    content = '# 30/09/2026\n\n\n[mktsk:2026-09-30T09:00]: # "open"\n'
+    result = state.with_state(
+        content, "in-progress", datetime.datetime.fromisoformat("2026-09-30T10:00")
+    )
+    assert result == (
+        '# 30/09/2026\n\n\n[mktsk:2026-09-30T09:00]: # "open"\n'
+        '[mktsk:2026-09-30T10:00]: # "in-progress"\n'
+    )
+
+
+def test_with_state_keeps_a_blank_prefix_in_front_of_an_existing_block():
+    content = '\n\n[mktsk:2026-09-30T09:00]: # "open"\n'
+    result = state.with_state(
+        content, "waiting", datetime.datetime.fromisoformat("2026-09-30T10:00")
+    )
+    assert result == (
+        '\n\n[mktsk:2026-09-30T09:00]: # "open"\n'
+        '[mktsk:2026-09-30T10:00]: # "waiting"\n'
+    )
+
+
+def test_with_state_keeps_a_trailing_blank_line_before_the_block():
+    # the last line of text is not a section heading, so the usual single
+    # blank line is all that separates it from the events
+    content = "# 18/09/2026\n\nHello\n\n"
+    result = state.with_state(
+        content, "waiting", datetime.datetime.fromisoformat("2026-10-02T10:00")
+    )
+    assert result == (
+        '# 18/09/2026\n\nHello\n\n[mktsk:2026-10-02T10:00]: # "waiting"\n'
+    )
+
+
+def test_with_state_on_a_file_that_is_only_a_code_block():
+    # a heading inside a fence is not a section, so the block gets the usual
+    # single blank line
+    content = "```\n# 18/09/2026\n```\n"
+    result = state.with_state(
+        content, "waiting", datetime.datetime.fromisoformat("2026-10-02T10:00")
+    )
+    assert result == (
+        '```\n# 18/09/2026\n```\n\n[mktsk:2026-10-02T10:00]: # "waiting"\n'
+    )
+
+
 def test_set_state_writes_atomically(tmp_path):
     file = tmp_path / "Test.md"
     file.write_text("# 18/09/2026\n\nHello\n", encoding="utf-8")

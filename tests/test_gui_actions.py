@@ -201,7 +201,8 @@ def test_resume_button_adds_today_and_opens(window, tmp_path, fake_open, make_ta
     action_bar(window, file).resume_button.click()
 
     assert file.read_text(encoding="utf-8") == (
-        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-30T00:00]: # "in-progress"\n'
     )
     assert fake_open == [file]
 

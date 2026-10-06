@@ -60,7 +60,12 @@ The Markdown file contains:
 # 23/09/2026
 
 Your notes go here.
+
+[mktsk:2026-09-23T00:00]: # "open"
 ```
+
+A new task is `open`, and the event that says so sits under two blank lines, so a note
+typed on the first one never runs into it.
 
 The task folder is created in the directory from which `mktsk` is executed.
 
@@ -79,12 +84,12 @@ mktsk It's Alive!
 ```
 
 ```text
-Opened: 260923 - ItsAlive (added # 30/09/2026)
+Opened: 260923 - ItsAlive (added # 30/09/2026) (state: in-progress)
 ```
 
 No new folder is created. A first level heading with today's date is appended as a new
 section to the existing Markdown file, so each day you work on a task keeps
-its own notes:
+its own notes, and coming back on a new day moves the task to `in-progress`:
 
 ```markdown
 # 23/09/2026
@@ -93,10 +98,13 @@ Your notes go here.
 
 # 30/09/2026
 
+
+
+[mktsk:2026-09-30T00:00]: # "in-progress"
 ```
 
-Running it twice on the same day does not add a second heading for that date. Your text
-is never rewritten; only trailing whitespace is dropped.
+Running it twice on the same day does not add a second heading for that date and never
+changes the state. Your text is never rewritten; only trailing whitespace is dropped.
 
 The search stays in the directory you run `mktsk` from, so with this layout:
 
@@ -199,6 +207,14 @@ Markdown keeps it out of your notes:
 Every change appends one line, stamped with the local time of the moment, and the last
 line in the file is the state the task is in now. A section written by a resume lands in
 front of those lines rather than after them, so the events stay at the end of the file.
+
+You rarely have to run this command, because mktsk records the obvious changes by itself:
+a new task starts `open`, and coming back to it on a new day moves it to `in-progress`
+when it was `open`, `waiting` or `closed`. Coming back on the same day never changes the
+state, and a task already `in-progress` stays as it is: only a new section, a new day of
+work, counts. The message of the command says what was recorded, for example
+`(state: in-progress)`, or that the state was not recorded when writing it failed; the
+task is opened either way.
 
 ## Creating a category
 

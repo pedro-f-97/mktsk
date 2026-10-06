@@ -25,7 +25,9 @@ def test_main(monkeypatch, tmp_path):
 
     assert result == 0
     assert final_file.is_file()
-    assert final_file.read_text(encoding="utf-8") == "# 22/09/2026\n\n"
+    assert final_file.read_text(encoding="utf-8") == (
+        '# 22/09/2026\n\n\n[mktsk:2026-09-22T00:00]: # "open"\n'
+    )
     assert opened_files == [final_file]
 
 
@@ -83,7 +85,9 @@ def test_main_resumes_existing_task(monkeypatch, tmp_path):
         result = main()
 
     assert result == 0
-    assert existing_file.read_text(encoding="utf-8") == "# 22/09/2026\n\n"
+    assert existing_file.read_text(encoding="utf-8") == (
+        '# 22/09/2026\n\n\n[mktsk:2026-09-22T00:00]: # "in-progress"\n'
+    )
     assert opened_files == [existing_file]
 
 
@@ -104,7 +108,8 @@ def test_main_finds_existing_task_by_title(monkeypatch, tmp_path, capsys):
     assert result == 0
     assert opened_files == [file]
     assert file.read_text(encoding="utf-8") == (
-        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-30T00:00]: # "in-progress"\n'
     )
     assert "Opened: 260918 - TestMain" in capsys.readouterr().out
     assert not (tmp_path / "260930 - TestMain").exists()
