@@ -1,45 +1,36 @@
 import datetime
 from pathlib import Path
 
-from . import helpers, parsing, standards
+from . import helpers, parsing, standards, state
 
 # the command that converts a tree of tasks to the format mktsk writes
 _MIGRATION_COMMAND = "python -m mktsk.migration"
 
 
 def _has_bom(content: str) -> bool:
+    """Tells whether the text of a .md starts with a byte order mark."""
     return content.startswith(parsing.BOM)
 
 
-def _block_is_event_line(line: str) -> bool:
-    match = parsing._EVENT.match(line)
-    if match is None:
-        return False
-    timestamp, state = match.groups()
-    if state not in parsing.STATES:
-        return False
-    try:
-        datetime.datetime.strptime(timestamp, parsing._EVENT_FORMAT)  # noqa: DTZ007
-    except ValueError:
-        return False
-    return True
-
-
-def _split_event_block(content: str) -> tuple[str, str]:
-    lines = content.splitlines(keepends=True)
-    block_start = len(lines)
-    for i in range(len(lines) - 1, -1, -1):
-        if _block_is_event_line(lines[i]):
-            block_start = i
-        else:
-            break
-    prefix_lines = lines[:block_start]
-    event_block_lines = lines[block_start:]
-    return "".join(prefix_lines), "".join(event_block_lines)
-
-
 def create_folder(location: Path, name: str) -> Path:
-    """Creates a folder with the given name at the given location."""
+    """Creates a folder with the given name at the given location.
+
+    The name is taken as it is given, so a name Windows reserves is only
+    refused by the caller that knows it is a title. A task folder carries a
+    date prefix, which `261001 - CON` shows is enough to keep the name out of
+    the reserved set, so nothing is lost by leaving the check out here.
+
+    Args:
+        location: path where the folder will be created
+        name: name to give the folder
+
+    Returns:
+        the path of the created folder
+
+    Raises:
+        TaskError: If the name is not a single path component, or carries a
+            character, or ends in a way, that Windows does not accept.
+    """
     helpers.validate_name(name)
 
     folder_to_create = location / name
@@ -50,7 +41,19 @@ def create_folder(location: Path, name: str) -> Path:
 
 
 def create_md_file(location: Path, name: str) -> Path:
-    """Creates an .md file with the given name at the given location"""
+    """Creates an .md file with the given name at the given location
+
+    Args:
+        location: path where the file will be created
+        name: name to give the file
+
+    Returns:
+        the path of the created .md file
+
+    Raises:
+        TaskError: If the name is a single path component Windows accepts, or
+            is a reserved name, which `CON.md` is as much as `CON` is.
+    """
     helpers.validate_name(name)
 
     if helpers.is_reserved_name(name):
@@ -63,11 +66,36 @@ def create_md_file(location: Path, name: str) -> Path:
 
 
 def append_date_section(file: Path, date: datetime.date) -> bool:
-    """Adds a first level heading with the given date to the given .md file."""
+    """Adds a first level heading with the given date to the given .md file.
+
+    The date of a visit is a level 1 heading, because the title of the task is
+    the name of the folder and of the file rather than something inside it. The
+    first section is the one a file is born with, and every visit after it is
+    appended at the end.
+
+    The final block of state events is the end of the file, so a new section is
+    written in front of it and the block never moves from there.
+
+    Existing content is never rewritten, only trailing whitespace is dropped, and
+    a date that already has a section is not added twice. Whether it has one is
+    read with `parse_task`, so a date written in another of the accepted forms,
+    with stray spacing or inside a code block, counts the way it reads.
+
+    A file in the old format is refused rather than read as the new one, so its
+    title is never mistaken for an intervention. Nothing is written in that case.
+
+    Args:
+        file: file to append to.
+        date: date of the new section.
+
+    Returns:
+        True if the section was added, False if the date was already there.
+
+    Raises:
+        TaskError: If the file is in the old format.
+    """
     formatted = date.strftime(helpers.DATE_FORMAT)
     content = file.read_text(encoding="utf-8")
-    bom = parsing.BOM if _has_bom(content) else ""
-    content_no_bom = content[len(bom):] if bom else content
 
     if parsing.is_legacy(content):
         raise helpers.TaskError(
@@ -75,39 +103,53 @@ def append_date_section(file: Path, date: datetime.date) -> bool:
             f"'{_MIGRATION_COMMAND} <folder>' to convert it"
         )
 
-    parsed = parsing.parse_task(content)
-    if any(intervention.date == date for intervention in parsed.interventions):
+    if any(
+        intervention.date == date
+        for intervention in parsing.parse_task(content).interventions
+    ):
         return False
 
-    prefix, event_block = _split_event_block(content_no_bom)
+    # a file keeps the mark it was written with, and the block of state events
+    # stays at the end, so the new section goes in front of it
+    bom = parsing.BOM if _has_bom(content) else ""
+    prefix, event_block = state._split_event_block(parsing.without_bom(content))
     body = prefix.rstrip()
 
+    # a file with nothing in it is born with the section and a blank line, so
+    # the body can be typed straight away
     if not body:
-        if event_block:
-            file.write_text(f"{bom}# {formatted}\n\n{event_block}", encoding="utf-8")
-        else:
-            file.write_text(f"{bom}# {formatted}\n\n", encoding="utf-8")
-        return True
+        file.write_text(f"{bom}# {formatted}\n\n{event_block}", encoding="utf-8")
+    else:
+        file.write_text(
+            f"{bom}{body}\n\n# {formatted}\n\n{event_block}", encoding="utf-8"
+        )
 
-    new_body = body
-    if not new_body.endswith("\n\n"):
-        trailing = len(new_body) - len(new_body.rstrip("\n\r"))
-        if trailing == 0:
-            new_body = new_body + "\n\n"
-        elif trailing == 1:
-            new_body = new_body + "\n"
-        else:
-            new_body = new_body.rstrip("\n\r") + "\n\n"
-
-    new_content = bom + new_body + f"# {formatted}\n\n" + event_block
-    file.write_text(new_content, encoding="utf-8")
     return True
 
 
 def create_category(location: Path, raw_name: str) -> Path:
-    """Creates a new category folder in the given directory."""
+    """Creates a new category folder in the given directory.
+
+    A category is a plain subdirectory, so it is not a task folder and does not
+    follow the task naming rules. The name is stripped of accents, so that the
+    folder stays ASCII, but otherwise it is left as the user typed it. A name
+    that is already there does not produce an error: the existing path is
+    returned instead.
+
+    Args:
+        location: the directory to create the category in.
+        raw_name: the name to give the category, as typed by the user.
+
+    Returns:
+        The path of the category folder.
+
+    Raises:
+        TaskError: If the name is empty, contains path separators, is a
+            reserved Windows name, would be hidden, or looks like a task folder.
+    """
     name = standards._without_accents(raw_name)
 
+    # a folder name is ASCII, and there is no accent to fold a Japanese word
     if not name.strip() or not name.isascii():
         raise helpers.TaskError("invalid category name")
 
@@ -124,6 +166,7 @@ def create_category(location: Path, raw_name: str) -> Path:
 
     category = location / name
 
+    # exist_ok, so a name that is already there is not an error
     category.mkdir(exist_ok=True)
 
     return category

@@ -15,33 +15,28 @@ def _has_bom(content: str) -> bool:
     return content.startswith(parsing.BOM)
 
 
-def _block_is_event_line(line: str) -> bool:
-    """Returns True if the line is a valid state event line."""
-    match = parsing._EVENT.match(line)
-    if match is None:
-        return False
-    timestamp, state = match.groups()
-    if state not in parsing.STATES:
-        return False
-    try:
-        datetime.datetime.strptime(timestamp, parsing._EVENT_FORMAT)  # noqa: DTZ007
-    except ValueError:
-        return False
-    return True
-
-
 def _split_event_block(content: str) -> tuple[str, str]:
-    """Splits content into (prefix, event_block_text)."""
+    """Splits the text into what precedes the final block of state events and
+    the block itself, which mktsk keeps at the end of the file. A line is part
+    of the block when `parsing._event` reads it as one, so the block is cut
+    exactly where the parser would read the events.
+
+    Args:
+        content: the text of the .md file, without the byte order mark.
+
+    Returns:
+        The content before the block and the block itself, either empty when
+        the file holds none.
+    """
     lines = content.splitlines(keepends=True)
     block_start = len(lines)
-    for i in range(len(lines) - 1, -1, -1):
-        if _block_is_event_line(lines[i]):
-            block_start = i
-        else:
+
+    for index in range(len(lines) - 1, -1, -1):
+        if parsing._event(index, lines[index]) is None:
             break
-    prefix_lines = lines[:block_start]
-    event_block_lines = lines[block_start:]
-    return "".join(prefix_lines), "".join(event_block_lines)
+        block_start = index
+
+    return "".join(lines[:block_start]), "".join(lines[block_start:])
 
 
 def current_state(content: str) -> str:
