@@ -61,7 +61,7 @@ def with_state(content: str, state: str, now: datetime.datetime) -> str:
     if events and events[-1].state == state:
         return content
 
-    prefix, event_block = _split_event_block(content)
+    prefix, event_block = _split_event_block(parsing.without_bom(content))
     bom = parsing.BOM if _has_bom(content) else ""
 
     timestamp = now.strftime(parsing._EVENT_FORMAT)
