@@ -82,7 +82,8 @@ Rules:
 3. Levels 2 to 6 are free for notes
 4. State: lines `[mktsk:YYYY-MM-DDTHH:MM]: # "state"`, local time, anywhere in the file.
    mktsk always writes them in a block at the end, after a blank line. Without that blank
-   line, Markdown renders them as text
+   line, Markdown renders them as text. A section written in front of a block is followed
+   by two blank lines, so a note typed right under its heading never touches the block
 5. Current state: the last event in file order. An unknown value is ignored. With no events,
    the state is derived: `open` with at most one intervention, `in-progress` with more
 6. Code blocks (` ``` ` and `~~~`) are ignored everywhere
@@ -528,6 +529,8 @@ Transition rules:
 
 Details:
 - The current state is the one from `current_state`, computed before the section is added
+- A new task is written as `# dd/mm/yyyy`, two blank lines and the `open` event block, so a
+  note typed under the heading is never glued to the block (see rule 4 of the format)
 - The message returned by `open_or_create_task` and `resume_task` mentions the state change,
   when there is one (for example `(state: in-progress)`)
 - If writing the state fails, the task still opens and the message says the state was not
