@@ -2,7 +2,7 @@ import datetime
 from pathlib import Path
 from typing import NamedTuple
 
-from . import files, helpers, listing, standards
+from . import files, helpers, listing, standards, state
 
 
 class TaskResult(NamedTuple):
@@ -10,6 +10,29 @@ class TaskResult(NamedTuple):
 
     file: Path
     message: str
+
+
+def _state_note(file: Path, new_state: str) -> str:
+    """Writes the event that records the state, and words it for the message.
+
+    A state that cannot be written never stops the task from being opened:
+    the visit is what matters, and the state can be set again later, so the
+    failure reaches the message instead of the caller.
+
+    Args:
+        file: the .md file of the task.
+        new_state: the state to record.
+
+    Returns:
+        " (state: <state>)" when the event was written, or
+        " (state not recorded)" when writing it failed.
+    """
+    try:
+        state.set_state(file, new_state)
+    except OSError:
+        return " (state not recorded)"
+
+    return f" (state: {new_state})"
 
 
 def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
@@ -21,7 +44,8 @@ def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
         date: the date of the new visit.
 
     Returns:
-        The .md file to open and a message describing what happened.
+        The .md file to open and a message describing what happened, ending
+        with the state change when this visit records one.
 
     Raises:
         TaskError: If the .md is in the old format, which the migration has to
@@ -37,8 +61,14 @@ def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
     file = files.create_md_file(folder, folder_title)
     formatted = date.strftime(helpers.DATE_FORMAT)
 
+    # the state this visit starts from is the one the file had before it is
+    # dated: only a new date section counts as work, and it takes a task that
+    # is not already in-progress to in-progress
+    before = state.current_state(file.read_text(encoding="utf-8"))
+
     if files.append_date_section(file, date):
-        return TaskResult(file, f"Opened: {folder.name} (added # {formatted})")
+        note = _state_note(file, "in-progress") if before != "in-progress" else ""
+        return TaskResult(file, f"Opened: {folder.name} (added # {formatted}){note}")
 
     return TaskResult(file, f"Opened: {folder.name} (# {formatted} already there)")
 
@@ -57,7 +87,8 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
         raw_title: the task title, as typed by the user.
 
     Returns:
-        The .md file to open and a message describing what happened.
+        The .md file to open and a message describing what happened, ending
+        with the state change when this visit records one.
 
     Raises:
         TaskError: If the title is empty, normalizes to nothing, or is a
@@ -84,7 +115,12 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
     # the file is born with the first section, the one that dates this visit
     files.append_date_section(created_file, today)
 
-    return TaskResult(created_file, f"Created: {folder_name}")
+    # a task that comes into being is open, and the heading of the new
+    # section is followed by two blank lines before the block, so a note
+    # typed on the first one never runs into the events
+    note = _state_note(created_file, "open")
+
+    return TaskResult(created_file, f"Created: {folder_name}{note}")
 
 
 def resume_task(folder: Path, title: str) -> TaskResult:
@@ -98,7 +134,8 @@ def resume_task(folder: Path, title: str) -> TaskResult:
         title: the standardized title of the task.
 
     Returns:
-        The .md file to open and a message describing what happened.
+        The .md file to open and a message describing what happened, ending
+        with the state change when this visit records one.
     """
     today = datetime.datetime.now().astimezone().date()
 

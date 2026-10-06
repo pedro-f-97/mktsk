@@ -39,6 +39,30 @@ def _split_event_block(content: str) -> tuple[str, str]:
     return "".join(lines[:block_start]), "".join(lines[block_start:])
 
 
+def _ends_with_section(prefix: str) -> bool:
+    """Tells whether a text ends with a section heading and nothing under it.
+
+    The last line that carries text is where a note would be typed, and when
+    that line dates a section, the events that follow it need two blank lines
+    of their own so the note never runs into them. A heading inside a code
+    block is not a section, so the lines are read the way the parser reads
+    them.
+
+    Args:
+        prefix: what precedes the final block of state events.
+
+    Returns:
+        True when the last line of text is a dated level 1 heading.
+    """
+    last = ""
+
+    for _number, line in parsing._readable_lines(prefix):
+        if line.strip():
+            last = line
+
+    return parsing._intervention(1, last) is not None
+
+
 def current_state(content: str) -> str:
     """Returns the current state of the task."""
     parsed = parsing.parse_task(content)
@@ -66,33 +90,32 @@ def with_state(content: str, state: str, now: datetime.datetime) -> str:
 
     timestamp = now.strftime(parsing._EVENT_FORMAT)
     new_event_line = f"[mktsk:{timestamp}]: # \"{state}\"\n"
+    new_event_block = event_block + new_event_line
 
+    # the block is what needs a blank line in front of it, and the whitespace
+    # before an existing one is kept exactly as it is: the two blank lines a
+    # section was written with must survive every state write that follows
     if event_block:
-        new_event_block = event_block + new_event_line
-    else:
-        new_event_block = new_event_line
-
-    # Build result prefix with proper spacing
-    result_prefix = prefix
-    if prefix:
-        # Ensure blank line before event block
-        stripped = prefix.rstrip("\n\r")
-        if stripped:
-            # Has content - need blank line
-            if not prefix.endswith("\n\n"):
-                trailing = len(prefix) - len(prefix.rstrip("\n\r"))
-                if trailing == 0:
-                    result_prefix = prefix + "\n\n"
-                elif trailing == 1:
-                    result_prefix = prefix + "\n"
-                else:
-                    result_prefix = prefix.rstrip("\n\r") + "\n\n"
-            else:
-                result_prefix = prefix
-        else:
-            result_prefix = ""
-    else:
+        result_prefix = prefix
+    elif not prefix.strip():
+        # a prefix that carries nothing leaves the block alone at the top
         result_prefix = ""
+    elif _ends_with_section(prefix):
+        # a section heading with nothing under it gets two blank lines, so a
+        # note typed on the first one never runs into the events
+        result_prefix = prefix.rstrip("\n\r") + "\n\n\n"
+    elif prefix.endswith("\n\n"):
+        # the text already stands apart from the block by a blank line
+        result_prefix = prefix
+    else:
+        trailing = len(prefix) - len(prefix.rstrip("\n\r"))
+
+        if trailing == 0:
+            result_prefix = prefix + "\n\n"
+        elif trailing == 1:
+            result_prefix = prefix + "\n"
+        else:
+            result_prefix = prefix.rstrip("\n\r") + "\n\n"
 
     return bom + result_prefix + new_event_block
 

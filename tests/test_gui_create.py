@@ -25,7 +25,9 @@ def test_create_task(qtbot, window, tmp_path, fake_open):
     folder = tmp_path / "260928 - TestTask"
     file = folder / "TestTask.md"
     assert file.is_file()
-    assert file.read_text(encoding="utf-8") == "# 28/09/2026\n\n"
+    assert file.read_text(encoding="utf-8") == (
+        '# 28/09/2026\n\n\n[mktsk:2026-09-28T00:00]: # "open"\n'
+    )
     assert fake_open == [file]
     assert window.title_input.text() == ""
     assert "28/09/2026  Test Task" in tab_labels(window, tmp_path.name)
@@ -71,7 +73,9 @@ def test_create_task_resumes_existing_task(window, tmp_path, fake_open):
 
     window.create_task()
 
-    assert existing_file.read_text(encoding="utf-8") == "# 28/09/2026\n\n"
+    assert existing_file.read_text(encoding="utf-8") == (
+        '# 28/09/2026\n\n\n[mktsk:2026-09-28T00:00]: # "in-progress"\n'
+    )
     assert fake_open == [existing_file]
 
 
@@ -87,7 +91,8 @@ def test_create_task_finds_existing_task_by_title(window, tmp_path, fake_open):
     window.create_task()
 
     assert file.read_text(encoding="utf-8") == (
-        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n"
+        "# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
+        '[mktsk:2026-09-30T00:00]: # "in-progress"\n'
     )
     assert fake_open == [file]
     assert window.title_input.text() == ""

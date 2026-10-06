@@ -26,8 +26,8 @@ workflow interactively.
   `.md`, appending a dated section, creating a category
 - `mktsk/listing.py` — everything that reads a directory: finding, listing,
   grouping, and the activity of each task
-- `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume,
-  rename
+- `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume, rename,
+  and record the state those visits change
 - `mktsk/parsing.py` — reads the text of a `.md` in the new format: interventions,
   state events, last activity. Pure functions, no I/O
 - `mktsk/migration.py` — converts the text of a `.md` from the old format to the
@@ -103,6 +103,15 @@ change the name.
 - A `.md` in the old format is refused rather than read: `append_date_section` raises
   `TaskError` naming the file and `python -m mktsk.migration`, and nothing is written, so the
   migration can still convert it. `is_legacy` is what recognises one
+- The state follows what you do: creating records `open`, and resuming with a new section
+  records `in-progress` when the state is `open`, `waiting` or `closed`. Resuming on the
+  same day never changes the state, a state already `in-progress` writes nothing, and only
+  a new date section counts as work
+- The state a resume starts from is `current_state` read before the section is added, so a
+  file with no events counts as `open` and its second section takes it to `in-progress`
+- The message of a create or a resume ends with ` (state: <state>)` when this visit records
+  one, and with ` (state not recorded)` when writing the event failed; a state that cannot
+  be written never stops the task from being opened
 - `resume_task(folder, title)` resumes the folder it is given, wherever that folder
   lives; unlike `open_or_create_task`, it does no lookup and takes no directory
 - `rename_task(folder, title, raw_title)` keeps the date prefix and renames the `.md` and the
@@ -220,6 +229,10 @@ Free text, with levels 2 to 6 available.
   it, so the block stays the end of the file, and follows the heading with two blank lines
   when a block is there, so a note typed on the first blank line is never glued to the
   events; without a block the heading is followed by the usual one
+- `with_state` keeps the whitespace in front of an existing block exactly as it is, so the
+  two blank lines creation and `append_date_section` leave there survive the state write
+  that follows them; when there is no block yet and the text ends with a section heading,
+  the heading is followed by two blank lines before the block, for the same reason
 - `last_activity` is the most recent date of the interventions, not the last one in the
   file, and `None` when there are none
 - Code blocks (``` and `~~~`, closed with the same character) are ignored everywhere, so a
