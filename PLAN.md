@@ -43,6 +43,7 @@ reopening (10 and 11) are the only steps that delete folders, so they come last.
 - Closing compresses the folder into a zip; the zip is the `closed` state
 - No compatibility with the old format: everything is migrated at once
 - Everything in the repository is in English: code, strings, docs and state names
+- Closing from the GUI archives directly, with no confirmation box (reopening is cheap)
 
 ## Open decisions (defaults already in the prompts)
 
@@ -653,14 +654,14 @@ Design:
   brings the listing down
 - CLI: `--close TITLE`. The title is chosen as in `--state`. It prints one line with the name
   of the archive created. `--state ... closed` stays refused
-- GUI: a "close" action on a task, with a confirmation box, and a "closed" tab that lists the
+- GUI: a "close" action on a task, with no confirmation box, and a "closed" tab that lists the
   archives. Follow the style of the existing tabs and actions
 
 Tests: closing creates the zip and deletes the folder; the `.md` in the zip has the `closed`
 event and the folder's was not touched beforehand; extra files and subfolders go in the zip;
 a failure writing the zip leaves the folder; a failure deleting leaves both and gives
 `TaskError`; `mktsk Foo` with `Foo.zip` does not duplicate; rename refused; listing of the
-closed ones; `--list` hides them by default; GUI with confirmation and tab. Use `tmp_path`,
+closed ones; `--list` hides them by default; GUI closing directly and the tab. Use `tmp_path`,
 never real folders.
 
 Documentation: `AGENTS.md` (archive rules, CLI, GUI) and `README.md`.
@@ -677,7 +678,7 @@ nothing:
 3. `feat: list closed tasks`: the listing reads the archives; `--list` hides them and
    `--list --only closed` shows them
 4. `feat: close a task from the command line`: `--close TITLE`
-5. `feat: close a task from the gui`: the close action with confirmation and the closed tab
+5. `feat: close a task from the gui`: the close action (no confirmation) and the closed tab
 6. `docs: describe closing a task`: `AGENTS.md` and `README.md`
 
 Answer format: the final report described in "Common rules" of `PLAN.md`, with a description
