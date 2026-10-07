@@ -423,8 +423,8 @@ Opens a window where you can:
     Nothing is opened, because the task is over.
 
   The buttons show an icon each, and the name of the action on hover. A task in the
-  `Closed` tab offers the resume action alone, since reopening is the one action that
-  reaches an archive.
+  `Closed` tab offers a reopen button, with an icon and a hover text of its own, since
+  reopening is the one action that reaches an archive.
 
 The last visited folder is remembered between sessions.
 
