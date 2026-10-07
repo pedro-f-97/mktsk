@@ -33,7 +33,14 @@ from PySide6.QtWidgets import (
 
 from mktsk import listing, parsing
 
-from .icons import _draw_folder, _draw_pencil, _draw_plus, _draw_state, _icon_button
+from .icons import (
+    _draw_close,
+    _draw_folder,
+    _draw_pencil,
+    _draw_plus,
+    _draw_state,
+    _icon_button,
+)
 
 _ENTRY_ROLE = Qt.ItemDataRole.UserRole + 1
 _COUNT_ROLE = Qt.ItemDataRole.UserRole + 2
@@ -268,6 +275,7 @@ class _ActionBar(QWidget):
         self.state_button = _icon_button(
             self, "Change the state of this task", _draw_state, "ChangeState"
         )
+        self.close_button = _icon_button(self, "Close this task", _draw_close, "CloseTask")
         self.state_menu = QMenu(self.state_button)
         for offered in _OFFERED_STATES:
             self.state_menu.addAction(offered)
@@ -285,12 +293,13 @@ class _ActionBar(QWidget):
         )
 
     def buttons(self) -> tuple[QToolButton, ...]:
-        """Returns the four action buttons, in order."""
+        """Returns the five action buttons, in order."""
         return (
             self.open_button,
             self.resume_button,
             self.rename_button,
             self.state_button,
+            self.close_button,
         )
 
 
@@ -385,14 +394,17 @@ class TaskListing(QListWidget):
     """A list of tasks with an action bar over the selected row.
 
     The bar follows the selected row, and shows only when a task is selected.
-    Headings are not selectable, so they never get one. The listing only reports
-    which action was asked for, leaving the task logic to the window.
+    Headings are not selectable, so they never get one, and a closed task gets
+    no bar either, because none of the actions reaches an archive. The listing
+    only reports which action was asked for, leaving the task logic to the
+    window.
     """
 
     open_requested = Signal(object)
     resume_requested = Signal(object)
     rename_requested = Signal(object)
     state_requested = Signal(object, str)
+    close_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -413,6 +425,9 @@ class TaskListing(QListWidget):
         )
         self.action_bar.rename_button.clicked.connect(
             lambda: self._request(self.rename_requested)
+        )
+        self.action_bar.close_button.clicked.connect(
+            lambda: self._request(self.close_requested)
         )
         for action in self.action_bar.state_menu.actions():
             name = action.text()
@@ -455,10 +470,20 @@ class TaskListing(QListWidget):
             self.state_requested.emit(entry, new_state)
 
     def _sync_action_bar(self) -> None:
+        entry = self.selected_entry()
+
+        # an archive is the task closed: none of the actions reach it, so its
+        # row keeps no room for the bar
+        if entry is not None and entry.state == "closed":
+            self.delegate.inset_row = -1
+            self.viewport().update()
+            self.action_bar.hide()
+            return
+
         self.delegate.inset_row = self.currentRow()
         self.viewport().update()
 
-        if self.selected_entry() is None:
+        if entry is None:
             self.action_bar.hide()
             return
 

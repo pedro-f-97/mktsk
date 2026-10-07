@@ -83,6 +83,13 @@ def _draw_state(painter: QPainter, box: QRectF) -> None:
     painter.drawEllipse(QPointF(9, 9), 1.5, 1.5)
 
 
+def _draw_close(painter: QPainter, box: QRectF) -> None:
+    """Draws an archive box with a lid, for closing a task into one."""
+    painter.drawRect(QRectF(2, 3, 14, 5))
+    painter.drawRect(QRectF(4, 8, 10, 7))
+    painter.drawLine(QPointF(7.5, 5.5), QPointF(10.5, 5.5))
+
+
 def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QIcon:
     """Renders a stroked icon on a transparent image.
 

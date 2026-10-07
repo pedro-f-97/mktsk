@@ -3,6 +3,7 @@ from PySide6.QtGui import QColor
 
 from mktsk.gui.icons import (
     _ICON_SIZE,
+    _draw_close,
     _draw_folder,
     _draw_plus,
     _draw_state,
@@ -77,3 +78,15 @@ def test_the_state_icon_is_a_ring_with_a_dot(qapp):
     # and the ring is a ring: the same on both sides of the middle
     for offset in range(_ICON_SIZE):
         assert ink[centre][offset] == ink[centre][last - offset]
+
+
+def test_the_close_icon_is_a_box_with_a_lid(qapp):
+    ink = _ink(_draw_close)
+
+    # the lid is a band across the top, with a slot in the middle of it
+    assert _painted(ink, "row", 3) is True
+    assert ink[5][9] is True
+
+    # and the box under the lid is an outline rather than a filled block
+    assert ink[12][9] is False
+    assert ink[15][4] is True
