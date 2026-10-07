@@ -667,7 +667,18 @@ Documentation: `AGENTS.md` (archive rules, CLI, GUI) and `README.md`.
 
 Verification: everything green, coverage 100%.
 
-Commit: `feat: close a task into an archive`.
+Work in these commits, in this order. Before each one, `ruff check .`, `pyright mktsk/` and
+`pytest -x` must be green with coverage at 100%, so that a session that is cut short loses
+nothing:
+1. `feat: add the archive of a task`: `is_task_archive`, `find_task_archive` and `close_task`
+   with every safety step and its tests. No CLI or GUI yet
+2. `feat: count archives in the title rule`: `mktsk Foo` with `Foo.zip` raises the archived
+   error, rename is refused, and the clash check includes archives
+3. `feat: list closed tasks`: the listing reads the archives; `--list` hides them and
+   `--list --only closed` shows them
+4. `feat: close a task from the command line`: `--close TITLE`
+5. `feat: close a task from the gui`: the close action with confirmation and the closed tab
+6. `docs: describe closing a task`: `AGENTS.md` and `README.md`
 
 Answer format: the final report described in "Common rules" of `PLAN.md`, with a description
 of any decision about how the archive appears in the listing.
