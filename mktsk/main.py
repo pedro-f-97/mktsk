@@ -45,6 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar=("TITLE", "STATE"),
         help="set the state of a task (open, in-progress, waiting)",
     )
+    parser.add_argument(
+        "--close",
+        metavar="TITLE",
+        help="close a task into an archive, given its title",
+    )
     return parser
 
 
@@ -59,6 +64,14 @@ def parse_arguments() -> argparse.Namespace:
 
     if args.rename and args.list:
         parser.error("--rename and --list do not go together")
+
+    if args.close is not None and (
+        args.rename
+        or args.list
+        or args.new_category is not None
+        or args.state is not None
+    ):
+        parser.error("--close does not go with --rename, --list, --new-category or --state")
 
     if args.new_category is not None:
         if args.rename or args.list or args.state:
@@ -78,6 +91,9 @@ def parse_arguments() -> argparse.Namespace:
     elif args.state is not None:
         if args.title:
             parser.error("--state takes TITLE and STATE")
+    elif args.close is not None:
+        if args.title:
+            parser.error("--close takes one title")
     elif not args.title:
         parser.error("a task title is required")
 
@@ -99,6 +115,9 @@ def main() -> int:
 
     if args.state is not None:
         return _set_state(Path.cwd(), args.state[0], args.state[1])
+
+    if args.close is not None:
+        return _close(Path.cwd(), args.close)
 
     try:
         if args.rename:
@@ -264,7 +283,7 @@ def _set_state(location: Path, raw_title: str, new_state: str) -> int:
     The title is resolved the way `mktsk Foo` resolves it, by normalizing it
     and looking it up in the current directory, on any date. A title that is
     not there does not create a task. `closed` is not accepted here: closing
-    is a different operation, for a later step.
+    is `--close`, which archives the folder.
 
     Args:
         location: the directory the task belongs to.
@@ -294,6 +313,41 @@ def _set_state(location: Path, raw_title: str, new_state: str) -> int:
         return 1
 
     print(f"{folder.name}: {new_state}")
+
+    return 0
+
+
+def _close(location: Path, raw_title: str) -> int:
+    """Closes a task given its title, and reports the archive.
+
+    The title is resolved the way `mktsk Foo` resolves it, by normalizing it
+    and looking it up in the current directory, on any date. A title that is
+    not there does not create a task. Nothing is opened: the task is over.
+
+    Args:
+        location: the directory the task belongs to.
+        raw_title: the task title, as typed by the user.
+
+    Returns:
+        0 on success, 1 when the task or the archive cannot be used.
+    """
+    title = standards.standardize_string(raw_title)
+    folder = listing.find_task_folder(location, title)
+
+    if folder is None:
+        print(f"Error: '{raw_title}' is not a task here")
+        return 1
+
+    try:
+        # the .md of a task is named after the title its own folder carries,
+        # so a folder renamed by hand still has its file found
+        folder_title = standards.task_folder_title(folder.name) or title
+        result = tasks.close_task(folder, folder_title)
+    except (OSError, helpers.TaskError) as error:
+        print(f"Error: {error}")
+        return 1
+
+    print(result.message)
 
     return 0
 
