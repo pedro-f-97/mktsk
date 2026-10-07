@@ -38,13 +38,20 @@ def _state_note(file: Path, new_state: str) -> str:
     return f" (state: {new_state})"
 
 
-def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
+def _resume_task(
+    folder: Path, title: str, date: datetime.date, verb: str = "Opened"
+) -> TaskResult:
     """Prepares an existing task folder for a new visit.
+
+    A visit to a task that is closed takes it out of that state even when the
+    day adds no section: the folder stands again, and the listing must not
+    read it as closed.
 
     Args:
         folder: the task folder to resume.
         title: the standardized title.
         date: the date of the new visit.
+        verb: the word the message opens with, "Opened" or "Reopened".
 
     Returns:
         The .md file to open and a message describing what happened, ending
@@ -66,14 +73,19 @@ def _resume_task(folder: Path, title: str, date: datetime.date) -> TaskResult:
 
     # the state this visit starts from is the one the file had before it is
     # dated: only a new date section counts as work, and it takes a task that
-    # is not already in-progress to in-progress
+    # is not already in-progress to in-progress; a closed task stands again
+    # with the visit itself, section or no section
     before = state.current_state(file.read_text(encoding="utf-8"))
+    added = files.append_date_section(file, date)
 
-    if files.append_date_section(file, date):
-        note = _state_note(file, "in-progress") if before != "in-progress" else ""
-        return TaskResult(file, f"Opened: {folder.name} (added # {formatted}){note}")
+    if (added or before == "closed") and before != "in-progress":
+        note = _state_note(file, "in-progress")
+    else:
+        note = ""
 
-    return TaskResult(file, f"Opened: {folder.name} (# {formatted} already there)")
+    what = f"added # {formatted}" if added else f"# {formatted} already there"
+
+    return TaskResult(file, f"{verb}: {folder.name} ({what}){note}")
 
 
 def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
@@ -95,8 +107,8 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
 
     Raises:
         TaskError: If the title is empty, normalizes to nothing, is a
-            reserved Windows name, or names a task that is archived, which
-            the archive already is until reopening arrives.
+            reserved Windows name, or names a task that is archived with the
+            folder also standing beside the archive.
     """
     title = standards.standardize_string(raw_title)
 
@@ -113,10 +125,11 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
         return _resume_task(existing, title, today)
 
     # a title is unique in a directory whether the task stands as a folder or
-    # as an archive, so an archived task is not resumed and not duplicated: a
-    # second one beside the zip would be two of one title
+    # as an archive, and the folder is the task that stands: an archive with
+    # no folder beside it is reopened rather than refused, and one with a
+    # folder beside it never reaches here
     if listing.find_task_archive(location, title) is not None:
-        raise helpers.TaskError(f"'{title}' is already archived")
+        return reopen_task(location, title)
 
     folder_name = standards.build_folder_name(title)
     created_folder = files.create_folder(location, folder_name)
@@ -138,6 +151,8 @@ def resume_task(folder: Path, title: str) -> TaskResult:
 
     Unlike `open_or_create_task`, which looks a title up in the current
     directory, this resumes the folder it is given, wherever that folder lives.
+    A folder that is not there but whose archive is, in the same directory, is
+    reopened the way `reopen_task` does it.
 
     Args:
         folder: the task folder to resume.
@@ -146,8 +161,17 @@ def resume_task(folder: Path, title: str) -> TaskResult:
     Returns:
         The .md file to open and a message describing what happened, ending
         with the state change when this visit records one.
+
+    Raises:
+        TaskError: If the .md is in the old format, which the migration has to
+            convert first, or the archive of the task cannot be reopened.
     """
     today = datetime.datetime.now().astimezone().date()
+
+    if not folder.is_dir() and listing.find_task_archive(
+        folder.parent, title
+    ) is not None:
+        return reopen_task(folder.parent, title)
 
     return _resume_task(folder, title, today)
 
@@ -361,3 +385,198 @@ def close_task(folder: Path, title: str) -> TaskResult:
         ) from error
 
     return TaskResult(archive, f"Closed: {archive.name}")
+
+
+def _without_root(member: str, root: str) -> str:
+    """Takes the folder name the archive stores its members under off a name.
+
+    Args:
+        member: the path a member is stored as.
+        root: the folder name the members live under in the archive.
+
+    Returns:
+        The path of the member inside the task folder; a member stored
+        without the root comes back as it is, which is what makes a name
+        that points elsewhere visible to the check that refuses it.
+    """
+    prefix = f"{root}/"
+
+    if member.startswith(prefix):
+        return member[len(prefix) :]
+
+    return member
+
+
+def _extract_archive(archive: Path, destination: Path, root: str) -> None:
+    """Fills a directory of its own with the contents of an archive.
+
+    Every member is written under `destination` after its path is resolved
+    against it, so a name that points outside — with `..` or as an absolute
+    path — is refused before anything of it reaches the disk. The root the
+    archive stores is stripped from each name, so what comes out is the task
+    folder itself and can be renamed into place when it has been verified.
+
+    Args:
+        archive: the archive to extract.
+        destination: the directory to fill, created here.
+        root: the folder name the members are stored under.
+
+    Raises:
+        TaskError: If the archive cannot be read or holds a member that
+            leaves `destination`.
+        OSError: If a directory or a file cannot be created.
+    """
+    with zipfile.ZipFile(archive) as handle:
+        destination.mkdir()
+
+        for info in handle.infolist():
+            if info.is_dir():
+                continue
+
+            name = _without_root(info.filename, root)
+            target = destination / name
+
+            # resolving against the destination is what makes a name that
+            # points elsewhere visible: neither form can stand inside it
+            if not target.resolve().is_relative_to(destination.resolve()):
+                raise helpers.TaskError(f"unsafe archive member: '{info.filename}'")
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+
+            with handle.open(info) as source, target.open("wb") as sink:
+                shutil.copyfileobj(source, sink)
+
+
+def _verify_extraction(archive: Path, destination: Path, root: str) -> None:
+    """Reopens the archive and checks the filled directory against it.
+
+    Nothing is renamed into place until this passes, so a member that lost
+    its content or came out short never reaches the name a task answers to.
+
+    Args:
+        archive: the archive that was extracted.
+        destination: the directory that was filled.
+        root: the folder name the members are stored under.
+
+    Raises:
+        TaskError: If a member of the archive is corrupt, or the directory
+            holds other contents or a size other than the archive holds.
+    """
+    with zipfile.ZipFile(archive) as handle:
+        corrupt = handle.testzip()
+
+        if corrupt is not None:
+            raise helpers.TaskError(
+                f"extraction verification failed: '{corrupt}' is corrupt"
+            )
+
+        expected = {}
+
+        for name in handle.namelist():
+            if name.endswith("/"):
+                continue
+
+            expected[_without_root(name, root)] = handle.getinfo(name).file_size
+
+    actual = {
+        path.relative_to(destination).as_posix(): path.stat().st_size
+        for path in destination.rglob("*")
+        if path.is_file()
+    }
+
+    if set(actual) != set(expected):
+        raise helpers.TaskError("extraction verification failed: unexpected contents")
+
+    for name, size in actual.items():
+        if size != expected[name]:
+            raise helpers.TaskError(
+                f"extraction verification failed: '{name}' has the wrong size"
+            )
+
+
+def reopen_task(location: Path, title: str) -> TaskResult:
+    """Extracts the archive of a task, resumes it, and deletes the archive.
+
+    The archive is extracted into a directory of its own beside it and
+    verified against it before anything moves, and the archive is deleted
+    only after the task has been resumed. A failure before that leaves the
+    archive intact and nothing of the extraction behind, and a failure
+    deleting the archive keeps both, so nothing is ever lost.
+
+    Args:
+        location: the directory holding the archive.
+        title: the standardized title of the task.
+
+    Returns:
+        The .md file to open and a message describing what happened, ending
+        with the state change when this visit records one.
+
+    Raises:
+        TaskError: If no archive of the title stands in `location`, the
+            folder of the task stands beside the archive, the extraction
+            directory of a failed run is left behind, the archive cannot be
+            read or holds something unsafe, the extraction fails
+            verification, the resumed .md is in the old format, or the
+            archive cannot be deleted once the task stands as a folder.
+    """
+    archive = listing.find_task_archive(location, title)
+
+    if archive is None:
+        raise helpers.TaskError(f"'{title}' is not archived")
+
+    folder = location / archive.stem
+    temp = location / f".{archive.stem}.part"
+
+    # a folder standing beside the archive is the task that stands; the
+    # situation needs mending by hand and this does not mend it
+    existing = listing.find_task_folder(location, title)
+
+    if existing is not None:
+        raise helpers.TaskError(
+            f"'{title}' is already a task here as {existing.name}; "
+            f"the archive {archive.name} was left in place"
+        )
+
+    if temp.exists():
+        raise helpers.TaskError(
+            f"the extraction directory '{temp.name}' is already there; "
+            "remove it and try again"
+        )
+
+    try:
+        _extract_archive(archive, temp, archive.stem)
+        _verify_extraction(archive, temp, archive.stem)
+    except zipfile.BadZipFile as error:
+        shutil.rmtree(temp, ignore_errors=True)
+        raise helpers.TaskError(
+            f"the archive {archive.name} cannot be read: {error}"
+        ) from error
+    except BaseException:
+        shutil.rmtree(temp, ignore_errors=True)
+        raise
+
+    # the extraction stands on its own now: from here on a failure keeps the
+    # folder and the archive rather than losing either
+    try:
+        temp.rename(folder)
+    except OSError:
+        shutil.rmtree(temp, ignore_errors=True)
+        raise
+
+    try:
+        result = _resume_task(
+            folder, title, datetime.datetime.now().astimezone().date(), verb="Reopened"
+        )
+    except BaseException:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+
+    try:
+        archive.unlink()
+    except OSError as error:
+        raise helpers.TaskError(
+            f"'{folder.name}' is reopened, but {archive.name} "
+            f"could not be removed: {error}"
+        ) from error
+
+    return result

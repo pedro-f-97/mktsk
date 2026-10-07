@@ -3,6 +3,7 @@ from freezegun import freeze_time
 
 from mktsk.helpers import TaskError
 from mktsk.tasks import (
+    close_task,
     open_or_create_task,
     resume_task,
 )
@@ -196,16 +197,20 @@ def test_open_or_create_task_reserved_name(tmp_path):
 
 
 @freeze_time("2026-09-30")
-def test_open_or_create_task_refuses_a_task_that_is_archived(tmp_path):
-    archive = tmp_path / "260918 - Foo.zip"
-    archive.write_bytes(b"zip")
+def test_open_or_create_task_reopens_a_task_that_is_archived(tmp_path, make_task):
+    with freeze_time("2026-09-18"):
+        file = make_task(tmp_path, "260918", "Foo")
+        close_task(file.parent, "Foo")
 
-    # the archive is the task closed, so a second one beside it would be a
-    # duplicate; reopening is a later step
-    with pytest.raises(TaskError, match="already archived"):
-        open_or_create_task(tmp_path, "foo")
+    # the title is unique whether the task stands as a folder or as an
+    # archive, and an archive with no folder beside it is the task to reopen
+    result = open_or_create_task(tmp_path, "foo")
 
-    assert list(tmp_path.iterdir()) == [archive]
+    assert result.message == (
+        "Reopened: 260918 - Foo (added # 30/09/2026) (state: in-progress)"
+    )
+    assert (tmp_path / "260918 - Foo").is_dir()
+    assert not (tmp_path / "260918 - Foo.zip").exists()
 
 
 @freeze_time("2026-09-30")

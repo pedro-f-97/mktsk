@@ -1,13 +1,19 @@
 import pytest
+from freezegun import freeze_time
 
 from mktsk.main import main, parse_arguments
 from mktsk.tasks import close_task
 
 
-def test_main_refuses_a_task_that_is_archived(monkeypatch, tmp_path, capsys):
+@freeze_time("2026-09-30T09:00")
+def test_main_reopens_a_task_that_is_archived(
+    monkeypatch, tmp_path, capsys, make_task
+):
+    with freeze_time("2026-09-18T10:30"):
+        file = make_task(tmp_path, "260918", "Foo")
+        close_task(file.parent, "Foo")
+
     monkeypatch.chdir(tmp_path)
-    archive = tmp_path / "260918 - Foo.zip"
-    archive.write_bytes(b"zip")
     monkeypatch.setattr("sys.argv", ["mktsk", "Foo"])
 
     opened = []
@@ -15,10 +21,14 @@ def test_main_refuses_a_task_that_is_archived(monkeypatch, tmp_path, capsys):
 
     result = main()
 
-    assert result == 1
-    assert "'Foo' is already archived" in capsys.readouterr().out
-    assert list(tmp_path.iterdir()) == [archive]
-    assert opened == []
+    assert result == 0
+    assert capsys.readouterr().out == (
+        "Reopened: 260918 - Foo (added # 30/09/2026) (state: in-progress)\n"
+    )
+    folder = tmp_path / "260918 - Foo"
+    assert folder.is_dir()
+    assert not (tmp_path / "260918 - Foo.zip").exists()
+    assert opened == [folder / "Foo.md"]
 
 
 def test_main_rename_refuses_an_archived_task(monkeypatch, tmp_path, capsys):
