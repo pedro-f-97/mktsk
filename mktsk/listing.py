@@ -86,6 +86,46 @@ def find_task_folder(
     return max(matches, key=lambda match: match[0])[1]
 
 
+def find_task_archive(location: Path, title: str) -> Path | None:
+    """Finds the archive of a task for a title in the given directory.
+
+    An archive is looked up the way a task folder is: by title on any date,
+    ignoring the case, so `mktsk Foo` reaches `260918 - Foo.zip` rather than
+    making a second task beside it. Only files count, so a directory that
+    happens to carry an archive name is left out.
+
+    Args:
+        location: the directory to look in.
+        title: the standardized title to look for.
+
+    Returns:
+        The archive, or None if the directory holds none.
+    """
+    if not location.is_dir():
+        return None
+
+    matches = []
+
+    for entry in location.iterdir():
+        if not entry.is_file() or not standards.is_task_archive(entry.name):
+            continue
+
+        parts = standards._task_date_and_title(
+            entry.name.removesuffix(standards._ARCHIVE_SUFFIX)
+        )
+        # is_task_archive already read the name as a task folder, so this holds
+        assert parts is not None
+
+        if parts[1].casefold() == title.casefold():
+            matches.append((parts[0], entry))
+
+    if not matches:
+        return None
+
+    # an archive copied in by hand leaves the date, so the newest wins
+    return max(matches, key=lambda match: match[0])[1]
+
+
 def _activity(file: Path, date: datetime.date) -> tuple[datetime.date, int, str]:
     """Reads the activity and the state of a task out of its .md.
 
