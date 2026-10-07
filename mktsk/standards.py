@@ -7,6 +7,7 @@ from . import helpers
 _TASK_NAME_SEPARATOR = " - "
 _TASK_DATE_PREFIX_LENGTH = 6
 _TASK_DATE_FORMAT = "%y%m%d"
+_ARCHIVE_SUFFIX = ".zip"
 
 
 def _without_accents(value: str) -> str:
@@ -107,6 +108,25 @@ def is_task_folder(name: str) -> bool:
         and not title[0].islower()
         and not helpers.is_reserved_name(title)
     )
+
+
+def is_task_archive(name: str) -> bool:
+    """Tells whether a file name is the archive of a task.
+
+    A task archive is the folder it holds with the archive suffix, so every
+    rule that decides what a task folder is decides what its archive is as
+    well: the same date prefix, the same title shape, the same reserved names.
+
+    Args:
+        name: the file name to check.
+
+    Returns:
+        True if the name identifies a task archive.
+    """
+    if not name.endswith(_ARCHIVE_SUFFIX):
+        return False
+
+    return is_task_folder(name[: -len(_ARCHIVE_SUFFIX)])
 
 
 def _reserved_task_title(name: str) -> bool:

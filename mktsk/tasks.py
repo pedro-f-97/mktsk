@@ -1,4 +1,7 @@
 import datetime
+import os
+import shutil
+import zipfile
 from pathlib import Path
 from typing import NamedTuple
 
@@ -91,8 +94,9 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
         with the state change when this visit records one.
 
     Raises:
-        TaskError: If the title is empty, normalizes to nothing, or is a
-            reserved Windows name.
+        TaskError: If the title is empty, normalizes to nothing, is a
+            reserved Windows name, or names a task that is archived, which
+            the archive already is until reopening arrives.
     """
     title = standards.standardize_string(raw_title)
 
@@ -107,6 +111,12 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
 
     if existing is not None:
         return _resume_task(existing, title, today)
+
+    # a title is unique in a directory whether the task stands as a folder or
+    # as an archive, so an archived task is not resumed and not duplicated: a
+    # second one beside the zip would be two of one title
+    if listing.find_task_archive(location, title) is not None:
+        raise helpers.TaskError(f"'{title}' is already archived")
 
     folder_name = standards.build_folder_name(title)
     created_folder = files.create_folder(location, folder_name)
@@ -163,7 +173,9 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
 
     Raises:
         TaskError: If the new title is empty, normalizes to nothing, is a
-            reserved Windows name, or names a task that is already there.
+            reserved Windows name, names a task that is already there, or
+            names one that is archived; or if the task being renamed is
+            archived itself, which only a leftover of a failed close leaves.
         OSError: If the folder or the file cannot be renamed.
     """
     new_title = standards.standardize_string(raw_title)
@@ -179,6 +191,11 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     if not file.is_file():
         raise helpers.TaskError(f"'{title}' has no Markdown file")
 
+    # a task with an archive beside it is closed, and renaming it would leave
+    # the archive carrying a title the folder no longer answers to
+    if listing.find_task_archive(folder.parent, title) is not None:
+        raise helpers.TaskError(f"'{title}' is already archived")
+
     if new_title == title:
         return TaskResult(file, f"Renamed: {folder.name}")
 
@@ -192,6 +209,11 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     # changes the case would be a clash with the task it already is.
     if listing.find_task_folder(folder.parent, new_title, exclude=folder) is not None:
         raise helpers.TaskError(f"'{new_title}' is already a task here")
+
+    # an archive holds the title as a task folder does, so the target of a
+    # rename cannot be one either
+    if listing.find_task_archive(folder.parent, new_title) is not None:
+        raise helpers.TaskError(f"'{new_title}' is already archived")
 
     new_file = folder / f"{new_title}.md"
 
@@ -208,3 +230,134 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     renamed_file = renamed_folder / f"{new_title}.md"
 
     return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")
+
+
+def _archive_members(folder: Path, md: Path) -> list[tuple[str, bytes]]:
+    """Reads every file of a folder into the members of its archive.
+
+    The .md is the one member read as text: it goes in carrying the closed
+    event, while the file on disk keeps whatever it had, so a failure halfway
+    never leaves the task half closed. Every other file is archived as it is.
+
+    Args:
+        folder: the task folder to archive.
+        md: the .md of the task, the member that carries the closed event.
+
+    Returns:
+        The archive path of each file of the folder and its content, in the
+        order the files come out of the folder.
+    """
+    members = []
+
+    for path in sorted(folder.rglob("*")):
+        if not path.is_file():
+            continue
+
+        arcname = f"{folder.name}/{path.relative_to(folder).as_posix()}"
+
+        if path == md:
+            content = path.read_text(encoding="utf-8")
+            # the event line carries no zone, so the wall clock of the machine
+            # is enough and the time is kept naive, the way set_state writes it
+            now = datetime.datetime.now()  # noqa: DTZ005
+            closed = state.with_state(content, "closed", now)
+            members.append((arcname, closed.encode("utf-8")))
+        else:
+            members.append((arcname, path.read_bytes()))
+
+    return members
+
+
+def _verify_archive(temp: Path, members: list[tuple[str, bytes]]) -> None:
+    """Reopens the archive just written and checks it against what went in.
+
+    Nothing is renamed and no folder is removed until this passes, so an
+    archive that lost a member or came out short never reaches the name a
+    closed task answers to.
+
+    Args:
+        temp: the archive under its temporary name.
+        members: the archive paths and contents that were written.
+
+    Raises:
+        TaskError: If the archive is corrupt, holds other names than the ones
+            written, or a member has the wrong size.
+    """
+    expected_sizes = {name: len(data) for name, data in members}
+
+    with zipfile.ZipFile(temp) as archive:
+        corrupt = archive.testzip()
+
+        if corrupt is not None:
+            raise helpers.TaskError(
+                f"archive verification failed: '{corrupt}' is corrupt"
+            )
+
+        names = archive.namelist()
+
+        if len(names) != len(expected_sizes) or set(names) != set(expected_sizes):
+            raise helpers.TaskError("archive verification failed: unexpected contents")
+
+        for info in archive.infolist():
+            if info.file_size != expected_sizes[info.filename]:
+                raise helpers.TaskError(
+                    f"archive verification failed: '{info.filename}' has the wrong size"
+                )
+
+
+def close_task(folder: Path, title: str) -> TaskResult:
+    """Compresses a task folder into an archive beside it and deletes it.
+
+    The archive takes the place of the folder in the same directory, named
+    after it, and its .md carries the closed event while the .md on disk is
+    left as it is. Nothing is deleted until the archive exists, opens and
+    matches what went into it, so a failure at any point loses nothing: a
+    failure before the folder goes leaves the folder alone, and a failure
+    removing it keeps the archive and the folder both.
+
+    Args:
+        folder: the task folder to close.
+        title: the standardized title of the task.
+
+    Returns:
+        The archive and a message describing what happened.
+
+    Raises:
+        TaskError: If the task is already archived, has no .md, the archive
+            fails verification, or the folder cannot be removed now that the
+            archive is in place.
+    """
+    archive = folder.parent / f"{folder.name}.zip"
+
+    if listing.find_task_archive(folder.parent, title) is not None:
+        raise helpers.TaskError(f"'{title}' is already archived")
+
+    file = folder / f"{title}.md"
+
+    if not file.is_file():
+        raise helpers.TaskError(f"'{title}' has no Markdown file")
+
+    temp = folder.parent / f".{folder.name}.zip.part"
+
+    try:
+        members = _archive_members(folder, file)
+
+        with zipfile.ZipFile(temp, "w", zipfile.ZIP_DEFLATED) as handle:
+            for name, data in members:
+                handle.writestr(name, data)
+
+        _verify_archive(temp, members)
+        os.replace(temp, archive)
+    except BaseException:
+        temp.unlink(missing_ok=True)
+        raise
+
+    try:
+        shutil.rmtree(folder)
+    except OSError as error:
+        raise helpers.TaskError(
+            f"'{folder.name}' is archived as {archive.name}, but the folder "
+            f"could not be removed: {error}"
+        ) from error
+
+    return TaskResult(archive, f"Closed: {archive.name}")

@@ -1,4 +1,5 @@
 import datetime
+import zipfile
 from pathlib import Path
 from typing import NamedTuple
 
@@ -6,17 +7,19 @@ from . import parsing, standards, state
 
 
 class TaskEntry(NamedTuple):
-    """A task folder found under a base directory.
+    """A task folder or archive found under a base directory.
 
     Attributes:
-        date: the date in the name of the folder, the day the task was created.
+        date: the date in the name of the folder or archive, the day the task
+            was created.
         title: the standardized title of the task.
-        file: the .md that goes with the folder.
-        last_activity: the most recent intervention of the .md, or the folder date
-            when the file carries none or cannot be read.
+        file: the .md that goes with the folder, or the archive that holds the
+            whole task once it is closed.
+        last_activity: the most recent intervention of the .md, or the date in
+            the name when the file carries none or cannot be read.
         interventions: how many interventions the .md carries.
         state: what the .md says the task is in, `open` when nothing can be
-            read out of it.
+            read out of it, and `closed` for an archive whatever it holds.
     """
 
     date: datetime.date
@@ -86,6 +89,46 @@ def find_task_folder(
     return max(matches, key=lambda match: match[0])[1]
 
 
+def find_task_archive(location: Path, title: str) -> Path | None:
+    """Finds the archive of a task for a title in the given directory.
+
+    An archive is looked up the way a task folder is: by title on any date,
+    ignoring the case, so `mktsk Foo` reaches `260918 - Foo.zip` rather than
+    making a second task beside it. Only files count, so a directory that
+    happens to carry an archive name is left out.
+
+    Args:
+        location: the directory to look in.
+        title: the standardized title to look for.
+
+    Returns:
+        The archive, or None if the directory holds none.
+    """
+    if not location.is_dir():
+        return None
+
+    matches = []
+
+    for entry in location.iterdir():
+        if not entry.is_file() or not standards.is_task_archive(entry.name):
+            continue
+
+        parts = standards._task_date_and_title(
+            entry.name.removesuffix(standards._ARCHIVE_SUFFIX)
+        )
+        # is_task_archive already read the name as a task folder, so this holds
+        assert parts is not None
+
+        if parts[1].casefold() == title.casefold():
+            matches.append((parts[0], entry))
+
+    if not matches:
+        return None
+
+    # an archive copied in by hand leaves the date, so the newest wins
+    return max(matches, key=lambda match: match[0])[1]
+
+
 def _activity(file: Path, date: datetime.date) -> tuple[datetime.date, int, str]:
     """Reads the activity and the state of a task out of its .md.
 
@@ -122,41 +165,94 @@ def _activity(file: Path, date: datetime.date) -> tuple[datetime.date, int, str]
     return parsed.last_activity, len(parsed.interventions), task_state
 
 
+def _archive_activity(
+    archive: Path, date: datetime.date, title: str
+) -> tuple[datetime.date, int]:
+    """Reads the activity of the .md an archive holds.
+
+    The .md of a closed task travels into the archive carrying the closed
+    event, so its interventions and its last activity are read from there.
+    An archive that cannot be read, holds no .md, or holds one in the old
+    format says nothing about its task, and never brings the listing down:
+    the date in the name stands in, with no interventions, the same fallback
+    a folder gets. The state is not read here: an archive is the task closed
+    whatever the file inside it says.
+
+    Args:
+        archive: the task archive.
+        date: the date in the name of the archive, as a last resort.
+        title: the standardized title of the task.
+
+    Returns:
+        The last activity of the task and how many interventions it carries.
+    """
+    root = archive.name.removesuffix(standards._ARCHIVE_SUFFIX)
+
+    try:
+        with zipfile.ZipFile(archive) as handle:
+            content = handle.read(f"{root}/{title}.md").decode("utf-8")
+    except (OSError, KeyError, UnicodeDecodeError, zipfile.BadZipFile):
+        return date, 0
+
+    if parsing.is_legacy(content):
+        return date, 0
+
+    parsed = parsing.parse_task(content)
+
+    if parsed.last_activity is None:
+        return date, 0
+
+    return parsed.last_activity, len(parsed.interventions)
+
+
 def _tasks_in(directory: Path) -> list[TaskEntry]:
-    """Collects the task folders of a directory, by last activity.
+    """Collects the task folders and archives of a directory, by last activity.
 
     A task folder is listed only when it holds the .md file that goes with it,
-    so a folder left without one is never offered to open. A directory that
-    cannot be read holds no tasks, and is left out rather than raising.
+    so a folder left without one is never offered to open. An archive is
+    listed with the state `closed`, read as the folder would be apart from
+    its state, so the two sort into one list by the work they carry. A
+    directory that cannot be read holds no tasks, and is left out rather
+    than raising.
 
     Args:
         directory: the directory to look in.
 
     Returns:
-        One entry per task folder, by last activity, newest first and
-        alphabetical for tasks of the same last activity.
+        One entry per task folder or archive, by last activity, newest first
+        and alphabetical for tasks of the same last activity.
     """
     try:
-        folders = list(directory.iterdir())
+        on_disk = list(directory.iterdir())
     except OSError:
         return []
 
     entries = []
 
-    for folder in folders:
-        if not folder.is_dir():
-            continue
+    for entry in on_disk:
+        if entry.is_dir():
+            parts = standards._task_date_and_title(entry.name)
+            if parts is None:
+                continue
 
-        parts = standards._task_date_and_title(folder.name)
-        if parts is None:
-            continue
+            date, title = parts
+            file = entry / f"{title}.md"
+            if file.is_file():
+                last_activity, interventions, task_state = _activity(file, date)
+                entries.append(
+                    TaskEntry(date, title, file, last_activity, interventions, task_state)
+                )
+        elif standards.is_task_archive(entry.name):
+            parts = standards._task_date_and_title(
+                entry.name.removesuffix(standards._ARCHIVE_SUFFIX)
+            )
+            # is_task_archive already read the name as a task folder
+            assert parts is not None
 
-        date, title = parts
-        file = folder / f"{title}.md"
-        if file.is_file():
-            last_activity, interventions, task_state = _activity(file, date)
+            date, title = parts
+            last_activity, interventions = _archive_activity(entry, date, title)
             entries.append(
-                TaskEntry(date, title, file, last_activity, interventions, task_state)
+                TaskEntry(date, title, entry, last_activity, interventions, "closed")
             )
 
     return sorted(

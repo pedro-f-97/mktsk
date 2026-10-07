@@ -37,6 +37,7 @@ from .tasklist import (
 from .tree import _PATH_ROLE, _CategoryTree
 
 _ALL_TAB = "All"
+_CLOSED_TAB = "Closed"
 
 
 class MainWindow(QMainWindow):
@@ -190,17 +191,38 @@ class MainWindow(QMainWindow):
         self.tabs.clear()
 
         every = self._new_listing()
+        shut = self._new_listing()
+        closed_here = False
+
         for title, group in sections:
-            self._add_heading(every, title)
-            for entry in group.entries:
-                self._add_task(every, entry, today)
+            standing = [entry for entry in group.entries if entry.state != "closed"]
+            archived = [entry for entry in group.entries if entry.state == "closed"]
+
+            if standing:
+                self._add_heading(every, title)
+                for entry in standing:
+                    self._add_task(every, entry, today)
+
+            if archived:
+                self._add_heading(shut, title)
+                for entry in archived:
+                    self._add_task(shut, entry, today)
+                closed_here = True
+
         self._add_tab(_ALL_TAB, every)
 
         for title, group in sections:
+            standing = [entry for entry in group.entries if entry.state != "closed"]
+            if not standing:
+                continue
+
             tab = self._new_listing()
-            for entry in group.entries:
+            for entry in standing:
                 self._add_task(tab, entry, today)
             self._add_tab(title, tab)
+
+        if closed_here:
+            self._add_tab(_CLOSED_TAB, shut)
 
         self._select_tab(active)
 
@@ -229,6 +251,7 @@ class MainWindow(QMainWindow):
         tab.resume_requested.connect(self.resume_task)
         tab.rename_requested.connect(self.rename_task)
         tab.state_requested.connect(self.change_state)
+        tab.close_requested.connect(self.close_task)
         return tab
 
     def _add_tab(self, title: str, tab: TaskListing) -> None:
@@ -367,6 +390,34 @@ class MainWindow(QMainWindow):
         """
         try:
             state.set_state(entry.file, new_state)
+        except (OSError, helpers.TaskError) as error:
+            QMessageBox.critical(self, "mktsk", str(error))
+            return
+
+        self.refresh()
+
+    def close_task(self, entry: listing.TaskEntry) -> None:
+        """Archives a task folder into a zip, after asking for it.
+
+        The folder becomes a zip beside where it stood, and the .md inside the
+        zip carries the closed event. The folder is only gone once the archive
+        is verified, and nothing is opened: the task is over.
+
+        Args:
+            entry: the selected task.
+        """
+        answer = QMessageBox.question(
+            self,
+            "mktsk",
+            f"Close {helpers.readable_title(entry.title)}? "
+            "The folder becomes a zip file.",
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            tasks.close_task(entry.file.parent, entry.title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return
