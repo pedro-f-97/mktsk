@@ -30,8 +30,6 @@ workflow interactively.
   close, reopen, and record the state those visits change
 - `mktsk/parsing.py` — reads the text of a `.md` in the new format: interventions,
   state events, last activity. Pure functions, no I/O
-- `mktsk/migration.py` — converts the text of a `.md` from the old format to the
-  new one, and the command line that applies it to a tree of tasks
 - `mktsk/state.py` — state handling: current state, updating state, writing
   atomically. Pure layer and thin I/O
 - `tests/` — pytest suite
@@ -101,8 +99,8 @@ change the name.
   is recognised the way the parser reads it, so a heading written by hand in another of
   the accepted forms, with stray spacing or inside a code block, counts
 - A `.md` in the old format is refused rather than read: `append_date_section` raises
-  `TaskError` naming the file and `python -m mktsk.migration`, and nothing is written, so the
-  migration can still convert it. `is_legacy` is what recognises one
+  `TaskError` naming the file and saying it is in the old format and was not read, and
+  nothing is written. `is_legacy` is what recognises one
 - The state follows what you do: creating records `open`, and resuming with a new section
   records `in-progress` when the state is `open`, `waiting` or `closed`. Resuming on the
   same day never changes the state, a state already `in-progress` writes nothing, and only
@@ -235,10 +233,9 @@ change the name.
 ## The new .md format
 
 This is the format mktsk writes: `files.append_date_section` writes it and reads it
-back with `mktsk/parsing.py`, and `mktsk/migration.py` converts a file that was
-written in the old one, a `# <StandardizedTitle>` heading and a
-`## <dd/mm/YYYY>` heading per visit. The plan the steps come from is in
-`PLAN.md`.
+back with `mktsk/parsing.py`. The old format, a `# <StandardizedTitle>` heading and a
+`## <dd/mm/YYYY>` heading per visit, is refused rather than read. The plan the steps
+come from is in `PLAN.md`.
 
 ```markdown
 # 18/09/2026
@@ -289,10 +286,9 @@ Free text, with levels 2 to 6 available.
   closed runs to the end of the file
 - A file may start with a utf-8 byte order mark, which `utf-8` reads as U+FEFF rather than
   taking off, and a mark is not text: left in place it hides the first heading from
-  `parse_task`, `is_legacy` and the migration. `parsing.without_bom` takes it off, and it is
+  `parse_task` and `is_legacy`. `parsing.without_bom` takes it off, and it is
   the one place that does, so every reader goes through it. Nothing that writes adds a mark
-  or takes one away, so a file keeps the one it was written with, and the migration puts it
-  back in front of what it writes
+  or takes one away, so a file keeps the one it was written with
 - `is_legacy` recognises the old format: the first non-empty line is a level 1 heading
   with no date on it, and the file has a level 2 heading with a date. It is never read as
   the new one, so the title is not mistaken for an intervention
@@ -485,8 +481,8 @@ Free text, with levels 2 to 6 available.
 - Comment only when it adds value; never delete existing comments
 - Tests in `tests/test_*.py`; never write to real user folders (`tmp_path`)
 - One test file per subject, named after it (`test_gui_listing.py`, `test_gui_target.py`,
-  `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py`, `test_gui_window.py`,
-  `test_migration.py`); a file that grows past a few hundred lines is split, never extended
+  `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py`, `test_gui_window.py`);
+  a file that grows past a few hundred lines is split, never extended
 - Fixtures go in `tests/conftest.py`; the plain helpers shared across GUI test files live
   in `tests/gui_helpers.py` and are imported as `from tests.gui_helpers import ...`, because
   `tests/__init__.py` makes `tests/` a package

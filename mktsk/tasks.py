@@ -58,8 +58,7 @@ def _resume_task(
         with the state change when this visit records one.
 
     Raises:
-        TaskError: If the .md is in the old format, which the migration has to
-            convert first.
+        TaskError: If the .md is in the old format and was not read.
     """
     # the title is the one the folder carries rather than the one the lookup was
     # given: a folder renamed by hand keeps the capitals of its own name, and the
@@ -163,8 +162,8 @@ def resume_task(folder: Path, title: str) -> TaskResult:
         with the state change when this visit records one.
 
     Raises:
-        TaskError: If the .md is in the old format, which the migration has to
-            convert first, or the archive of the task cannot be reopened.
+        TaskError: If the .md is in the old format and was not read, or the
+            archive of the task cannot be reopened.
     """
     today = datetime.datetime.now().astimezone().date()
 

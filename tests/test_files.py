@@ -207,10 +207,10 @@ def test_append_date_section_refuses_a_file_in_the_old_format(tmp_path):
     content = "# Foo\n\n## 18/09/2026\n\nnotes\n"
     file.write_text(content, encoding="utf-8")
 
-    with pytest.raises(TaskError, match=r"python -m mktsk\.migration"):
+    with pytest.raises(TaskError, match=r"is in the old format and was not read"):
         append_date_section(file, datetime.date(2026, 9, 30))
 
-    # nothing was written, so the migration can still convert the file
+    # nothing was written, the file is left as it was
     assert file.read_text(encoding="utf-8") == content
 
 

@@ -3,9 +3,6 @@ from pathlib import Path
 
 from . import helpers, parsing, standards, state
 
-# the command that converts a tree of tasks to the format mktsk writes
-_MIGRATION_COMMAND = "python -m mktsk.migration"
-
 
 def _has_bom(content: str) -> bool:
     """Tells whether the text of a .md starts with a byte order mark."""
@@ -102,8 +99,7 @@ def append_date_section(file: Path, date: datetime.date) -> bool:
 
     if parsing.is_legacy(content):
         raise helpers.TaskError(
-            f"'{file.name}' is in the old format: run "
-            f"'{_MIGRATION_COMMAND} <folder>' to convert it"
+            f"'{file.name}' is in the old format and was not read"
         )
 
     if any(
