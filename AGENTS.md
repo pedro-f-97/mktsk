@@ -433,12 +433,10 @@ Free text, with levels 2 to 6 available.
   it was asked for, not to one looked up in the current directory. It refreshes the listing
   as well, because the row carries the count and the age that the new intervention has
   changed
-- `Close` emits `close_requested` with the entry, and the window asks for confirmation in
-  a `QMessageBox.question` before it does anything: declined, nothing changes; accepted, it
-  calls `close_task` on the folder the entry points at, showing a failure in a
-  `QMessageBox.critical` like every other action and refreshing the list on success, so
-  the task moves to the `Closed` tab. Nothing is opened either way, and with no selection
-  nothing changes
+- `Close` emits `close_requested` with the entry, and the window calls `close_task` on
+  the folder the entry points at, showing a failure in a `QMessageBox.critical` like every
+  other action and refreshing the list on success, so the task moves to the `Closed` tab.
+  Nothing is opened either way, and with no selection nothing changes
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
   what was created; the warning carries the error as it is, `helpers.open_file` already

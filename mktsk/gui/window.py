@@ -397,7 +397,7 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def close_task(self, entry: listing.TaskEntry) -> None:
-        """Archives a task folder into a zip, after asking for it.
+        """Archives a task folder into a zip.
 
         The folder becomes a zip beside where it stood, and the .md inside the
         zip carries the closed event. The folder is only gone once the archive
@@ -406,16 +406,6 @@ class MainWindow(QMainWindow):
         Args:
             entry: the selected task.
         """
-        answer = QMessageBox.question(
-            self,
-            "mktsk",
-            f"Close {helpers.readable_title(entry.title)}? "
-            "The folder becomes a zip file.",
-        )
-
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-
         try:
             tasks.close_task(entry.file.parent, entry.title)
         except (OSError, helpers.TaskError) as error:

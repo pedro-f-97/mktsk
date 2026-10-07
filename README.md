@@ -389,7 +389,7 @@ Opens a window where you can:
     the state of the task changes where it lives, a line at the end of its Markdown file,
     and the list shows the new state at once. A file can carry `closed` too, but this
     menu does not set it.
-  * `Close` asks you to confirm, then compresses the folder into a zip beside where it
+  * `Close` compresses the folder into a zip beside where it
     stood, verified before the folder is deleted, and the task moves to the `Closed` tab.
     Nothing is opened, because the task is over.
 
