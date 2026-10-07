@@ -80,6 +80,32 @@ def test_rename_task_rejects_a_task_that_is_already_there(tmp_path, make_task):
     assert (tmp_path / "260917 - FSocietyEverbind").is_dir()
 
 
+def test_rename_task_rejects_a_title_an_archive_holds(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    archive = tmp_path / "260930 - Everbind.zip"
+    archive.write_bytes(b"zip")
+
+    with pytest.raises(TaskError, match="already archived"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert (tmp_path / "260918 - FSociety").is_dir()
+    assert file.read_text(encoding="utf-8") == "# 18/09/2026\n\n"
+    assert archive.is_file()
+
+
+def test_rename_task_rejects_a_task_that_is_archived(tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "FSociety")
+    archive = tmp_path / "260918 - FSociety.zip"
+    archive.write_bytes(b"zip")
+
+    with pytest.raises(TaskError, match="already archived"):
+        rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert (tmp_path / "260918 - FSociety").is_dir()
+    assert file.read_text(encoding="utf-8") == "# 18/09/2026\n\n"
+    assert archive.is_file()
+
+
 def test_rename_task_rejects_a_title_of_another_date(tmp_path, make_task):
     # a title is unique in a directory, whichever date the task it clashes with
     # carries, so renaming must not be the way to end up with two of one title

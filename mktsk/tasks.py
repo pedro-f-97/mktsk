@@ -94,8 +94,9 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
         with the state change when this visit records one.
 
     Raises:
-        TaskError: If the title is empty, normalizes to nothing, or is a
-            reserved Windows name.
+        TaskError: If the title is empty, normalizes to nothing, is a
+            reserved Windows name, or names a task that is archived, which
+            the archive already is until reopening arrives.
     """
     title = standards.standardize_string(raw_title)
 
@@ -110,6 +111,12 @@ def open_or_create_task(location: Path, raw_title: str) -> TaskResult:
 
     if existing is not None:
         return _resume_task(existing, title, today)
+
+    # a title is unique in a directory whether the task stands as a folder or
+    # as an archive, so an archived task is not resumed and not duplicated: a
+    # second one beside the zip would be two of one title
+    if listing.find_task_archive(location, title) is not None:
+        raise helpers.TaskError(f"'{title}' is already archived")
 
     folder_name = standards.build_folder_name(title)
     created_folder = files.create_folder(location, folder_name)
@@ -166,7 +173,9 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
 
     Raises:
         TaskError: If the new title is empty, normalizes to nothing, is a
-            reserved Windows name, or names a task that is already there.
+            reserved Windows name, names a task that is already there, or
+            names one that is archived; or if the task being renamed is
+            archived itself, which only a leftover of a failed close leaves.
         OSError: If the folder or the file cannot be renamed.
     """
     new_title = standards.standardize_string(raw_title)
@@ -182,6 +191,11 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     if not file.is_file():
         raise helpers.TaskError(f"'{title}' has no Markdown file")
 
+    # a task with an archive beside it is closed, and renaming it would leave
+    # the archive carrying a title the folder no longer answers to
+    if listing.find_task_archive(folder.parent, title) is not None:
+        raise helpers.TaskError(f"'{title}' is already archived")
+
     if new_title == title:
         return TaskResult(file, f"Renamed: {folder.name}")
 
@@ -195,6 +209,11 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     # changes the case would be a clash with the task it already is.
     if listing.find_task_folder(folder.parent, new_title, exclude=folder) is not None:
         raise helpers.TaskError(f"'{new_title}' is already a task here")
+
+    # an archive holds the title as a task folder does, so the target of a
+    # rename cannot be one either
+    if listing.find_task_archive(folder.parent, new_title) is not None:
+        raise helpers.TaskError(f"'{new_title}' is already archived")
 
     new_file = folder / f"{new_title}.md"
 

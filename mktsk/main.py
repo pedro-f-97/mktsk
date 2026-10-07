@@ -230,6 +230,12 @@ def _rename(location: Path, folder_name: str, raw_title: str) -> int:
     folder = location / folder_name
 
     if not folder.is_dir():
+        # an archive is the task closed, and its folder is gone: renaming it
+        # is refused rather than reported as a folder that is not there
+        if listing.find_task_archive(location, title) is not None:
+            print(f"Error: '{title}' is already archived")
+            return 1
+
         print(f"Error: '{folder_name}' is not there")
         return 1
 

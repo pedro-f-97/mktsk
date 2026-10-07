@@ -196,6 +196,19 @@ def test_open_or_create_task_reserved_name(tmp_path):
 
 
 @freeze_time("2026-09-30")
+def test_open_or_create_task_refuses_a_task_that_is_archived(tmp_path):
+    archive = tmp_path / "260918 - Foo.zip"
+    archive.write_bytes(b"zip")
+
+    # the archive is the task closed, so a second one beside it would be a
+    # duplicate; reopening is a later step
+    with pytest.raises(TaskError, match="already archived"):
+        open_or_create_task(tmp_path, "foo")
+
+    assert list(tmp_path.iterdir()) == [archive]
+
+
+@freeze_time("2026-09-30")
 def test_resume_task_uses_the_given_folder(tmp_path, make_task):
     make_task(tmp_path, "260918", "FSociety")
     folder = tmp_path / "260918 - FSociety"
