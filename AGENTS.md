@@ -435,9 +435,10 @@ Free text, with levels 2 to 6 available.
   file has to be collected for a frozen build
 - The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
   checks the item holds a `TaskEntry` before showing or placing the bar. A row in the
-  `Closed` tab gets a bar with only the resume action, and room for it, because reopening
+  `Closed` tab gets a bar with only the reopen button, and room for it, because reopening
   is the one action that reaches an archive; `set_reopening` takes the other four buttons
-  out until the folder stands again
+  out until the folder stands again, and gives the resume button the reopen icon and
+  tooltip while it stands for one, putting them back afterwards
 - Only the selected row is inset to make room for the bar, so the space appears when the
   row is clicked and is given back when the selection goes; every row keeps the height
   the bar needs, or the list would shift as the selection moves

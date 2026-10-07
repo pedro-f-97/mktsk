@@ -90,6 +90,13 @@ def _draw_close(painter: QPainter, box: QRectF) -> None:
     painter.drawLine(QPointF(7.5, 5.5), QPointF(10.5, 5.5))
 
 
+def _draw_reopen(painter: QPainter, box: QRectF) -> None:
+    """Draws a circular arrow turning counter-clockwise, for restoring."""
+    painter.drawArc(QRectF(4, 4, 10, 10), 1440, 4320)
+    painter.drawLine(QPointF(14, 9), QPointF(11.9, 11.1))
+    painter.drawLine(QPointF(14, 9), QPointF(16.1, 11.1))
+
+
 def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QIcon:
     """Renders a stroked icon on a transparent image.
 

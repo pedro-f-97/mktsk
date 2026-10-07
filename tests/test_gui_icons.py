@@ -6,6 +6,7 @@ from mktsk.gui.icons import (
     _draw_close,
     _draw_folder,
     _draw_plus,
+    _draw_reopen,
     _draw_state,
     _stroked_icon,
 )
@@ -90,3 +91,9 @@ def test_the_close_icon_is_a_box_with_a_lid(qapp):
     # and the box under the lid is an outline rather than a filled block
     assert ink[12][9] is False
     assert ink[15][4] is True
+
+
+def test_the_reopen_icon_is_not_the_resume_icon(qapp):
+    # reopening an archived task is not adding a note, so the two icons must
+    # draw different images
+    assert _ink(_draw_reopen) != _ink(_draw_plus)

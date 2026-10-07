@@ -38,8 +38,10 @@ from .icons import (
     _draw_folder,
     _draw_pencil,
     _draw_plus,
+    _draw_reopen,
     _draw_state,
     _icon_button,
+    _stroked_icon,
 )
 
 _ENTRY_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -276,6 +278,10 @@ class _ActionBar(QWidget):
             self, "Change the state of this task", _draw_state, "ChangeState"
         )
         self.close_button = _icon_button(self, "Close this task", _draw_close, "CloseTask")
+        # the resume button is the one set_reopening turns into the reopen
+        # action, so what it starts with is what puts back
+        self._resume_icon = self.resume_button.icon()
+        self._resume_tooltip = self.resume_button.toolTip()
         self.state_menu = QMenu(self.state_button)
         for offered in _OFFERED_STATES:
             self.state_menu.addAction(offered)
@@ -303,10 +309,13 @@ class _ActionBar(QWidget):
         )
 
     def set_reopening(self, reopening: bool) -> None:
-        """Offers resume alone for a row that holds a closed task.
+        """Offers reopen alone for a row that holds a closed task.
 
         The other four actions all speak to a folder, and only reopening
-        makes the folder stand again, so they are left out until then.
+        makes the folder stand again, so they are left out until then. The
+        button that carries resume carries the reopen icon and tooltip while
+        it stands for reopening, because reopening an archived task is not
+        adding a note for today; putting it back restores both.
 
         Args:
             reopening: True when the selected row holds a closed task.
@@ -318,6 +327,20 @@ class _ActionBar(QWidget):
             self.close_button,
         ):
             button.setVisible(not reopening)
+
+        if reopening:
+            self.resume_button.setIcon(
+                _stroked_icon(
+                    self.resume_button.palette().color(
+                        QPalette.ColorRole.ButtonText
+                    ),
+                    _draw_reopen,
+                )
+            )
+            self.resume_button.setToolTip("Reopen this task")
+        else:
+            self.resume_button.setIcon(self._resume_icon)
+            self.resume_button.setToolTip(self._resume_tooltip)
 
 
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
@@ -412,9 +435,9 @@ class TaskListing(QListWidget):
 
     The bar follows the selected row, and shows only when a task is selected.
     Headings are not selectable, so they never get one, and a closed task gets
-    the resume action alone, which reopens it: the other actions all speak to
-    a folder. The listing only reports which action was asked for, leaving the
-    task logic to the window.
+    a single button, the reopen action, which still reports resume: the other
+    actions all speak to a folder. The listing only reports which action was
+    asked for, leaving the task logic to the window.
     """
 
     open_requested = Signal(object)
@@ -490,7 +513,7 @@ class TaskListing(QListWidget):
         entry = self.selected_entry()
 
         # a row that holds an archive is reopened from it and nothing else,
-        # so the bar it gets carries the resume action alone
+        # so the bar it gets carries the reopen button alone
         self.action_bar.set_reopening(entry is not None and entry.state == "closed")
 
         self.delegate.inset_row = self.currentRow()
