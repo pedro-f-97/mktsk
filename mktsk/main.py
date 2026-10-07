@@ -150,12 +150,16 @@ def _list(location: Path, only: str | None = None) -> int:
     Each category is a heading of its own name, the directory here included, and
     the tasks under it read as they do in the GUI: the date, two spaces, then the
     title read as words. The tasks of a category come by last activity, so the
-    one you worked on last is the first. A directory with no tasks prints nothing
-    at all, and so does a category left without a task by the state filter.
+    one you worked on last is the first. A closed task is left out by default,
+    so what stands as folders is what the listing shows; `only` names a state to
+    show instead, `closed` included, which is how the archives are read. A
+    directory with no tasks prints nothing at all, and so does a category left
+    without a task by the state filter.
 
     Args:
         location: the directory to list.
-        only: a state to filter by, listing every task when None.
+        only: a state to filter by, listing every task that is not closed when
+            None.
 
     Returns:
         0.
@@ -167,9 +171,10 @@ def _list(location: Path, only: str | None = None) -> int:
         raise helpers.TaskError(f"invalid state: {only}")
 
     for group in listing.find_task_groups(location):
-        entries = [
-            entry for entry in group.entries if only is None or entry.state == only
-        ]
+        if only is None:
+            entries = [entry for entry in group.entries if entry.state != "closed"]
+        else:
+            entries = [entry for entry in group.entries if entry.state == only]
         if not entries:
             continue
 
