@@ -156,28 +156,40 @@ mktsk --list
 
 ```text
 tasks/
-  18/09/2026  Its Alive  (2 interventions, last activity 30/09/2026)
-  23/09/2026  F Society  (1 intervention, last activity 23/09/2026)
+  18/09/2026  Its Alive  (in-progress, 2 interventions, last activity 30/09/2026)
+  23/09/2026  F Society  (open, 1 intervention, last activity 23/09/2026)
 Able/
-  19/09/2026  Foo  (1 intervention, last activity 19/09/2026)
+  19/09/2026  Foo  (open, 1 intervention, last activity 19/09/2026)
 Veritas/
-  25/09/2026  F Society Everbind  (1 intervention, last activity 25/09/2026)
+  25/09/2026  F Society Everbind  (open, 1 intervention, last activity 25/09/2026)
 ```
 
 Each directory is a heading, the one you are in first, and the tasks under it read the
 same way the GUI shows them: the date of the folder, two spaces, then the title read as
 words (`FSocietyEverbind` shows as `F Society Everbind`). What the Markdown file knows
-comes after it: how many dated sections the file has, the one the task was born with
-counted, and the date of the last of them.
+comes after it: the state the task is in, how many dated sections the file has, the one
+the task was born with counted, and the date of the last of them.
 
 Tasks come by last activity, so the one you worked on last is the first, whichever day it
 was created, and coming back to a task moves it to the top. Tasks of the same last activity
 are alphabetical, and the directories themselves are in alphabetical order.
 
+Pass `--only` with a state to keep only the tasks in it:
+
+```bash
+mktsk --list --only waiting
+```
+
+It takes `open`, `in-progress`, `waiting` and `closed`, since it filters what the files
+carry rather than what the command can set. A category left without a task prints no
+heading at all, and any other word is an error. On its own, without `--list`, it is
+refused before anything is listed.
+
 A task folder without its Markdown file is left out, since there is nothing to open. A
 Markdown file that cannot be read keeps its task in the list, and so does one with no
 dated section, or one still in the old format: the date of the folder stands in as its
-last activity, since there is nothing in the file to read it from.
+last activity, since there is nothing in the file to read it from, and the state of such
+a task is `open`, which is what a file with nothing in it is.
 
 ## Setting the state of a task
 

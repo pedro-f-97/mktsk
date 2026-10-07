@@ -169,8 +169,11 @@ change the name.
 - Folder and file names are ASCII only
 - `TaskEntry` carries two dates: `date` is the one in the name of the folder, the day the task
   was created, and `last_activity` is the one the `.md` knows. The listing reads every `.md`
-  with `parse_task`, and `interventions` is how many interventions it found. `last_activity`
-  falls back to the folder date when the file is in the old format, when it carries no
+  with `parse_task`, and `interventions` is how many interventions it found. `state` is read
+  from that same text with `current_state`, so the listing never reads a file twice, and it is
+  `open` when the file is in the old format or cannot be read, which is what a file with
+  nothing in it is. `last_activity` falls back to the folder date when the file is in the old
+  format, when it carries no
   intervention, or when it cannot be read, and `interventions` is then 0: a task is still a
   task when nothing can be read out of it. An old file is never read as the new one, so a
   dated heading a conversion left in the body is content rather than a visit. A `.md` that
@@ -263,12 +266,18 @@ Free text, with levels 2 to 6 available.
   does not open the `.md`, because renaming is not working on the task
 - `--list` takes no title and opens nothing; it prints each directory as a heading and
   its tasks under it. A row is `_task_label`: `DATE_FORMAT`, two spaces,
-  `readable_title`, then two spaces and `(3 interventions, last activity 18/09/2026)`,
-  with `intervention` in the singular for one. The first three are the task column of the
-  GUI row; the count and the date are the CLI wording, because the GUI counts in words
-  rather than in dates. The order is the one `find_task_groups` already gives, which is by
-  last activity, so a directory with no tasks prints nothing. Never format a date or a
-  title in the CLI by hand, or the two listings drift apart
+  `readable_title`, then two spaces and `(open, 3 interventions, last activity 18/09/2026)`,
+  the state first and `intervention` in the singular for one. The date and the title are the
+  task column of the GUI row; the state, the count and the date are the CLI wording, because
+  the GUI counts in words rather than in dates. The order is the one `find_task_groups`
+  already gives, which is by last activity, so a directory with no tasks prints nothing.
+  Never format a date or a title in the CLI by hand, or the two listings drift apart
+- `--only <state>` goes with `--list` and keeps only the tasks in that state. It accepts the
+  four states of `parsing.STATES`, `closed` included, because it filters what a `.md`
+  carries rather than what this CLI can set, and anything else raises `TaskError`, which
+  `main` prints as `Error: invalid state: <state>` with exit code 1. A category left
+  without a task by the filter prints no heading at all. On its own it is refused with
+  `parser.error("--only goes with --list")`, so it never reaches `_list`
 - `--new-category <name>` creates a category in the current directory and prints the path;
   it opens nothing, because making somewhere to put tasks is not working on one. The name
   is one argument, so a name with spaces in it has to be quoted, unlike a task title or a

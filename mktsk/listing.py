@@ -2,7 +2,7 @@ import datetime
 from pathlib import Path
 from typing import NamedTuple
 
-from . import parsing, standards
+from . import parsing, standards, state
 
 
 class TaskEntry(NamedTuple):
@@ -15,6 +15,8 @@ class TaskEntry(NamedTuple):
         last_activity: the most recent intervention of the .md, or the folder date
             when the file carries none or cannot be read.
         interventions: how many interventions the .md carries.
+        state: what the .md says the task is in, `open` when nothing can be
+            read out of it.
     """
 
     date: datetime.date
@@ -22,6 +24,7 @@ class TaskEntry(NamedTuple):
     file: Path
     last_activity: datetime.date
     interventions: int
+    state: str
 
 
 class TaskGroup(NamedTuple):
@@ -83,37 +86,40 @@ def find_task_folder(
     return max(matches, key=lambda match: match[0])[1]
 
 
-def _activity(file: Path, date: datetime.date) -> tuple[datetime.date, int]:
-    """Reads the activity of a task out of its .md.
+def _activity(file: Path, date: datetime.date) -> tuple[datetime.date, int, str]:
+    """Reads the activity and the state of a task out of its .md.
 
     The date of the folder stands in for the last activity when the file is in
     the old format, when it carries no intervention, and when it cannot be read:
     a task is still a task when nothing can be read out of it, and one file that
     cannot be read never brings the listing down. An old file is not read as the
     new one, because the dated heading a conversion left behind is content of a
-    file mktsk refuses to touch rather than a visit to the task.
+    file mktsk refuses to touch rather than a visit to the task. The state is
+    `open` in those same cases, which is what a file with nothing in it is.
 
     Args:
         file: the .md of the task.
         date: the date in the name of the folder, as a last resort.
 
     Returns:
-        The last activity of the task and how many interventions it carries.
+        The last activity of the task, how many interventions it carries, and
+        the state its .md says it is in.
     """
     try:
         content = file.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return date, 0
+        return date, 0, "open"
 
     if parsing.is_legacy(content):
-        return date, 0
+        return date, 0, "open"
 
     parsed = parsing.parse_task(content)
+    task_state = state.current_state(content)
 
     if parsed.last_activity is None:
-        return date, 0
+        return date, 0, task_state
 
-    return parsed.last_activity, len(parsed.interventions)
+    return parsed.last_activity, len(parsed.interventions), task_state
 
 
 def _tasks_in(directory: Path) -> list[TaskEntry]:
@@ -148,9 +154,9 @@ def _tasks_in(directory: Path) -> list[TaskEntry]:
         date, title = parts
         file = folder / f"{title}.md"
         if file.is_file():
-            last_activity, interventions = _activity(file, date)
+            last_activity, interventions, task_state = _activity(file, date)
             entries.append(
-                TaskEntry(date, title, file, last_activity, interventions)
+                TaskEntry(date, title, file, last_activity, interventions, task_state)
             )
 
     return sorted(

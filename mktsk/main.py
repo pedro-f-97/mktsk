@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from . import files, helpers, listing, standards, state, tasks
+from . import files, helpers, listing, parsing, standards, state, tasks
 
 _RENAME_MINIMUM_ARGUMENTS = 2
 
@@ -30,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="list the tasks here and in the categories below, and open nothing",
     )
     parser.add_argument(
+        "--only",
+        metavar="STATE",
+        help="with --list, show only the tasks in that state",
+    )
+    parser.add_argument(
         "--new-category",
         metavar="NAME",
         help="create a category folder here, for tasks to be kept apart in",
@@ -49,6 +54,9 @@ def parse_arguments() -> argparse.Namespace:
 
     # every option names what it needs, so each is checked on its own and only
     # the plain form falls back to the title
+    if args.only is not None and not args.list:
+        parser.error("--only goes with --list")
+
     if args.rename and args.list:
         parser.error("--rename and --list do not go together")
 
@@ -83,7 +91,11 @@ def main() -> int:
         return _new_category(Path.cwd(), args.new_category)
 
     if args.list:
-        return _list(Path.cwd())
+        try:
+            return _list(Path.cwd(), args.only)
+        except helpers.TaskError as error:
+            print(f"Error: {error}")
+            return 1
 
     if args.state is not None:
         return _set_state(Path.cwd(), args.state[0], args.state[1])
@@ -110,9 +122,10 @@ def _task_label(entry: listing.TaskEntry) -> str:
     """Formats one task as the listing shows it.
 
     The date of the folder, two spaces and the title read as words are what the
-    GUI shows, and what goes after them is what the .md carries: how many times
-    the task was worked on and the last of those days. A task whose .md cannot
-    be read is still listed, with the date of its folder as its last activity.
+    GUI shows, and what goes after them is what the .md carries: the state the
+    task is in, how many times it was worked on and the last of those days. A
+    task whose .md cannot be read is still listed, with the date of its folder
+    as its last activity and the state `open`.
 
     Args:
         entry: the task to format.
@@ -125,29 +138,45 @@ def _task_label(entry: listing.TaskEntry) -> str:
     title = helpers.readable_title(entry.title)
     noun = "intervention" if entry.interventions == 1 else "interventions"
 
-    return f"{date}  {title}  ({entry.interventions} {noun}, last activity {activity})"
+    return (
+        f"{date}  {title}  ({entry.state}, {entry.interventions} {noun}, "
+        f"last activity {activity})"
+    )
 
 
-def _list(location: Path) -> int:
+def _list(location: Path, only: str | None = None) -> int:
     """Prints the tasks of a directory and of its categories, and opens nothing.
 
     Each category is a heading of its own name, the directory here included, and
     the tasks under it read as they do in the GUI: the date, two spaces, then the
     title read as words. The tasks of a category come by last activity, so the
     one you worked on last is the first. A directory with no tasks prints nothing
-    at all.
+    at all, and so does a category left without a task by the state filter.
 
     Args:
         location: the directory to list.
+        only: a state to filter by, listing every task when None.
 
     Returns:
         0.
+
+    Raises:
+        TaskError: when `only` is not a state.
     """
+    if only is not None and only not in parsing.STATES:
+        raise helpers.TaskError(f"invalid state: {only}")
+
     for group in listing.find_task_groups(location):
+        entries = [
+            entry for entry in group.entries if only is None or entry.state == only
+        ]
+        if not entries:
+            continue
+
         name = location.name or str(location)
         print(f"{name if group.category is None else group.category.name}/")
 
-        for entry in group.entries:
+        for entry in entries:
             print(f"  {_task_label(entry)}")
 
     return 0
