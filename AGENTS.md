@@ -296,7 +296,8 @@ Free text, with levels 2 to 6 available.
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
-  `tests/test_gui_activity.py` and `tests/test_gui_window.py` with pytest-qt
+  `tests/test_gui_activity.py`, `tests/test_gui_state.py` and `tests/test_gui_window.py`
+  with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
   window imports the widgets it is built from, and a widget only reports what it was
@@ -346,32 +347,33 @@ Free text, with levels 2 to 6 available.
   says how long ago the last intervention was, so the date on a row and the order of the
   rows can disagree
 - A task folder with no `.md` is not listed; a task two levels down is not found
-- A task row is three columns, `Task`, `Interventions` and `Last activity`. The task is
-  `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as tooltip; the
-  interventions are the count from the `.md`, `0` when there are none; the activity is
-  `_relative_age`, which says `today`, `yesterday` or `N days ago`, and reads a date that
-  has not come yet as `today`
-- `TaskPanel` is what a tab holds: `_ColumnHeader` over `TaskListing`. The two right columns
+- A task row is four columns, `Task`, `State`, `Interventions` and `Last activity`. The task
+  is `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as tooltip; the state
+  is `entry.state`, spelled as the file spells it; the interventions are the count from the
+  `.md`, `0` when there are none; the activity is `_relative_age`, which says `today`,
+  `yesterday` or `N days ago`, and reads a date that has not come yet as `today`
+- `TaskPanel` is what a tab holds: `_ColumnHeader` over `TaskListing`. The three right columns
   are measured from the bold application font (`_column_widths`) and split by
   `_column_rects`, which the header and the delegate both ask, so a heading never sits over a
-  value of another column. A row too narrow for all three shares what is left by weight, the
+  value of another column. A row too narrow for all four shares what is left by weight, the
   task counting a share against one for each column of its activity, so a task never
   disappears for the sake of its own numbers and no column is ever given a negative width
 - The headings are placed over the width of a row of the list, not over the width of the
   header, because a scrollbar takes its width from the rows: `set_row_width` is what puts
   them back, and the panel filters the viewport of the list to call it
-- The count and the age reach the delegate in the item roles `_COUNT_ROLE` and `_AGE_ROLE`,
-  so painting reads no file and holds no date of its own. The window takes one day per
-  reload and hands it to every row, so a refresh that runs as the date turns does not date
-  half of the tasks to yesterday
+- The state, the count and the age reach the delegate in the item roles `_STATE_ROLE`,
+  `_COUNT_ROLE` and `_AGE_ROLE`, so painting reads no file and holds no date of its own.
+  The window takes one day per reload and hands it to every row, so a refresh that runs as
+  the date turns does not date half of the tasks to yesterday
 - A row without those roles is a heading, which has no activity of its own and is painted
   where it stands, across the row
 - Selecting a task shows an action bar over that row, aligned to the left, with the
-  `Open`, `Resume` and `Rename` buttons; it moves with the selection and disappears with
-  it
+  `Open`, `Resume` and `Rename` buttons and the change-state one; it moves with the
+  selection and disappears with it
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
-  `Open`, a plus for `Resume` and a pencil for `Rename`, all drawn with `QPainter` in
-  `gui/icons.py`, so no image file has to be collected for a frozen build
+  `Open`, a plus for `Resume`, a pencil for `Rename` and a ring with a dot for the state,
+  all drawn with `QPainter` in `gui/icons.py`, so no image file has to be collected for a
+  frozen build
 - The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
   checks the item holds a `TaskEntry` before showing or placing the bar
 - Only the selected row is inset to make room for the bar, so the space appears when the
@@ -380,6 +382,14 @@ Free text, with levels 2 to 6 available.
 - `Open` replaces the double click on a task; `Open` reveals the task folder in the file
   manager and touches nothing, `Resume` opens the `.md`, `Rename` does not open it, it
   just refreshes the list
+- The change-state button carries a menu of `_OFFERED_STATES`, the states of
+  `parsing.STATES` without `closed`, which only arrives by closing the task; the list of
+  the three is never written down a second time. Picking one emits `state_requested` with
+  the entry and the state, the window calls `set_state` on the `.md` of that task and
+  refreshes the list, and a failure is shown in a `QMessageBox` like every other action,
+  never left to crash the window. Nothing is opened, and with no selection nothing
+  changes. The menu opens from `clicked` rather than from the press, because a menu that
+  opens while the button is down makes the click wait for it to close
 - `Resume` is the only browse action that appends a date, and it appends it to the task
   it was asked for, not to one looked up in the current directory. It refreshes the listing
   as well, because the row carries the count and the age that the new intervention has

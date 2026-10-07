@@ -337,10 +337,11 @@ Opens a window where you can:
   gets its own tab, the current folder included, plus an `All` tab that lists everything
   under a heading per category. By last activity, so the task you worked on last comes
   first;
-* read each task as three columns under their headings: the task itself, the date of the
+* read each task as four columns under their headings: the task itself, the date of the
   folder as `dd/mm/yyyy` with the title read as words (`260923 - FSocietyEverbind` shows
-  as `23/09/2026  F Society Everbind`), the number of interventions, and how long ago the
-  last of them was, as `today`, `yesterday` or `N days ago`;
+  as `23/09/2026  F Society Everbind`), the state the task is in, the number of
+  interventions, and how long ago the last of them was, as `today`, `yesterday` or
+  `N days ago`;
 * create a task with the same rules as the CLI, opening the resulting Markdown file with
   the default application;
 * act on an existing task by selecting it, which brings a bar of buttons over its row.
@@ -350,6 +351,10 @@ Opens a window where you can:
   * `Rename` asks for a new title and renames the folder and the file, keeping the date.
     The content is left exactly as it was, and a title another task already has is
     refused.
+  * the last button carries a menu with `open`, `in-progress` and `waiting`: pick one and
+    the state of the task changes where it lives, a line at the end of its Markdown file,
+    and the list shows the new state at once. A file can carry `closed` too, but this
+    menu does not set it.
 
   The buttons show an icon each, and the name of the action on hover.
 

@@ -77,6 +77,12 @@ def _draw_pencil(painter: QPainter, box: QRectF) -> None:
     painter.drawLine(QPointF(10.4, 5.5), QPointF(12.5, 7.6))
 
 
+def _draw_state(painter: QPainter, box: QRectF) -> None:
+    """Draws a ring with a dot, for the state a task is in."""
+    painter.drawEllipse(QPointF(9, 9), 6, 6)
+    painter.drawEllipse(QPointF(9, 9), 1.5, 1.5)
+
+
 def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QIcon:
     """Renders a stroked icon on a transparent image.
 

@@ -1,7 +1,13 @@
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor
 
-from mktsk.gui.icons import _ICON_SIZE, _draw_folder, _draw_plus, _stroked_icon
+from mktsk.gui.icons import (
+    _ICON_SIZE,
+    _draw_folder,
+    _draw_plus,
+    _draw_state,
+    _stroked_icon,
+)
 
 
 def _ink(draw):
@@ -56,3 +62,18 @@ def test_the_plus_is_symmetric_about_its_centre(qapp):
     for offset in range(_ICON_SIZE):
         assert ink[centre][offset] == ink[centre][last - offset]
         assert ink[offset][centre] == ink[last - offset][centre]
+
+
+def test_the_state_icon_is_a_ring_with_a_dot(qapp):
+    ink = _ink(_draw_state)
+    last = _ICON_SIZE - 1
+    centre = _ICON_SIZE // 2
+
+    # the ring and the dot inside it both sit on the middle of the icon
+    assert ink[centre][centre] is True
+    assert ink[centre][3] is True
+    assert ink[centre][5] is False
+
+    # and the ring is a ring: the same on both sides of the middle
+    for offset in range(_ICON_SIZE):
+        assert ink[centre][offset] == ink[centre][last - offset]
