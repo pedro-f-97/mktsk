@@ -113,14 +113,22 @@ def test_there_is_no_closed_tab_without_closed_tasks(window, tmp_path, make_task
     assert tab_titles(window) == ["All", tmp_path.name]
 
 
-def test_a_closed_row_offers_no_action_bar(window, tmp_path, make_task):
+def test_a_closed_row_offers_only_the_resume_action(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
     action_bar(window, file).close_button.click()
 
     listing = task_listing(window, "Closed")
+    select_tab(window, "Closed")
     listing.setCurrentItem(listing.item(1))
+    bar = listing.action_bar
 
     assert listing.selected_entry().state == "closed"
-    assert listing.delegate.inset_row == -1
-    assert listing.action_bar.isVisible() is False
+    # the row makes room for the bar, and the bar carries resume alone
+    assert listing.delegate.inset_row == 1
+    assert bar.isVisible() is True
+    assert bar.resume_button.isVisible() is True
+    assert bar.open_button.isVisible() is False
+    assert bar.rename_button.isVisible() is False
+    assert bar.state_button.isVisible() is False
+    assert bar.close_button.isVisible() is False

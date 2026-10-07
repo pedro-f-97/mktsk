@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from mktsk import files, helpers, listing, state, tasks
+from mktsk import files, helpers, listing, standards, state, tasks
 
 from .tasklist import (
     _AGE_ROLE,
@@ -334,17 +334,22 @@ class MainWindow(QMainWindow):
         self.open_with_default_app(entry.file.parent)
 
     def resume_task(self, entry: listing.TaskEntry) -> None:
-        """Adds a dated section to a task and opens it.
+        """Adds a dated section to a task and opens it, reopening it if closed.
 
         The task is resumed where it is, which is not necessarily the current
-        directory. The listing is refreshed either way, because the row now
-        carries the count and the age the new intervention has changed.
+        directory. A row that holds an archive is reopened: the archive is
+        extracted, the task resumed and the archive deleted, and the listing
+        is refreshed either way, because the row now carries the count and the
+        age the new intervention has changed.
 
         Args:
             entry: the selected task.
         """
         try:
-            result = tasks.resume_task(entry.file.parent, entry.title)
+            if standards.is_task_archive(entry.file.name):
+                result = tasks.reopen_task(entry.file.parent, entry.title)
+            else:
+                result = tasks.resume_task(entry.file.parent, entry.title)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return

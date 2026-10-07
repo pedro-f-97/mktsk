@@ -206,9 +206,11 @@ def test_a_failure_deleting_the_archive_keeps_both(
 
     monkeypatch.setattr(Path, "unlink", boom)
 
-    with freeze_time("2026-09-30T09:00"):
-        with pytest.raises(TaskError, match="could not be removed"):
-            reopen_task(tmp_path, "Foo")
+    with (
+        freeze_time("2026-09-30T09:00"),
+        pytest.raises(TaskError, match="could not be removed"),
+    ):
+        reopen_task(tmp_path, "Foo")
 
     # the folder is back and dated, and the archive is left beside it
     assert sorted(path.name for path in tmp_path.iterdir()) == [

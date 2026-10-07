@@ -302,6 +302,23 @@ class _ActionBar(QWidget):
             self.close_button,
         )
 
+    def set_reopening(self, reopening: bool) -> None:
+        """Offers resume alone for a row that holds a closed task.
+
+        The other four actions all speak to a folder, and only reopening
+        makes the folder stand again, so they are left out until then.
+
+        Args:
+            reopening: True when the selected row holds a closed task.
+        """
+        for button in (
+            self.open_button,
+            self.rename_button,
+            self.state_button,
+            self.close_button,
+        ):
+            button.setVisible(not reopening)
+
 
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     """Returns the colour of the text of a cell, which follows the selection.
@@ -395,9 +412,9 @@ class TaskListing(QListWidget):
 
     The bar follows the selected row, and shows only when a task is selected.
     Headings are not selectable, so they never get one, and a closed task gets
-    no bar either, because none of the actions reaches an archive. The listing
-    only reports which action was asked for, leaving the task logic to the
-    window.
+    the resume action alone, which reopens it: the other actions all speak to
+    a folder. The listing only reports which action was asked for, leaving the
+    task logic to the window.
     """
 
     open_requested = Signal(object)
@@ -472,17 +489,14 @@ class TaskListing(QListWidget):
     def _sync_action_bar(self) -> None:
         entry = self.selected_entry()
 
-        # an archive is the task closed: none of the actions reach it, so its
-        # row keeps no room for the bar
-        if entry is not None and entry.state == "closed":
-            self.delegate.inset_row = -1
-            self.viewport().update()
-            self.action_bar.hide()
-            return
+        # a row that holds an archive is reopened from it and nothing else,
+        # so the bar it gets carries the resume action alone
+        self.action_bar.set_reopening(entry is not None and entry.state == "closed")
 
         self.delegate.inset_row = self.currentRow()
         self.viewport().update()
 
+        # Qt lets a heading become the current item, and it still gets no bar
         if entry is None:
             self.action_bar.hide()
             return
