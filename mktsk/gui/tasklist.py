@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLayout,
     QListWidget,
+    QMenu,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
@@ -30,26 +31,31 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from mktsk import listing
+from mktsk import listing, parsing
 
-from .icons import _draw_folder, _draw_pencil, _draw_plus, _icon_button
+from .icons import _draw_folder, _draw_pencil, _draw_plus, _draw_state, _icon_button
 
 _ENTRY_ROLE = Qt.ItemDataRole.UserRole + 1
 _COUNT_ROLE = Qt.ItemDataRole.UserRole + 2
 _AGE_ROLE = Qt.ItemDataRole.UserRole + 3
+_STATE_ROLE = Qt.ItemDataRole.UserRole + 4
 
 _ACTION_BAR_PADDING = 4
 
-# the columns of a task row, from the left: the task itself, how many
-# interventions it carries, and how long ago the last of them was
-_HEADINGS = ("Task", "Interventions", "Last activity")
+# the columns of a task row, from the left: the task itself, the state it is
+# in, how many interventions it carries, and how long ago the last was
+_HEADINGS = ("Task", "State", "Interventions", "Last activity")
+
+# the states the change-state action offers: `closed` only comes from closing
+# the task, which is a different operation
+_OFFERED_STATES = tuple(state for state in parsing.STATES if state != "closed")
 
 _COLUMN_PADDING = 6
 
-# how a row too narrow for the three columns shares what is left: the task takes
-# a share of the three, the two columns of its activity one each
+# how a row too narrow for all the columns shares what is left: the task takes
+# one share of four, the state and the two columns of its activity one each
 _TASK_SHARE = 1
-_SHARES = _TASK_SHARE + 2
+_SHARES = _TASK_SHARE + 3
 
 # how the text of a cell sits in the column of it: read from the left and
 # centred, so a row of one line looks like the headings above it
@@ -57,14 +63,15 @@ _CELL_ALIGNMENT = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
 
 
 class _Columns(NamedTuple):
-    """The widths of the two right columns of a row."""
+    """The widths of the three right columns of a row."""
 
+    state: int
     interventions: int
     activity: int
 
 
 def _column_widths() -> _Columns:
-    """Measures the two right columns as wide as the headings over them.
+    """Measures the right columns as wide as the headings over them.
 
     A heading is the widest thing its column holds, so measuring one keeps the
     column as narrow as it can be and never clipping it. The widths come from
@@ -73,7 +80,8 @@ def _column_widths() -> _Columns:
     get the same widths.
 
     Returns:
-        The width of the interventions column and of the last activity one.
+        The width of the state column, of the interventions one and of the last
+        activity one.
     """
     font = QFont(QApplication.font())
     font.setBold(True)
@@ -82,45 +90,49 @@ def _column_widths() -> _Columns:
     return _Columns(
         metrics.horizontalAdvance(_HEADINGS[1]) + 2 * _COLUMN_PADDING,
         metrics.horizontalAdvance(_HEADINGS[2]) + 2 * _COLUMN_PADDING,
+        metrics.horizontalAdvance(_HEADINGS[3]) + 2 * _COLUMN_PADDING,
     )
 
 
-def _column_rects(row: QRect, columns: _Columns) -> tuple[QRect, QRect, QRect]:
-    """Splits a row into the task, the interventions and the last activity.
+def _column_rects(row: QRect, columns: _Columns) -> tuple[QRect, QRect, QRect, QRect]:
+    """Splits a row into the task, the state, the interventions and the activity.
 
     The header above the list and the rows themselves both ask here, so a
-    heading never sits over a value of another column. The two right columns
+    heading never sits over a value of another column. The three right columns
     are as wide as the headings over them and the task takes the rest. A row too
-    narrow for all three shares what is left by weight, the task counting a
-    share against one for each column of its activity, because a row showing the
+    narrow for all four shares what is left by weight, the task counting a
+    share against one for each of the other columns, because a row showing the
     numbers of a task without the task itself says nothing. No column is ever
     given a negative width, whatever the row is.
 
     Args:
         row: the row to split.
-        columns: the widths of the two right columns.
+        columns: the widths of the three right columns.
 
     Returns:
-        The three columns, from the task on the left to the last activity on the
+        The four columns, from the task on the left to the last activity on the
         right, each as tall as the row.
     """
     available = max(0, row.width() - 2 * _COLUMN_PADDING)
-    needed = columns.interventions + columns.activity
+    needed = columns.state + columns.interventions + columns.activity
 
-    if available * 2 >= needed * _SHARES:
+    if available * (_SHARES - _TASK_SHARE) >= needed * _SHARES:
         task_width = available - needed
+        state = columns.state
         interventions = columns.interventions
         activity = columns.activity
     else:
         task_width = available * _TASK_SHARE // _SHARES
         room = available - task_width
+        state = min(columns.state, room * columns.state // needed)
         interventions = min(
             columns.interventions, room * columns.interventions // needed
         )
-        activity = min(columns.activity, room - interventions)
+        activity = min(columns.activity, room - state - interventions)
 
     last = max(row.left(), row.right() - _COLUMN_PADDING - activity + 1)
-    first = max(row.left(), last - interventions)
+    middle = max(row.left(), last - interventions)
+    first = max(row.left(), middle - state)
 
     return (
         QRect(
@@ -129,7 +141,8 @@ def _column_rects(row: QRect, columns: _Columns) -> tuple[QRect, QRect, QRect]:
             max(0, first - row.left() - _COLUMN_PADDING),
             row.height(),
         ),
-        QRect(first, row.top(), max(0, interventions), row.height()),
+        QRect(first, row.top(), max(0, state), row.height()),
+        QRect(middle, row.top(), max(0, interventions), row.height()),
         QRect(last, row.top(), max(0, activity), row.height()),
     )
 
@@ -174,7 +187,12 @@ class _ColumnHeader(QFrame):
         self.columns = _column_widths()
         self.row_width = 0
         labels = [_heading(text, self) for text in _HEADINGS]
-        self.task_label, self.interventions_label, self.activity_label = labels
+        (
+            self.task_label,
+            self.state_label,
+            self.interventions_label,
+            self.activity_label,
+        ) = labels
 
         self.rule = QFrame(self)
         self.rule.setFrameShape(QFrame.Shape.HLine)
@@ -183,9 +201,14 @@ class _ColumnHeader(QFrame):
         # the band is as tall as a row, so the headings line up with the rows
         self.setFixedHeight(height)
 
-    def labels(self) -> tuple[QLabel, QLabel, QLabel]:
-        """Returns the three headings, from the task on the left."""
-        return self.task_label, self.interventions_label, self.activity_label
+    def labels(self) -> tuple[QLabel, QLabel, QLabel, QLabel]:
+        """Returns the four headings, from the task on the left."""
+        return (
+            self.task_label,
+            self.state_label,
+            self.interventions_label,
+            self.activity_label,
+        )
 
     def set_row_width(self, width: int) -> None:
         """Places the headings over a row of the given width.
@@ -242,12 +265,33 @@ class _ActionBar(QWidget):
         self.rename_button = _icon_button(
             self, "Rename this task", _draw_pencil, "RenameTask"
         )
+        self.state_button = _icon_button(
+            self, "Change the state of this task", _draw_state, "ChangeState"
+        )
+        self.state_menu = QMenu(self.state_button)
+        for offered in _OFFERED_STATES:
+            self.state_menu.addAction(offered)
+        self.state_button.setMenu(self.state_menu)
+        # the menu opens from the click rather than from the press, so the
+        # button never waits for a menu that the click itself has to close
+        self.state_button.clicked.connect(self._open_state_menu)
         for button in self.buttons():
             layout.addWidget(button)
 
+    def _open_state_menu(self) -> None:
+        """Opens the menu of states under the button that carries it."""
+        self.state_menu.popup(
+            self.state_button.mapToGlobal(self.state_button.rect().bottomLeft())
+        )
+
     def buttons(self) -> tuple[QToolButton, ...]:
-        """Returns the three action buttons, in order."""
-        return (self.open_button, self.resume_button, self.rename_button)
+        """Returns the four action buttons, in order."""
+        return (
+            self.open_button,
+            self.resume_button,
+            self.rename_button,
+            self.state_button,
+        )
 
 
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
@@ -269,14 +313,14 @@ def _cell_pen(option: QStyleOptionViewItem) -> QColor:
 
 
 class _InsetDelegate(QStyledItemDelegate):
-    """Paints a row as the three columns of the list, keeping the bar clear.
+    """Paints a row as the columns of the list, keeping the bar clear.
 
-    The two right columns are painted from `_column_rects`, the same arithmetic
+    The right columns are painted from `_column_rects`, the same arithmetic
     the header above them is placed by, so a heading never sits over a value of
-    another column. The count and the age reach the delegate in the item roles,
-    which the window fills from the task, so painting reads no file and holds no
-    date of its own. A row without them is a heading, which is painted where it
-    stands.
+    another column. The state, the count and the age reach the delegate in the
+    item roles, which the window fills from the task, so painting reads no file
+    and holds no date of its own. A row without them is a heading, which is
+    painted where it stands.
 
     Only the selected row is inset, so the space for the buttons appears when the
     row is clicked and is given back when the selection goes. Every row keeps the
@@ -286,7 +330,7 @@ class _InsetDelegate(QStyledItemDelegate):
     Args:
         inset: width reserved on the left of the selected row.
         min_height: height a row needs to hold the action bar.
-        columns: the widths of the two right columns.
+        columns: the widths of the three right columns.
     """
 
     def __init__(self, inset: int, min_height: int, columns: _Columns) -> None:
@@ -306,7 +350,7 @@ class _InsetDelegate(QStyledItemDelegate):
         if index.row() == self.inset_row:
             option.rect.adjust(self.inset, 0, 0, 0)
 
-        task, interventions, activity = _column_rects(option.rect, self.columns)
+        task, state, interventions, activity = _column_rects(option.rect, self.columns)
         count = index.data(_COUNT_ROLE)
         if count is None:
             super().paint(painter, option, index)
@@ -322,6 +366,7 @@ class _InsetDelegate(QStyledItemDelegate):
 
         painter.save()
         painter.setPen(_cell_pen(option))
+        painter.drawText(state, _CELL_ALIGNMENT, index.data(_STATE_ROLE))
         painter.drawText(interventions, _CELL_ALIGNMENT, count)
         painter.drawText(activity, _CELL_ALIGNMENT, index.data(_AGE_ROLE))
         painter.restore()
@@ -347,6 +392,7 @@ class TaskListing(QListWidget):
     open_requested = Signal(object)
     resume_requested = Signal(object)
     rename_requested = Signal(object)
+    state_requested = Signal(object, str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -368,6 +414,11 @@ class TaskListing(QListWidget):
         self.action_bar.rename_button.clicked.connect(
             lambda: self._request(self.rename_requested)
         )
+        for action in self.action_bar.state_menu.actions():
+            name = action.text()
+            action.triggered.connect(
+                lambda checked=False, new_state=name: self._request_state(new_state)
+            )
         self.currentItemChanged.connect(lambda *_: self._sync_action_bar())
         self.action_bar.hide()
 
@@ -392,6 +443,16 @@ class TaskListing(QListWidget):
         entry = self.selected_entry()
         if entry is not None:
             signal.emit(entry)
+
+    def _request_state(self, new_state: str) -> None:
+        """Reports the state picked from the menu of the action bar.
+
+        Args:
+            new_state: the state the user chose.
+        """
+        entry = self.selected_entry()
+        if entry is not None:
+            self.state_requested.emit(entry, new_state)
 
     def _sync_action_bar(self) -> None:
         self.delegate.inset_row = self.currentRow()

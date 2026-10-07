@@ -27,7 +27,7 @@ from tests.gui_helpers import (
 
 TODAY = datetime.date(2026, 10, 2)
 
-COLUMNS = _Columns(120, 140)
+COLUMNS = _Columns(70, 120, 140)
 
 ROW_WIDTH = 400
 
@@ -50,46 +50,49 @@ def test_activity_of_a_day_to_come_reads_today():
 
 
 def test_the_columns_run_from_the_task_to_the_last_activity():
-    task, interventions, activity = _column_rects(QRect(0, 0, 400, 20), COLUMNS)
+    task, state, interventions, activity = _column_rects(
+        QRect(0, 0, 400, 20), COLUMNS
+    )
 
-    assert task.left() < interventions.left() < activity.left()
+    assert task.left() < state.left() < interventions.left() < activity.left()
 
 
 def test_the_last_activity_column_ends_with_the_row():
     row = QRect(10, 30, 400, 20)
 
-    assert _column_rects(row, COLUMNS)[2].right() == row.right() - _COLUMN_PADDING
+    assert _column_rects(row, COLUMNS)[3].right() == row.right() - _COLUMN_PADDING
 
 
 def test_the_task_column_stops_where_the_interventions_begin():
     row = QRect(0, 0, 400, 20)
-    task, interventions, activity = _column_rects(row, COLUMNS)
+    task, state, interventions, activity = _column_rects(row, COLUMNS)
 
-    assert task.right() <= interventions.left()
+    assert task.right() <= state.left()
+    assert state.right() <= interventions.left()
     assert interventions.right() <= activity.left()
 
 
 def test_the_columns_follow_the_row_they_belong_to():
-    task, interventions, activity = _column_rects(QRect(10, 30, 400, 20), COLUMNS)
+    columns = _column_rects(QRect(10, 30, 400, 20), COLUMNS)
 
-    assert (task.top(), interventions.top(), activity.top()) == (30, 30, 30)
-    assert (task.height(), interventions.height(), activity.height()) == (20, 20, 20)
+    assert [column.top() for column in columns] == [30, 30, 30, 30]
+    assert [column.height() for column in columns] == [20, 20, 20, 20]
 
 
 def test_a_row_narrower_than_its_columns_keeps_them_inside():
     # the columns are measured from the font, so a window too narrow for them
     # shares what is left between them rather than reaching out of the row
     row = QRect(0, 0, 100, 20)
-    _, interventions, activity = _column_rects(row, COLUMNS)
+    _, state, interventions, activity = _column_rects(row, COLUMNS)
 
-    assert (interventions.width(), activity.width()) == (27, 32)
+    assert (state.width(), interventions.width(), activity.width()) == (14, 24, 28)
     assert activity.right() == row.right() - _COLUMN_PADDING
 
 
 def test_a_row_too_narrow_for_the_task_still_shows_it(qapp):
     # the columns share what is left with the task, so a narrow window never
     # shows the numbers of a task without the task itself
-    task, _, _ = _column_rects(QRect(0, 0, 348, 20), _column_widths())
+    task, _, _, _ = _column_rects(QRect(0, 0, 348, 20), _column_widths())
 
     assert task.width() > 0
 
@@ -99,27 +102,32 @@ def test_the_columns_stay_inside_a_row_of_any_width(qapp):
 
     for width in range(800):
         row = QRect(0, 0, width, 20)
-        task, interventions, activity = _column_rects(row, columns)
+        task, state, interventions, activity = _column_rects(row, columns)
 
-        for column in (task, interventions, activity):
+        for column in (task, state, interventions, activity):
             assert column.width() >= 0
-        assert task.width() + interventions.width() + activity.width() <= max(
+        assert task.width() + state.width() + interventions.width() + activity.width() <= max(
             0, width - 2 * _COLUMN_PADDING
         )
         assert activity.right() <= row.right()
 
 
 def test_a_row_wider_than_its_columns_gives_the_rest_to_the_task():
-    task, interventions, activity = _column_rects(QRect(0, 0, 500, 20), COLUMNS)
+    task, state, interventions, activity = _column_rects(QRect(0, 0, 500, 20), COLUMNS)
 
-    assert (interventions.width(), activity.width()) == (120, 140)
-    assert task.width() == 500 - 2 * _COLUMN_PADDING - 120 - 140
+    assert (state.width(), interventions.width(), activity.width()) == (70, 120, 140)
+    assert task.width() == 500 - 2 * _COLUMN_PADDING - 70 - 120 - 140
 
 
 def test_the_header_names_the_columns(window, tmp_path):
     window.navigate_to(tmp_path)
 
-    assert header_labels(window) == ["Task", "Interventions", "Last activity"]
+    assert header_labels(window) == [
+        "Task",
+        "State",
+        "Interventions",
+        "Last activity",
+    ]
 
 
 def test_a_heading_sits_over_its_own_column(qtbot):
@@ -293,12 +301,23 @@ def test_resuming_a_task_shows_the_intervention_it_added(
     assert find_task(window, file).data(_AGE_ROLE) == "today"
 
 
+def test_the_state_is_painted_over_the_state_column(window, tmp_path, make_task):
+    file = make_task(tmp_path, "261002", "Foo")
+
+    window.navigate_to(tmp_path)
+    image, (_, state, _, _) = _painter_row(
+        window, task_listing(window).row(find_task(window, file))
+    )
+
+    assert _ink(image, state) > 0
+
+
 @freeze_time("2026-10-02")
 def test_the_count_is_painted_over_the_interventions_column(window, tmp_path, make_task):
     file = make_task(tmp_path, "261002", "Foo")
 
     window.navigate_to(tmp_path)
-    image, (_, interventions, _) = _painter_row(
+    image, (_, _, interventions, _) = _painter_row(
         window, task_listing(window).row(find_task(window, file))
     )
 
@@ -310,7 +329,7 @@ def test_the_age_is_painted_over_the_last_activity_column(window, tmp_path, make
     file = make_task(tmp_path, "261002", "Foo")
 
     window.navigate_to(tmp_path)
-    image, (_, _, activity) = _painter_row(
+    image, (_, _, _, activity) = _painter_row(
         window, task_listing(window).row(find_task(window, file))
     )
 

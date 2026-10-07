@@ -25,7 +25,7 @@ def test_action_bar_follows_the_selected_task(window, tmp_path, make_task):
     bar = action_bar(window, file)
 
     assert bar.isVisible() is True
-    assert len(bar.buttons()) == 3
+    assert len(bar.buttons()) == 4
 
 
 def test_action_bar_sits_over_the_selected_row(window, tmp_path, make_task):
@@ -50,6 +50,7 @@ def test_action_bar_shows_icons_and_not_labels(window, tmp_path, make_task):
         bar.open_button,
         bar.resume_button,
         bar.rename_button,
+        bar.state_button,
     )
     for button in bar.buttons():
         assert button.text() == ""
@@ -66,6 +67,7 @@ def test_action_bar_tooltips_name_the_actions(window, tmp_path, make_task):
         "Open the task folder",
         "Add a note for today",
         "Rename this task",
+        "Change the state of this task",
     ]
 
 

@@ -23,12 +23,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from mktsk import files, helpers, listing, tasks
+from mktsk import files, helpers, listing, state, tasks
 
 from .tasklist import (
     _AGE_ROLE,
     _COUNT_ROLE,
     _ENTRY_ROLE,
+    _STATE_ROLE,
     TaskListing,
     TaskPanel,
     _relative_age,
@@ -227,6 +228,7 @@ class MainWindow(QMainWindow):
         tab.open_requested.connect(self.open_task)
         tab.resume_requested.connect(self.resume_task)
         tab.rename_requested.connect(self.rename_task)
+        tab.state_requested.connect(self.change_state)
         return tab
 
     def _add_tab(self, title: str, tab: TaskListing) -> None:
@@ -254,6 +256,7 @@ class MainWindow(QMainWindow):
         date = entry.date.strftime(helpers.DATE_FORMAT)
         item = QListWidgetItem(f"{date}  {helpers.readable_title(entry.title)}")
         item.setData(_ENTRY_ROLE, entry)
+        item.setData(_STATE_ROLE, entry.state)
         item.setData(_COUNT_ROLE, str(entry.interventions))
         item.setData(_AGE_ROLE, _relative_age(entry.last_activity, today))
         item.setToolTip(str(entry.file))
@@ -345,6 +348,25 @@ class MainWindow(QMainWindow):
 
         try:
             tasks.rename_task(entry.file.parent, entry.title, raw_title)
+        except (OSError, helpers.TaskError) as error:
+            QMessageBox.critical(self, "mktsk", str(error))
+            return
+
+        self.refresh()
+
+    def change_state(self, entry: listing.TaskEntry, new_state: str) -> None:
+        """Sets the state of a task by hand, and refreshes the list.
+
+        The task is changed where it lives, which is not necessarily the
+        current directory, and nothing is opened: picking a state is not
+        working on the task.
+
+        Args:
+            entry: the selected task.
+            new_state: the state the user chose.
+        """
+        try:
+            state.set_state(entry.file, new_state)
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return

@@ -30,6 +30,7 @@ def test_find_task_groups_unpacks_date_title_and_file(tmp_path, make_task):
             file,
             datetime.date(2026, 9, 18),
             1,
+            "open",
         )
     ]
 

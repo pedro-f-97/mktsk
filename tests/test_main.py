@@ -418,10 +418,10 @@ def test_main_list(monkeypatch, tmp_path, capsys, make_task):
     assert result == 0
     assert capsys.readouterr().out == (
         f"{tmp_path.name}/\n"
-        "  23/09/2026  Its Alive  (1 intervention, last activity 23/09/2026)\n"
-        "  18/09/2026  Foo  (1 intervention, last activity 18/09/2026)\n"
+        "  23/09/2026  Its Alive  (open, 1 intervention, last activity 23/09/2026)\n"
+        "  18/09/2026  Foo  (open, 1 intervention, last activity 18/09/2026)\n"
         "Veritas/\n"
-        "  24/09/2026  F Society Everbind  (1 intervention, last activity 24/09/2026)\n"
+        "  24/09/2026  F Society Everbind  (open, 1 intervention, last activity 24/09/2026)\n"
     )
     assert opened == []
 
@@ -439,7 +439,7 @@ def test_main_list_shows_the_interventions_and_the_last_activity(
     # the date of the folder stays, and what the .md says comes after it
     assert capsys.readouterr().out == (
         f"{tmp_path.name}/\n"
-        "  18/09/2026  Foo  (2 interventions, last activity 30/09/2026)\n"
+        "  18/09/2026  Foo  (in-progress, 2 interventions, last activity 30/09/2026)\n"
     )
 
 
@@ -457,7 +457,7 @@ def test_main_list_shows_a_task_with_no_interventions(
     # nothing to read out of the file, so the date of the folder stands in
     assert capsys.readouterr().out == (
         f"{tmp_path.name}/\n"
-        "  18/09/2026  Foo  (0 interventions, last activity 18/09/2026)\n"
+        "  18/09/2026  Foo  (open, 0 interventions, last activity 18/09/2026)\n"
     )
 
 
@@ -471,8 +471,8 @@ def test_main_list_sorts_by_the_last_activity(monkeypatch, tmp_path, capsys, mak
     main()
 
     assert capsys.readouterr().out.splitlines()[1:] == [
-        "  18/09/2026  Foo  (2 interventions, last activity 05/10/2026)",
-        "  30/09/2026  Bar  (1 intervention, last activity 30/09/2026)",
+        "  18/09/2026  Foo  (in-progress, 2 interventions, last activity 05/10/2026)",
+        "  30/09/2026  Bar  (open, 1 intervention, last activity 30/09/2026)",
     ]
 
 
@@ -483,7 +483,7 @@ def test_main_list_reads_the_title_as_words(monkeypatch, tmp_path, capsys, make_
 
     main()
 
-    assert "  23/09/2026  Task 2  (1 intervention" in capsys.readouterr().out
+    assert "  23/09/2026  Task 2  (open, 1 intervention" in capsys.readouterr().out
 
 
 def test_main_list_keeps_the_categories_apart(monkeypatch, tmp_path, capsys, make_task):
@@ -498,11 +498,11 @@ def test_main_list_keeps_the_categories_apart(monkeypatch, tmp_path, capsys, mak
     # the same title is a different task in each directory, and each gets its own
     assert capsys.readouterr().out == (
         f"{tmp_path.name}/\n"
-        "  18/09/2026  Foo  (1 intervention, last activity 18/09/2026)\n"
+        "  18/09/2026  Foo  (open, 1 intervention, last activity 18/09/2026)\n"
         "Able/\n"
-        "  19/09/2026  Foo  (1 intervention, last activity 19/09/2026)\n"
+        "  19/09/2026  Foo  (open, 1 intervention, last activity 19/09/2026)\n"
         "Veritas/\n"
-        "  20/09/2026  Foo  (1 intervention, last activity 20/09/2026)\n"
+        "  20/09/2026  Foo  (open, 1 intervention, last activity 20/09/2026)\n"
     )
 
 
