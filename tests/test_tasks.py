@@ -168,10 +168,10 @@ def test_open_or_create_task_refuses_a_file_in_the_old_format(tmp_path):
     content = "# Foo\n\n## 18/09/2026\n\nnotes\n"
     file.write_text(content, encoding="utf-8")
 
-    with pytest.raises(TaskError, match=r"python -m mktsk\.migration"):
+    with pytest.raises(TaskError, match=r"is in the old format and was not read"):
         open_or_create_task(tmp_path, "Foo")
 
-    # the file is left as it was, so the migration can still convert it
+    # the file is left as it was
     assert file.read_text(encoding="utf-8") == content
 
 
@@ -248,10 +248,10 @@ def test_resume_task_refuses_a_file_in_the_old_format(tmp_path, make_task):
     content = "# FSociety\n\n## 18/09/2026\n\nnotas\n"
     file.write_text(content, encoding="utf-8")
 
-    with pytest.raises(TaskError, match=r"python -m mktsk\.migration"):
+    with pytest.raises(TaskError, match=r"is in the old format and was not read"):
         resume_task(tmp_path / "260918 - FSociety", "FSociety")
 
-    # nothing was written, so the migration can still convert the file
+    # nothing was written, the file is left as it was
     assert file.read_text(encoding="utf-8") == content
 
 

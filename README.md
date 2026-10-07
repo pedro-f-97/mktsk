@@ -315,59 +315,6 @@ ending in a dot or a space, which Windows drops.
 Then create tasks inside it by running `mktsk` from there, and `--list` will show them
 under its own heading.
 
-## Migrating existing task files
-
-A task used to open its Markdown with a `# <title>` heading and date each visit with a
-second level one. The format mktsk writes has neither: the title is the folder and file
-name, and each visit is a first level heading. To convert the tasks you created before,
-run the migration over the folder that holds them:
-
-```bash
-python -m mktsk.migration ~/tasks
-```
-
-It walks the folder and its immediate subdirectories, finds every task in it and shows
-what it would do, one file at a time, without writing anything:
-
-```text
-260918 - SupplierReply/SupplierReply.md: migrated
---- 260918 - SupplierReply/SupplierReply.md
-+++ 260918 - SupplierReply/SupplierReply.md
-@@ -1,6 +1,4 @@
--# SupplierReply
--
--## 18/09/2026
-+# 18/09/2026
- 
- Customer request, see attachment.
- 
-Summary: 1 migrated, 0 already new, 0 to review, 0 failed
-```
-
-The status of each file is one of:
-
-* `migrated`: the file was converted;
-* `already new`: the file is already in the new format, and nothing was changed;
-* `review`: the file was converted, and something in it needs your eye, printed under
-  the status. A heading naming another task, or a `##` that carries no date, stays where
-  it is;
-* `error`: the file could not be read or written, and the run carried on without it.
-
-Once you have read the diff, zip the folder and apply the migration:
-
-```bash
-python -m mktsk.migration ~/tasks --apply
-```
-
-Each file is written through a temporary one in the same folder, so an interruption
-never leaves one of them half converted, and the line breaks each file was written with
-are kept. Running the migration again over the same folder reports every file as
-`already new`.
-
-A task still in the old format is refused rather than misread: opening or resuming it
-fails with an error naming the file and this command, and nothing is written to it, so
-it can still be migrated.
-
 ## Desktop GUI
 
 Launch with:
