@@ -10,8 +10,9 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * Finds an existing task by title in the current directory, on any date, and starts a new
   dated section in it.
 * Lists tasks by when they were last worked on, not by the date in the folder name.
-* Closes a task by compressing its folder into a verified zip archive, and lists the
-  archives apart from the tasks still standing.
+* Closes a task by compressing its folder into a verified zip archive, and reopens it from
+  the archive, giving back the folder plus a new dated section. Lists the archives apart
+  from the tasks still standing.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
 
@@ -228,10 +229,11 @@ front of those lines rather than after them, so the events stay at the end of th
 You rarely have to run this command, because mktsk records the obvious changes by itself:
 a new task starts `open`, and coming back to it on a new day moves it to `in-progress`
 when it was `open`, `waiting` or `closed`. Coming back on the same day never changes the
-state, and a task already `in-progress` stays as it is: only a new section, a new day of
-work, counts. The message of the command says what was recorded, for example
-`(state: in-progress)`, or that the state was not recorded when writing it failed; the
-task is opened either way.
+state, with one exception: a task that is `closed` leaves it for `in-progress` as soon as
+its folder stands again, section or no section. A task already `in-progress` stays as it
+is: only a new section, a new day of work, counts. The message of the command says what
+was recorded, for example `(state: in-progress)`, or that the state was not recorded when
+writing it failed; the task is opened either way.
 
 ## Closing a task
 
@@ -258,8 +260,33 @@ not a task in the directory you are in is an error that creates nothing. Nothing
 opened, because closing is the end of the task.
 
 A title is unique in a directory whether it stands as a folder or as an archive, so
-`mktsk <title>` with its zip there is refused with an error saying the task is archived,
-and renaming follows the same rule. Reopening arrives later.
+`mktsk <title>` with its zip there reopens the task, and renaming follows the same rule:
+the rename of an archived task is still refused.
+
+## Reopening a task
+
+Run mktsk with the title of a closed task, or pick `Resume` on its row in the `Closed` tab
+of the GUI:
+
+```bash
+mktsk "It's Alive!"
+```
+
+```text
+Reopened: 260923 - ItsAlive (added # 06/10/2026) (state: in-progress)
+```
+
+The archive is extracted into a temporary directory beside where it stood, every member
+checked so no path can escape the folder, and the extraction is verified against the zip,
+every file present at the right size, before it is renamed into place. The task is then
+resumed as usual, with a new dated section and the `in-progress` event, and only then is
+the zip deleted. A failure anywhere before that leaves the archive exactly as it was and
+takes the half-extracted folder away; a failure deleting the zip keeps both and says so.
+Nothing is ever lost.
+
+A folder and its archive left standing together, by an old failure, do not fix themselves:
+the folder is the task that stands, so reopening refuses with an error naming both and
+leaves the zip where it is.
 
 ## Creating a category
 
@@ -381,7 +408,9 @@ Opens a window where you can:
 * act on an existing task by selecting it, which brings a bar of buttons over its row.
   The room for the buttons appears only on the row you clicked:
   * `Open` reveals the task folder in the file manager, without touching the task;
-  * `Resume` adds a section for today, wherever the task lives, and opens it;
+  * `Resume` adds a section for today, wherever the task lives, and opens it. On a row in
+    the `Closed` tab it reopens the task from its archive instead, and the list refreshes
+    as well;
   * `Rename` asks for a new title and renames the folder and the file, keeping the date.
     The content is left exactly as it was, and a title another task already has is
     refused.
@@ -394,7 +423,8 @@ Opens a window where you can:
     Nothing is opened, because the task is over.
 
   The buttons show an icon each, and the name of the action on hover. A task in the
-  `Closed` tab offers no bar, since none of the actions reaches an archive.
+  `Closed` tab offers the resume action alone, since reopening is the one action that
+  reaches an archive.
 
 The last visited folder is remembered between sessions.
 

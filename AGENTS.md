@@ -27,7 +27,7 @@ workflow interactively.
 - `mktsk/listing.py` — everything that reads a directory: finding, listing,
   grouping, and the activity of each task
 - `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume, rename,
-  close, and record the state those visits change
+  close, reopen, and record the state those visits change
 - `mktsk/parsing.py` — reads the text of a `.md` in the new format: interventions,
   state events, last activity. Pure functions, no I/O
 - `mktsk/migration.py` — converts the text of a `.md` from the old format to the
@@ -106,14 +106,17 @@ change the name.
 - The state follows what you do: creating records `open`, and resuming with a new section
   records `in-progress` when the state is `open`, `waiting` or `closed`. Resuming on the
   same day never changes the state, a state already `in-progress` writes nothing, and only
-  a new date section counts as work
+  a new date section counts as work; the one state a visit takes over without a section is
+  `closed`, because a folder that stands again is not a task that is over, and a reopened
+  same day leaves `closed` for `in-progress` the same way
 - The state a resume starts from is `current_state` read before the section is added, so a
   file with no events counts as `open` and its second section takes it to `in-progress`
 - The message of a create or a resume ends with ` (state: <state>)` when this visit records
   one, and with ` (state not recorded)` when writing the event failed; a state that cannot
   be written never stops the task from being opened
 - `resume_task(folder, title)` resumes the folder it is given, wherever that folder
-  lives; unlike `open_or_create_task`, it does no lookup and takes no directory
+  lives; unlike `open_or_create_task`, it does no lookup and takes no directory. A folder
+  that is not there but whose archive is, in the same directory, is reopened instead
 - `rename_task(folder, title, raw_title)` keeps the date prefix and renames the `.md` and the
   folder, names only: the content is never read and never written, because the title of a
   task is not inside the file any more. Renaming to the title the task already has does
@@ -132,13 +135,31 @@ change the name.
   A failure before that leaves the folder intact and removes the temporary file; a failure
   deleting the folder keeps both and raises `TaskError` saying the task is archived but the
   folder could not be removed. Nothing is ever lost. The message is `Closed: <zip name>`
+- Reopening brings the archive back as a folder: `reopen_task(location, title)` finds the
+  archive, extracts it into `.<folder name>.part` beside it, validating each member before
+  it is written — a name that is absolute or that leaves the destination once resolved is
+  refused with `TaskError` and nothing of it reaches the disk — verifies the extraction
+  with `testzip`, the exact set of names and the size of every file, renames it into place,
+  resumes the task with `Reopened: <folder name>` and what was added, and only then deletes
+  the zip. A failure up to and including the resume removes the extracted folder, or the
+  temporary directory when it has not moved yet, and leaves the archive intact; a failure
+  deleting the zip keeps both and raises `TaskError` saying the task is reopened but the
+  archive could not be removed. Nothing is ever lost
+- A folder and an archive of the same title standing together do not fix themselves: the
+  folder is the task that stands, so `reopen_task` refuses with a `TaskError` naming both
+  and leaves the archive where it is, while `open_or_create_task` and `resume_task` find
+  the folder first and resume it, and with only an archive there they reopen it rather
+  than refusing it as archived
+- A leftover extraction directory of a failed run is left where it is: `reopen_task`
+  refuses it with a `TaskError` naming it rather than writing into it or taking it away,
+  and only the hand that put it there takes it away
 - `is_task_archive(name)` is `is_task_folder` on the name without its `.zip`, so a name
   that is not a task folder gives no archive, and a directory named like one is not one;
   `find_task_archive(location, title)` looks one up by title ignoring the case and taking
   the most recent date, the same way `find_task_folder` does
 - The title of a task is unique in a directory whether it stands as a folder or as an
-  archive: `mktsk Foo` with `Foo.zip` there raises `TaskError` saying it is archived and
-  creates nothing, `rename_task` refuses a task whose archive is there, the target of a
+  archive: `mktsk Foo` with `Foo.zip` there reopens the archive, leaving the folder and no
+  zip, `rename_task` refuses a task whose archive is there, the target of a
   rename cannot be a title an archive already has, and `_rename` reports the archive when
   the folder it was given is gone
 - The listing reads an archive as a task with the state `closed`, whatever the `.md`
@@ -280,7 +301,7 @@ Free text, with levels 2 to 6 available.
 
 ## CLI
 
-- `mktsk <title>` creates or resumes the task and opens its `.md`
+- `mktsk <title>` creates, resumes or reopens the task and opens its `.md`
 - The title is `nargs="*"`, not `nargs="+"`, because the options take arguments of their
   own; `parse_arguments` then checks what each option was given and calls
   `parser.error()`, so a missing argument still exits with code 2. Do not let that check
@@ -330,7 +351,8 @@ Free text, with levels 2 to 6 available.
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
-  `tests/test_gui_activity.py`, `tests/test_gui_state.py`, `tests/test_gui_close.py`
+  `tests/test_gui_activity.py`, `tests/test_gui_state.py`, `tests/test_gui_close.py`,
+  `tests/test_gui_reopen.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
@@ -413,8 +435,9 @@ Free text, with levels 2 to 6 available.
   file has to be collected for a frozen build
 - The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
   checks the item holds a `TaskEntry` before showing or placing the bar. A row in the
-  `Closed` tab gets no bar and no room for one, because none of the actions reaches an
-  archive
+  `Closed` tab gets a bar with only the resume action, and room for it, because reopening
+  is the one action that reaches an archive; `set_reopening` takes the other four buttons
+  out until the folder stands again
 - Only the selected row is inset to make room for the bar, so the space appears when the
   row is clicked and is given back when the selection goes; every row keeps the height
   the bar needs, or the list would shift as the selection moves
@@ -430,7 +453,8 @@ Free text, with levels 2 to 6 available.
   changes. The menu opens from `clicked` rather than from the press, because a menu that
   opens while the button is down makes the click wait for it to close
 - `Resume` is the only browse action that appends a date, and it appends it to the task
-  it was asked for, not to one looked up in the current directory. It refreshes the listing
+  it was asked for, not to one looked up in the current directory. On a row that holds an
+  archive the window reopens it instead, through `reopen_task`, and refreshes the listing
   as well, because the row carries the count and the age that the new intervention has
   changed
 - `Close` emits `close_requested` with the entry, and the window calls `close_task` on
