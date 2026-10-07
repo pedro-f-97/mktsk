@@ -21,13 +21,13 @@ workflow interactively.
 - `mktsk/helpers.py` — name validation, reserved Windows names, opening files, the
   date format the CLI and the GUI share
 - `mktsk/standards.py` — the rules of a task name: standardization, recognition of
-  the folder shape, reading a title back. No I/O
+  the folder shape, reading a title back, and the shape of an archive. No I/O
 - `mktsk/files.py` — everything that writes: creating the folder, creating the
   `.md`, appending a dated section, creating a category
 - `mktsk/listing.py` — everything that reads a directory: finding, listing,
   grouping, and the activity of each task
 - `mktsk/tasks.py` — the verbs the CLI and the GUI call: create or open, resume, rename,
-  and record the state those visits change
+  close, and record the state those visits change
 - `mktsk/parsing.py` — reads the text of a `.md` in the new format: interventions,
   state events, last activity. Pure functions, no I/O
 - `mktsk/migration.py` — converts the text of a `.md` from the old format to the
@@ -123,6 +123,31 @@ change the name.
 - `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
   `.md` or a title another task of the same directory already has; it renames the `.md`
   before the folder, or the old file path stops resolving
+- Closing compresses the task folder into an archive beside it: `close_task(folder, title)`
+  writes `<folder name>.zip` under a temporary name next to the folder, with every file of
+  the folder under the path `<folder name>/<relative path>` and the `.md` carried in with
+  the `closed` event written into the zip rather than into the folder, so the `.md` on disk
+  is never touched. It verifies the zip with `testzip`, the exact set of names and the size
+  of every member, moves it into place with `os.replace`, and only then deletes the folder.
+  A failure before that leaves the folder intact and removes the temporary file; a failure
+  deleting the folder keeps both and raises `TaskError` saying the task is archived but the
+  folder could not be removed. Nothing is ever lost. The message is `Closed: <zip name>`
+- `is_task_archive(name)` is `is_task_folder` on the name without its `.zip`, so a name
+  that is not a task folder gives no archive, and a directory named like one is not one;
+  `find_task_archive(location, title)` looks one up by title ignoring the case and taking
+  the most recent date, the same way `find_task_folder` does
+- The title of a task is unique in a directory whether it stands as a folder or as an
+  archive: `mktsk Foo` with `Foo.zip` there raises `TaskError` saying it is archived and
+  creates nothing, `rename_task` refuses a task whose archive is there, the target of a
+  rename cannot be a title an archive already has, and `_rename` reports the archive when
+  the folder it was given is gone
+- The listing reads an archive as a task with the state `closed`, whatever the `.md`
+  inside it says, and takes the intervention count and the last activity from that file
+  with the same rules as a folder: the archive path is `<zip name minus .zip>/<title>.md`,
+  a zip that cannot be read, holds no `.md` or holds one in the old format falls back to
+  the date in its name with 0 interventions, and a failure reading one never brings the
+  listing down. Closed entries sort with the folders by last activity, in the category
+  they sit in, so closing moves a task within the listing rather than out of it
 - `task_folder_title(name)` returns the standardized title a task folder name carries, or
   None when the name is not a task folder; it is how the CLI reads the current title of a
   folder the user named, so the CLI never has to know how the name is split
@@ -271,7 +296,9 @@ Free text, with levels 2 to 6 available.
   task column of the GUI row; the state, the count and the date are the CLI wording, because
   the GUI counts in words rather than in dates. The order is the one `find_task_groups`
   already gives, which is by last activity, so a directory with no tasks prints nothing.
-  Never format a date or a title in the CLI by hand, or the two listings drift apart
+  Never format a date or a title in the CLI by hand, or the two listings drift apart. A
+  closed task is left out without `--only`, so what the plain listing shows is what still
+  stands as folders, and `--only closed` is how the archives are read
 - `--only <state>` goes with `--list` and keeps only the tasks in that state. It accepts the
   four states of `parsing.STATES`, `closed` included, because it filters what a `.md`
   carries rather than what this CLI can set, and anything else raises `TaskError`, which
@@ -284,9 +311,16 @@ Free text, with levels 2 to 6 available.
   new title for `--rename`. It refuses to go with `--rename` or `--list`
 - `--state <title> <state>` sets the state of the task with that title in the current
   directory. It accepts `open`, `in-progress` and `waiting`; `closed` is not accepted from
-  the CLI here. The title is looked up the same way as for `mktsk <title>` (normalized and
-  found by `find_task_folder`). It prints one line with the new state and opens nothing. An
-  unknown title gives `TaskError` and does not create the task
+  the CLI here, closing is `--close`. The title is looked up the same way as for
+  `mktsk <title>` (normalized and found by `find_task_folder`). It prints one line with the
+  new state and opens nothing. An unknown title gives `TaskError` and does not create the
+  task
+- `--close <title>` closes the task with that title in the current directory, found the
+  same way as for `mktsk <title>`. It prints one line with the name of the archive created
+  and opens nothing, because closing is the end of the task; an unknown title gives
+  `TaskError` and does not create the task. It goes with no other option: alongside
+  `--rename`, `--list`, `--new-category` or `--state` it is refused, and a title of the
+  plain form alongside it too
 - Each option checks only what it needs, and only the plain form falls back to the title;
   when a second option arrives alongside, the refusal is about the two options, not about
   the title
@@ -296,8 +330,8 @@ Free text, with levels 2 to 6 available.
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
-  `tests/test_gui_activity.py`, `tests/test_gui_state.py` and `tests/test_gui_window.py`
-  with pytest-qt
+  `tests/test_gui_activity.py`, `tests/test_gui_state.py`, `tests/test_gui_close.py`
+  and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
   window imports the widgets it is built from, and a widget only reports what it was
@@ -339,7 +373,10 @@ Free text, with levels 2 to 6 available.
   directory being a category named after itself, plus an `All` tab first; only
   categories that hold tasks get a tab
 - `All` lists every task under a heading per category, headings bold and not
-  selectable; a category tab lists just its own tasks, with no heading
+  selectable; a category tab lists just its own tasks, with no heading. Neither shows a
+  closed task: a category whose tasks are all closed gets no tab and no heading, and a
+  `Closed` tab last holds every archive under a heading per category, appearing only
+  when there is at least one
 - The active tab survives a refresh or a new task; when its category is gone, `All`
   takes over again
 - Within a category, by last activity, newest first, alphabetical for tasks of the same
@@ -368,14 +405,16 @@ Free text, with levels 2 to 6 available.
 - A row without those roles is a heading, which has no activity of its own and is painted
   where it stands, across the row
 - Selecting a task shows an action bar over that row, aligned to the left, with the
-  `Open`, `Resume` and `Rename` buttons and the change-state one; it moves with the
-  selection and disappears with it
+  `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
+  the selection and disappears with it
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
-  `Open`, a plus for `Resume`, a pencil for `Rename` and a ring with a dot for the state,
-  all drawn with `QPainter` in `gui/icons.py`, so no image file has to be collected for a
-  frozen build
+  `Open`, a plus for `Resume`, a pencil for `Rename`, a ring with a dot for the state and
+  an archive box for `Close`, all drawn with `QPainter` in `gui/icons.py`, so no image
+  file has to be collected for a frozen build
 - The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
-  checks the item holds a `TaskEntry` before showing or placing the bar
+  checks the item holds a `TaskEntry` before showing or placing the bar. A row in the
+  `Closed` tab gets no bar and no room for one, because none of the actions reaches an
+  archive
 - Only the selected row is inset to make room for the bar, so the space appears when the
   row is clicked and is given back when the selection goes; every row keeps the height
   the bar needs, or the list would shift as the selection moves
@@ -394,6 +433,12 @@ Free text, with levels 2 to 6 available.
   it was asked for, not to one looked up in the current directory. It refreshes the listing
   as well, because the row carries the count and the age that the new intervention has
   changed
+- `Close` emits `close_requested` with the entry, and the window asks for confirmation in
+  a `QMessageBox.question` before it does anything: declined, nothing changes; accepted, it
+  calls `close_task` on the folder the entry points at, showing a failure in a
+  `QMessageBox.critical` like every other action and refreshing the list on success, so
+  the task moves to the `Closed` tab. Nothing is opened either way, and with no selection
+  nothing changes
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
   what was created; the warning carries the error as it is, `helpers.open_file` already

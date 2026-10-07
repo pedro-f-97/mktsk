@@ -10,6 +10,8 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * Finds an existing task by title in the current directory, on any date, and starts a new
   dated section in it.
 * Lists tasks by when they were last worked on, not by the date in the folder name.
+* Closes a task by compressing its folder into a verified zip archive, and lists the
+  archives apart from the tasks still standing.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
 
@@ -185,6 +187,9 @@ carry rather than what the command can set. A category left without a task print
 heading at all, and any other word is an error. On its own, without `--list`, it is
 refused before anything is listed.
 
+Closed tasks are left out of the plain listing, so what it shows is what still stands
+as folders; `mktsk --list --only closed` lists the archives instead.
+
 A task folder without its Markdown file is left out, since there is nothing to open. A
 Markdown file that cannot be read keeps its task in the list, and so does one with no
 dated section, or one still in the old format: the date of the folder stands in as its
@@ -227,6 +232,34 @@ state, and a task already `in-progress` stays as it is: only a new section, a ne
 work, counts. The message of the command says what was recorded, for example
 `(state: in-progress)`, or that the state was not recorded when writing it failed; the
 task is opened either way.
+
+## Closing a task
+
+Pass `--close` with the title of the task:
+
+```bash
+mktsk --close "It's Alive!"
+```
+
+```text
+Closed: 260923 - ItsAlive.zip
+```
+
+The folder is compressed into a zip beside where it stood, named after the folder, and
+only then deleted. The zip is written under a temporary name, checked to hold every file
+of the folder with the right size, and moved into place before the folder goes, so a
+close that fails or is interrupted never loses the task: anything short of the archive
+being verified leaves the folder exactly as it was. If the folder cannot be deleted once
+the archive is in place, both are kept and the error says the task is archived anyway.
+
+The Markdown file inside the zip carries the `closed` event; the one in the folder is
+never touched. The title is found the same way as for `mktsk <title>`, and a title that is
+not a task in the directory you are in is an error that creates nothing. Nothing is
+opened, because closing is the end of the task.
+
+A title is unique in a directory whether it stands as a folder or as an archive, so
+`mktsk <title>` with its zip there is refused with an error saying the task is archived,
+and renaming follows the same rule. Reopening arrives later.
 
 ## Creating a category
 
@@ -335,8 +368,9 @@ Opens a window where you can:
   until you select another one;
 * see on the right every existing task, including the ones in subfolders. Each category
   gets its own tab, the current folder included, plus an `All` tab that lists everything
-  under a heading per category. By last activity, so the task you worked on last comes
-  first;
+  still standing under a heading per category, and a `Closed` tab with the archives,
+  which appears only when there is at least one. By last activity, so the task you worked
+  on last comes first;
 * read each task as four columns under their headings: the task itself, the date of the
   folder as `dd/mm/yyyy` with the title read as words (`260923 - FSocietyEverbind` shows
   as `23/09/2026  F Society Everbind`), the state the task is in, the number of
@@ -351,12 +385,16 @@ Opens a window where you can:
   * `Rename` asks for a new title and renames the folder and the file, keeping the date.
     The content is left exactly as it was, and a title another task already has is
     refused.
-  * the last button carries a menu with `open`, `in-progress` and `waiting`: pick one and
+  * the state button carries a menu with `open`, `in-progress` and `waiting`: pick one and
     the state of the task changes where it lives, a line at the end of its Markdown file,
     and the list shows the new state at once. A file can carry `closed` too, but this
     menu does not set it.
+  * `Close` asks you to confirm, then compresses the folder into a zip beside where it
+    stood, verified before the folder is deleted, and the task moves to the `Closed` tab.
+    Nothing is opened, because the task is over.
 
-  The buttons show an icon each, and the name of the action on hover.
+  The buttons show an icon each, and the name of the action on hover. A task in the
+  `Closed` tab offers no bar, since none of the actions reaches an archive.
 
 The last visited folder is remembered between sessions.
 
