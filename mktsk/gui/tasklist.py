@@ -210,6 +210,10 @@ class _ColumnHeader(QHeaderView):
         self.resizeSection(1, cols.state)
         self.resizeSection(2, cols.interventions)
         self.resizeSection(3, cols.activity)
+        if model is not None:
+            item = model.horizontalHeaderItem(2)
+            if item is not None:
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def set_row_width(self, width: int) -> None:
         self.setFixedWidth(width)
@@ -410,7 +414,11 @@ class _InsetDelegate(QStyledItemDelegate):
         painter.save()
         painter.setPen(_cell_pen(option))
         painter.drawText(state, _CELL_ALIGNMENT, index.data(_STATE_ROLE))
-        painter.drawText(interventions, _CELL_ALIGNMENT, count)
+        painter.drawText(
+            interventions,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+            count,
+        )
         painter.drawText(activity, _CELL_ALIGNMENT, index.data(_AGE_ROLE))
         painter.restore()
 
