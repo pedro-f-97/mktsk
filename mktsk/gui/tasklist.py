@@ -14,11 +14,19 @@ from PySide6.QtCore import (
     Signal,
     SignalInstance,
 )
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPalette
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPalette,
+    QStandardItem,
+    QStandardItemModel,
+)
 from PySide6.QtWidgets import (
     QApplication,
-    QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLayout,
     QListWidget,
@@ -181,64 +189,33 @@ def _relative_age(last_activity: datetime.date, today: datetime.date) -> str:
     return f"{days} days ago"
 
 
-class _ColumnHeader(QFrame):
-    """The names of the columns of the task list, above it.
-
-    The headings are placed by arithmetic against the width of a row, from the
-    same `_column_rects` the rows are painted with, so a heading never sits over
-    a value of another column. The row is not the header itself but the list
-    under it, which is narrower when it shows a scrollbar, so the width comes
-    from `set_row_width` rather than from the width of the header.
-    """
+class _ColumnHeader(QHeaderView):
+    """Header using QHeaderView with interactive resize modes."""
 
     def __init__(self, height: int, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.columns = _column_widths()
-        self.row_width = 0
-        labels = [_heading(text, self) for text in _HEADINGS]
-        (
-            self.task_label,
-            self.state_label,
-            self.interventions_label,
-            self.activity_label,
-        ) = labels
-
-        self.rule = QFrame(self)
-        self.rule.setFrameShape(QFrame.Shape.HLine)
-        self.rule.setFixedHeight(1)
-
-        # the band is as tall as a row, so the headings line up with the rows
+        super().__init__(Qt.Orientation.Horizontal, parent)
         self.setFixedHeight(height)
-
-    def labels(self) -> tuple[QLabel, QLabel, QLabel, QLabel]:
-        """Returns the four headings, from the task on the left."""
-        return (
-            self.task_label,
-            self.state_label,
-            self.interventions_label,
-            self.activity_label,
-        )
+        model = QStandardItemModel(0, 4, self)
+        for i, text in enumerate(_HEADINGS):
+            model.setHorizontalHeaderItem(i, QStandardItem(text))
+        self.setModel(model)
+        self.setSectionsMovable(False)
+        self.setSectionsClickable(False)
+        self.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        cols = _column_widths()
+        self.setMinimumSectionSize(cols.state)
+        total = cols.state + cols.interventions + cols.activity
+        self.resizeSection(0, max(total, 100))
+        self.resizeSection(1, cols.state)
+        self.resizeSection(2, cols.interventions)
+        self.resizeSection(3, cols.activity)
 
     def set_row_width(self, width: int) -> None:
-        """Places the headings over a row of the given width.
-
-        Args:
-            width: the width of a row of the list under the header.
-        """
-        self.row_width = width
-        self._place()
+        self.setFixedWidth(width)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._place()
-
-    def _place(self) -> None:
-        """Moves each heading over its own column of the row below."""
-        row = QRect(0, 0, self.row_width, self.height())
-        columns = _column_rects(row, self.columns)
-        for label, column in zip(self.labels(), columns, strict=True):
-            label.setGeometry(column)
-        self.rule.setGeometry(0, self.height() - 1, self.width(), 1)
 
 
 def _heading(text: str, parent: QWidget) -> QLabel:
@@ -579,8 +556,7 @@ class TaskPanel(QWidget):
         layout.addWidget(self.header)
         layout.addWidget(listing, 1)
 
-        # the rows lose their width to a scrollbar, so the headings have to be
-        # placed again every time the list is given another width
+        # the rows lose their width to a scrollbar; header width follows viewport
         listing.viewport().installEventFilter(self)
         self._place_header()
 
@@ -600,5 +576,5 @@ class TaskPanel(QWidget):
         return super().eventFilter(watched, event)
 
     def _place_header(self) -> None:
-        """Places the headings over the width of a row of the list."""
-        self.header.set_row_width(self.listing.viewport().width())
+        """Align header width to listing viewport width."""
+        self.header.setFixedWidth(self.listing.viewport().width())

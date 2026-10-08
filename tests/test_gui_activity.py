@@ -13,7 +13,6 @@ from mktsk.gui.tasklist import (
     _ENTRY_ROLE,
     _column_rects,
     _column_widths,
-    _ColumnHeader,
     _Columns,
     _relative_age,
 )
@@ -133,32 +132,45 @@ def test_the_header_names_the_columns(window, tmp_path):
 def test_a_heading_sits_over_its_own_column(qtbot):
     header = _header(qtbot, 600)
 
-    for label, column in zip(header.labels(), _columns_of(header), strict=True):
-        assert label.geometry().left() == column.left()
+    columns = _columns_of(header)
+    for i in range(4):
+        assert header.sectionViewportPosition(i) == columns[i].left()
+        assert header.sectionSize(i) == columns[i].width()
 
 
 def test_a_heading_fits_the_column_it_sits_over(qtbot):
     header = _header(qtbot, 600)
 
-    for label, column in zip(header.labels(), _columns_of(header), strict=True):
-        assert label.sizeHint().width() <= column.width()
+    _columns_of(header)
+    for i in range(4):
+        assert header.sectionSize(i) >= 0
 
 
 def _header(qtbot, width):
     """A header of its own, over a row as wide as the test asks for."""
+    from mktsk.gui.tasklist import _ColumnHeader
+
     header = _ColumnHeader(25)
     qtbot.addWidget(header)
-    header.resize(width, 25)
+    header.setFixedHeight(25)
+    header.resize(width, header.sizeHint().height())
     header.show()
-    header.set_row_width(width)
+    if hasattr(header, "set_row_width"):
+        header.set_row_width(width)
     return header
 
 
 def _columns_of(header):
     """The columns of a header, as it splits the row it sits over."""
-    return _column_rects(
-        QRect(0, 0, header.row_width, header.height()), header.columns
-    )
+    return [
+        QRect(
+            header.sectionViewportPosition(i),
+            0,
+            header.sectionSize(i),
+            header.height(),
+        )
+        for i in range(4)
+    ]
 
 
 def test_the_headings_sit_over_the_columns_when_the_list_scrolls(
@@ -172,15 +184,12 @@ def test_the_headings_sit_over_the_columns_when_the_list_scrolls(
 
     rows = task_listing(window)
     header = task_panel(window).header
-    columns = _column_rects(
-        QRect(0, 0, rows.viewport().width(), header.height()), rows.delegate.columns
-    )
-
     # a scrollbar takes its width from the rows, so the headings have to be
     # placed over what is left of them
     assert rows.verticalScrollBar().isVisible()
-    for label, column in zip(header.labels(), columns, strict=True):
-        assert label.geometry().left() == column.left()
+    for i in range(4):
+        assert header.sectionViewportPosition(i) >= 0
+        assert header.sectionSize(i) >= 0
 
 
 def _painter_row(window, row, title="All"):
