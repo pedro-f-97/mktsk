@@ -388,6 +388,25 @@ class _InsetDelegate(QStyledItemDelegate):
         self.min_height = min_height
         self.columns = columns
         self.inset_row = -1
+        self._task_elide_width = -1
+        self._task_elide_row = -1
+
+    def initStyleOption(
+        self,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        super().initStyleOption(option, index)
+        if (
+            self._task_elide_row == index.row()
+            and self._task_elide_width > 0
+            and index.data(_COUNT_ROLE) is not None
+        ):
+            option.text = option.fontMetrics.elidedText(
+                index.data(Qt.ItemDataRole.DisplayRole),
+                Qt.TextElideMode.ElideRight,
+                self._task_elide_width,
+            )
 
     def paint(
         self,
@@ -405,13 +424,11 @@ class _InsetDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
 
-        # the task keeps its own text, elided into the column it has left
-        option.text = option.fontMetrics.elidedText(
-            index.data(Qt.ItemDataRole.DisplayRole),
-            Qt.TextElideMode.ElideRight,
-            task.width(),
-        )
+        self._task_elide_row = index.row()
+        self._task_elide_width = task.width()
         super().paint(painter, option, index)
+        self._task_elide_row = -1
+        self._task_elide_width = -1
 
         painter.save()
         painter.setPen(_cell_pen(option))
