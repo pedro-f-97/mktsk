@@ -347,8 +347,8 @@ Free text, with levels 2 to 6 available.
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
-  `tests/test_gui_activity.py`, `tests/test_gui_state.py`, `tests/test_gui_close.py`,
-  `tests/test_gui_reopen.py`
+  `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_state.py`,
+  `tests/test_gui_close.py`, `tests/test_gui_reopen.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
