@@ -406,6 +406,7 @@ class TaskListing(QListWidget):
         )
         self.setItemDelegate(self.delegate)
         self.header.sectionResized.connect(self._columns_changed)
+        self.horizontalScrollBar().valueChanged.connect(self.header.setOffset)
 
         self.action_bar.open_button.clicked.connect(
             lambda: self._request(self.open_requested)

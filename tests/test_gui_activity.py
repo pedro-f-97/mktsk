@@ -176,6 +176,20 @@ def test_the_headings_sit_over_the_columns_when_the_list_scrolls(
         assert header.sectionSize(i) >= 0
 
 
+def test_the_list_scrolls_the_header_with_it(window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    header = task_panel(window).header
+    header.resizeSection(0, header.sectionSize(0) + 800)
+    scrollbar = rows.horizontalScrollBar()
+    assert scrollbar.maximum() > 0
+
+    scrollbar.setValue(scrollbar.maximum() // 2)
+
+    assert header.offset() == scrollbar.value()
+
+
 def _painter_row(window, row, title="All"):
     """Paints one row of a tab on its own, as wide as the header."""
     rows = task_listing(window, title)
