@@ -407,15 +407,16 @@ Free text, with levels 2 to 6 available.
   is `entry.state`, spelled as the file spells it; the interventions are the count from the
   `.md`, `0` when there are none; the activity is `_relative_age`, which says `today`,
   `yesterday` or `N days ago`, and reads a date that has not come yet as `today`
-- `TaskPanel` is what a tab holds: `_ColumnHeader` over `TaskListing`. The three right columns
-  are measured from the bold application font (`_column_widths`) and split by
-  `_column_rects`, which the header and the delegate both ask, so a heading never sits over a
-  value of another column. A row too narrow for all four shares what is left by weight, the
-  task counting a share against one for each column of its activity, so a task never
-  disappears for the sake of its own numbers and no column is ever given a negative width
-- The headings are placed over the width of a row of the list, not over the width of the
-  header, because a scrollbar takes its width from the rows: `set_row_width` is what puts
-  them back, and the panel filters the viewport of the list to call it
+- `TaskPanel` is what a tab holds: `_ColumnHeader` over `TaskListing`. The header is the
+  only source of column geometry: the delegate reads each column's position and size from it
+  (`sectionPosition` and `sectionSize`), so a heading never sits over a value of another
+  column and dragging a separator moves the cells with it. `_column_widths` measures the
+  three right columns from the bold application font and is what the initial section sizes
+  come from; the task takes the rest of the room it had
+- The width of every item is the header's `length()`, so a header wider than the viewport
+  makes the list scroll horizontally, and the horizontal scrollbar's `valueChanged` moves
+  the header's offset with it; `sectionResized` lays the cells out again and repaints the
+  viewport, and a row without a count is a heading painted across the whole item width
 - The state, the count and the age reach the delegate in the item roles `_STATE_ROLE`,
   `_COUNT_ROLE` and `_AGE_ROLE`, so painting reads no file and holds no date of its own.
   The window takes one day per reload and hands it to every row, so a refresh that runs as

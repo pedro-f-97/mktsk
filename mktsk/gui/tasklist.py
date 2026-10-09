@@ -4,9 +4,7 @@ import datetime
 from typing import NamedTuple
 
 from PySide6.QtCore import (
-    QEvent,
     QModelIndex,
-    QObject,
     QPersistentModelIndex,
     QRect,
     QSize,
@@ -27,7 +25,6 @@ from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QLayout,
     QListWidget,
     QMenu,
@@ -69,11 +66,6 @@ _OFFERED_STATES = tuple(state for state in parsing.STATES if state != "closed")
 
 _COLUMN_PADDING = 6
 
-# how a row too narrow for all the columns shares what is left: the task takes
-# one share of four, the state and the two columns of its activity one each
-_TASK_SHARE = 1
-_SHARES = _TASK_SHARE + 3
-
 # how the text of a cell sits in the column of it: read from the left and
 # centred, so a row of one line looks like the headings above it
 _CELL_ALIGNMENT = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -93,8 +85,9 @@ def _column_widths() -> _Columns:
     A heading is the widest thing its column holds, so measuring one keeps the
     column as narrow as it can be and never clipping it. The widths come from
     the font in use rather than from numbers written down, so a font of another
-    size needs no constant of its own, and the header and the rows ask here and
-    get the same widths.
+    size needs no constant of its own. They are the initial sizes the header
+    starts its sections from; after that the header owns its geometry and the
+    cells read it back.
 
     Returns:
         The width of the state column, of the interventions one and of the last
@@ -108,59 +101,6 @@ def _column_widths() -> _Columns:
         metrics.horizontalAdvance(_HEADINGS[1]) + 2 * _COLUMN_PADDING,
         metrics.horizontalAdvance(_HEADINGS[2]) + 2 * _COLUMN_PADDING,
         metrics.horizontalAdvance(_HEADINGS[3]) + 2 * _COLUMN_PADDING,
-    )
-
-
-def _column_rects(row: QRect, columns: _Columns) -> tuple[QRect, QRect, QRect, QRect]:
-    """Splits a row into the task, the state, the interventions and the activity.
-
-    The header above the list and the rows themselves both ask here, so a
-    heading never sits over a value of another column. The three right columns
-    are as wide as the headings over them and the task takes the rest. A row too
-    narrow for all four shares what is left by weight, the task counting a
-    share against one for each of the other columns, because a row showing the
-    numbers of a task without the task itself says nothing. No column is ever
-    given a negative width, whatever the row is.
-
-    Args:
-        row: the row to split.
-        columns: the widths of the three right columns.
-
-    Returns:
-        The four columns, from the task on the left to the last activity on the
-        right, each as tall as the row.
-    """
-    available = max(0, row.width() - 2 * _COLUMN_PADDING)
-    needed = columns.state + columns.interventions + columns.activity
-
-    if available * (_SHARES - _TASK_SHARE) >= needed * _SHARES:
-        task_width = available - needed
-        state = columns.state
-        interventions = columns.interventions
-        activity = columns.activity
-    else:
-        task_width = available * _TASK_SHARE // _SHARES
-        room = available - task_width
-        state = min(columns.state, room * columns.state // needed)
-        interventions = min(
-            columns.interventions, room * columns.interventions // needed
-        )
-        activity = min(columns.activity, room - state - interventions)
-
-    last = max(row.left(), row.right() - _COLUMN_PADDING - activity + 1)
-    middle = max(row.left(), last - interventions)
-    first = max(row.left(), middle - state)
-
-    return (
-        QRect(
-            row.left() + _COLUMN_PADDING,
-            row.top(),
-            max(0, first - row.left() - _COLUMN_PADDING),
-            row.height(),
-        ),
-        QRect(first, row.top(), max(0, state), row.height()),
-        QRect(middle, row.top(), max(0, interventions), row.height()),
-        QRect(last, row.top(), max(0, activity), row.height()),
     )
 
 
@@ -190,19 +130,30 @@ def _relative_age(last_activity: datetime.date, today: datetime.date) -> str:
 
 
 class _ColumnHeader(QHeaderView):
-    """Header using QHeaderView with interactive resize modes."""
+    """The column headings, and the only source of column geometry.
+
+    Each section is interactive, so a separator can be dragged to give a column
+    more or less room, and the delegate reads every column back from here rather
+    than measuring one of its own. The three right columns start from the widths
+    of their headings, and the task takes the rest of the room a row has.
+    """
 
     def __init__(self, height: int, parent: QWidget | None = None) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
         self.setFixedHeight(height)
         model = QStandardItemModel(0, 4, self)
         for i, text in enumerate(_HEADINGS):
-            model.setHorizontalHeaderItem(i, QStandardItem(text))
+            item = QStandardItem(text)
+            if i == 2:
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            model.setHorizontalHeaderItem(i, item)
         self.setModel(model)
         self.setSectionsMovable(False)
         self.setSectionsClickable(False)
         self.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        self.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         cols = _column_widths()
         self.setMinimumSectionSize(cols.state)
         total = cols.state + cols.interventions + cols.activity
@@ -210,25 +161,6 @@ class _ColumnHeader(QHeaderView):
         self.resizeSection(1, cols.state)
         self.resizeSection(2, cols.interventions)
         self.resizeSection(3, cols.activity)
-        if model is not None:
-            item = model.horizontalHeaderItem(2)
-            if item is not None:
-                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-
-    def set_row_width(self, width: int) -> None:
-        self.setFixedWidth(width)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-
-
-def _heading(text: str, parent: QWidget) -> QLabel:
-    """Builds a column heading, bold the way a category heading is."""
-    label = QLabel(text, parent)
-    font = label.font()
-    font.setBold(True)
-    label.setFont(font)
-    return label
 
 
 class _ActionBar(QWidget):
@@ -343,14 +275,15 @@ def _cell_pen(option: QStyleOptionViewItem) -> QColor:
 
 
 class _InsetDelegate(QStyledItemDelegate):
-    """Paints a row as the columns of the list, keeping the bar clear.
+    """Paints a row as the columns of the header, keeping the bar clear.
 
-    The right columns are painted from `_column_rects`, the same arithmetic
-    the header above them is placed by, so a heading never sits over a value of
-    another column. The state, the count and the age reach the delegate in the
-    item roles, which the window fills from the task, so painting reads no file
-    and holds no date of its own. A row without them is a heading, which is
-    painted where it stands.
+    Every column comes from the header, which owns the geometry: the delegate
+    asks it for the position and the size of each section, so a heading never
+    sits over a value of another column and dragging a separator moves the cells
+    with it. The state, the count and the age reach the delegate in the item
+    roles, which the window fills from the task, so painting reads no file and
+    holds no date of its own. A row without them is a heading, painted across
+    the whole item.
 
     Only the selected row is inset, so the space for the buttons appears when the
     row is clicked and is given back when the selection goes. Every row keeps the
@@ -360,34 +293,37 @@ class _InsetDelegate(QStyledItemDelegate):
     Args:
         inset: width reserved on the left of the selected row.
         min_height: height a row needs to hold the action bar.
-        columns: the widths of the three right columns.
+        header: the header the geometry of every column is read from.
     """
 
-    def __init__(self, inset: int, min_height: int, columns: _Columns) -> None:
+    def __init__(self, inset: int, min_height: int, header: _ColumnHeader) -> None:
         super().__init__()
         self.inset = inset
         self.min_height = min_height
-        self.columns = columns
+        self.header = header
         self.inset_row = -1
-        self._task_elide_width = -1
-        self._task_elide_row = -1
 
-    def initStyleOption(
-        self,
-        option: QStyleOptionViewItem,
-        index: QModelIndex | QPersistentModelIndex,
-    ) -> None:
-        super().initStyleOption(option, index)
-        if (
-            self._task_elide_row == index.row()
-            and self._task_elide_width > 0
-            and index.data(_COUNT_ROLE) is not None
-        ):
-            option.text = option.fontMetrics.elidedText(
-                index.data(Qt.ItemDataRole.DisplayRole),
-                Qt.TextElideMode.ElideRight,
-                self._task_elide_width,
-            )
+    def column_rect(self, row: QRect, column: int) -> QRect:
+        """Returns the rectangle of a column within a row.
+
+        The position and the size come from the header, so the cells of the
+        list and the headings over them can never disagree; the row supplies
+        the vertical extent and the horizontal origin, which moves with the
+        horizontal scrollbar.
+
+        Args:
+            row: the row the column belongs to.
+            column: the index of the column, from the task on the left.
+
+        Returns:
+            The rectangle the column occupies in the row.
+        """
+        return QRect(
+            row.left() + self.header.sectionPosition(column),
+            row.top(),
+            self.header.sectionSize(column),
+            row.height(),
+        )
 
     def paint(
         self,
@@ -395,40 +331,50 @@ class _InsetDelegate(QStyledItemDelegate):
         option: QStyleOptionViewItem,
         index: QModelIndex | QPersistentModelIndex,
     ) -> None:
-        option.rect = QRect(option.rect)
-        if index.row() == self.inset_row:
-            option.rect.adjust(self.inset, 0, 0, 0)
-
-        task, state, interventions, activity = _column_rects(option.rect, self.columns)
         count = index.data(_COUNT_ROLE)
         if count is None:
             super().paint(painter, option, index)
             return
 
-        self._task_elide_row = index.row()
-        self._task_elide_width = task.width()
+        # the row background is the style's, but its text is drawn below, in
+        # the column of the task and clear of the action bar
+        option.text = ""
         super().paint(painter, option, index)
-        self._task_elide_row = -1
-        self._task_elide_width = -1
+
+        task = self.column_rect(option.rect, 0)
+        if index.row() == self.inset_row:
+            task.setLeft(task.left() + self.inset)
 
         painter.save()
         painter.setPen(_cell_pen(option))
-        painter.drawText(state, _CELL_ALIGNMENT, index.data(_STATE_ROLE))
         painter.drawText(
-            interventions,
+            task,
+            _CELL_ALIGNMENT,
+            option.fontMetrics.elidedText(
+                index.data(Qt.ItemDataRole.DisplayRole),
+                Qt.TextElideMode.ElideRight,
+                task.width(),
+            ),
+        )
+        painter.drawText(
+            self.column_rect(option.rect, 1), _CELL_ALIGNMENT, index.data(_STATE_ROLE)
+        )
+        painter.drawText(
+            self.column_rect(option.rect, 2),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
             count,
         )
-        painter.drawText(activity, _CELL_ALIGNMENT, index.data(_AGE_ROLE))
+        painter.drawText(
+            self.column_rect(option.rect, 3), _CELL_ALIGNMENT, index.data(_AGE_ROLE)
+        )
         painter.restore()
 
     def sizeHint(
         self, option: QStyleOptionViewItem, index: QModelIndex | QPersistentModelIndex
     ) -> QSize:
         size = super().sizeHint(option, index)
+        size.setWidth(self.header.length())
         size.setHeight(max(size.height(), self.min_height))
-        if index.row() == self.inset_row:
-            size.setWidth(size.width() + self.inset)
         return size
 
 
@@ -452,12 +398,14 @@ class TaskListing(QListWidget):
         super().__init__(parent)
         self.action_bar = _ActionBar(self.viewport())
         self.inset = self.action_bar.minimumSizeHint().width() + 2 * _ACTION_BAR_PADDING
+        self.header = _ColumnHeader(self.action_bar.minimumSizeHint().height())
         self.delegate = _InsetDelegate(
             self.inset,
             self.action_bar.minimumSizeHint().height(),
-            _column_widths(),
+            self.header,
         )
         self.setItemDelegate(self.delegate)
+        self.header.sectionResized.connect(self._columns_changed)
 
         self.action_bar.open_button.clicked.connect(
             lambda: self._request(self.open_requested)
@@ -483,6 +431,23 @@ class TaskListing(QListWidget):
         """Returns the task of the selected row, or None when none is."""
         item = self.currentItem()
         return item.data(_ENTRY_ROLE) if item else None
+
+    def column_rect(self, row: QRect, column: int) -> QRect:
+        """Returns the rectangle of a column within a row.
+
+        Args:
+            row: the row the column belongs to.
+            column: the index of the column, from the task on the left.
+
+        Returns:
+            The rectangle the column occupies in the row.
+        """
+        return self.delegate.column_rect(row, column)
+
+    def _columns_changed(self) -> None:
+        """Keeps the cells with the header after a section is resized."""
+        self.doItemsLayout()
+        self.viewport().update()
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
@@ -543,10 +508,10 @@ class TaskListing(QListWidget):
 class TaskPanel(QWidget):
     """The column headings over the tasks of a category.
 
-    The panel is what a tab holds: the headings, and the list under them. The
-    headings sit in a band of their own above the list rather than over it, so
-    the list keeps every row it had, and the headings are placed from the same
-    arithmetic the rows are painted with, so each sits over its own column.
+    The panel is what a tab holds: the header, and the list under it. The
+    header sits in a band of its own above the list rather than over it, so the
+    list keeps every row it had, and it owns the geometry of the columns the
+    rows are painted with, so each heading sits over its own column.
 
     Args:
         listing: the list of tasks the headings sit over.
@@ -556,33 +521,10 @@ class TaskPanel(QWidget):
     def __init__(self, listing: TaskListing, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.listing = listing
-        self.header = _ColumnHeader(listing.delegate.min_height, self)
+        self.header = listing.header
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.header)
         layout.addWidget(listing, 1)
-
-        # the rows lose their width to a scrollbar; header width follows viewport
-        listing.viewport().installEventFilter(self)
-        self._place_header()
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        """Puts the headings back over the rows when the list is resized.
-
-        Args:
-            watched: the widget the event went to.
-            event: the event that arrived.
-
-        Returns:
-            What the panel would have done with it, which is nothing.
-        """
-        if event.type() == QEvent.Type.Resize:
-            self._place_header()
-
-        return super().eventFilter(watched, event)
-
-    def _place_header(self) -> None:
-        """Align header width to listing viewport width."""
-        self.header.setFixedWidth(self.listing.viewport().width())

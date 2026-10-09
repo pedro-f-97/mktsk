@@ -8,12 +8,9 @@ from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 from mktsk import listing
 from mktsk.gui.tasklist import (
     _AGE_ROLE,
-    _COLUMN_PADDING,
     _COUNT_ROLE,
     _ENTRY_ROLE,
-    _column_rects,
     _column_widths,
-    _Columns,
     _relative_age,
 )
 from tests.gui_helpers import (
@@ -25,10 +22,6 @@ from tests.gui_helpers import (
 )
 
 TODAY = datetime.date(2026, 10, 2)
-
-COLUMNS = _Columns(70, 120, 140)
-
-ROW_WIDTH = 400
 
 
 def test_activity_of_today_reads_today():
@@ -48,74 +41,65 @@ def test_activity_of_a_day_to_come_reads_today():
     assert _relative_age(TODAY + datetime.timedelta(days=3), TODAY) == "today"
 
 
-def test_the_columns_run_from_the_task_to_the_last_activity():
-    task, state, interventions, activity = _column_rects(
-        QRect(0, 0, 400, 20), COLUMNS
-    )
+def test_a_column_rect_comes_from_the_header(window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    header = task_panel(window).header
+    row = QRect(0, 0, header.length(), rows.delegate.min_height)
 
-    assert task.left() < state.left() < interventions.left() < activity.left()
+    for column in range(4):
+        rect = rows.column_rect(row, column)
 
-
-def test_the_last_activity_column_ends_with_the_row():
-    row = QRect(10, 30, 400, 20)
-
-    assert _column_rects(row, COLUMNS)[3].right() == row.right() - _COLUMN_PADDING
-
-
-def test_the_task_column_stops_where_the_interventions_begin():
-    row = QRect(0, 0, 400, 20)
-    task, state, interventions, activity = _column_rects(row, COLUMNS)
-
-    assert task.right() <= state.left()
-    assert state.right() <= interventions.left()
-    assert interventions.right() <= activity.left()
+        assert rect.left() == header.sectionPosition(column)
+        assert rect.width() == header.sectionSize(column)
+        assert rect.top() == row.top()
+        assert rect.height() == row.height()
 
 
-def test_the_columns_follow_the_row_they_belong_to():
-    columns = _column_rects(QRect(10, 30, 400, 20), COLUMNS)
+def test_resizing_a_section_moves_the_columns_that_follow(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    header = task_panel(window).header
+    row = QRect(0, 0, header.length(), rows.delegate.min_height)
+    before = [rows.column_rect(row, column) for column in range(4)]
 
-    assert [column.top() for column in columns] == [30, 30, 30, 30]
-    assert [column.height() for column in columns] == [20, 20, 20, 20]
+    header.resizeSection(1, header.sectionSize(1) + 40)
 
-
-def test_a_row_narrower_than_its_columns_keeps_them_inside():
-    # the columns are measured from the font, so a window too narrow for them
-    # shares what is left between them rather than reaching out of the row
-    row = QRect(0, 0, 100, 20)
-    _, state, interventions, activity = _column_rects(row, COLUMNS)
-
-    assert (state.width(), interventions.width(), activity.width()) == (14, 24, 28)
-    assert activity.right() == row.right() - _COLUMN_PADDING
-
-
-def test_a_row_too_narrow_for_the_task_still_shows_it(qapp):
-    # the columns share what is left with the task, so a narrow window never
-    # shows the numbers of a task without the task itself
-    task, _, _, _ = _column_rects(QRect(0, 0, 348, 20), _column_widths())
-
-    assert task.width() > 0
+    after = [rows.column_rect(row, column) for column in range(4)]
+    assert after[0] == before[0]
+    assert after[1].left() == before[1].left()
+    assert after[1].width() == before[1].width() + 40
+    assert after[2].left() == before[2].left() + 40
+    assert after[2].width() == before[2].width()
+    assert after[3].left() == before[3].left() + 40
+    assert after[3].width() == before[3].width()
 
 
-def test_the_columns_stay_inside_a_row_of_any_width(qapp):
+def test_the_width_of_a_row_is_the_length_of_the_header(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    header = task_panel(window).header
+    header.resizeSection(0, header.sectionSize(0) + 800)
+
+    assert rows.visualItemRect(rows.item(0)).width() == header.length()
+
+
+def test_the_header_starts_from_the_measured_columns(window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    header = task_panel(window).header
     columns = _column_widths()
 
-    for width in range(800):
-        row = QRect(0, 0, width, 20)
-        task, state, interventions, activity = _column_rects(row, columns)
-
-        for column in (task, state, interventions, activity):
-            assert column.width() >= 0
-        assert task.width() + state.width() + interventions.width() + activity.width() <= max(
-            0, width - 2 * _COLUMN_PADDING
-        )
-        assert activity.right() <= row.right()
-
-
-def test_a_row_wider_than_its_columns_gives_the_rest_to_the_task():
-    task, state, interventions, activity = _column_rects(QRect(0, 0, 500, 20), COLUMNS)
-
-    assert (state.width(), interventions.width(), activity.width()) == (70, 120, 140)
-    assert task.width() == 500 - 2 * _COLUMN_PADDING - 70 - 120 - 140
+    assert header.sectionSize(1) == columns.state
+    assert header.sectionSize(2) == columns.interventions
+    assert header.sectionSize(3) == columns.activity
 
 
 def test_the_header_names_the_columns(window, tmp_path):
@@ -193,22 +177,24 @@ def test_the_headings_sit_over_the_columns_when_the_list_scrolls(
 
 
 def _painter_row(window, row, title="All"):
-    """Paints one row of a tab on its own and returns the image of it."""
+    """Paints one row of a tab on its own, as wide as the header."""
     rows = task_listing(window, title)
     delegate = rows.delegate
+    index = rows.model().index(row, 0)
 
     option = QStyleOptionViewItem()
     option.initFrom(rows)
-    option.rect = QRect(0, 0, ROW_WIDTH, delegate.min_height)
+    option.rect = QRect(0, 0, rows.header.length(), delegate.min_height)
     option.state = QStyle.StateFlag.State_Enabled
+    option.text = index.data(Qt.ItemDataRole.DisplayRole)
 
     image = QImage(option.rect.size(), QImage.Format.Format_ARGB32)
     image.fill(Qt.GlobalColor.white)
     painter = QPainter(image)
-    delegate.paint(painter, option, rows.model().index(row, 0))
+    delegate.paint(painter, option, index)
     painter.end()
 
-    return image, _column_rects(option.rect, delegate.columns)
+    return image, rows, QRect(option.rect)
 
 
 def _ink(image, column):
@@ -314,11 +300,10 @@ def test_the_state_is_painted_over_the_state_column(window, tmp_path, make_task)
     file = make_task(tmp_path, "261002", "Foo")
 
     window.navigate_to(tmp_path)
-    image, (_, state, _, _) = _painter_row(
-        window, task_listing(window).row(find_task(window, file))
-    )
+    rows = task_listing(window)
+    image, rows, rect = _painter_row(window, rows.row(find_task(window, file)))
 
-    assert _ink(image, state) > 0
+    assert _ink(image, rows.column_rect(rect, 1)) > 0
 
 
 @freeze_time("2026-10-02")
@@ -326,11 +311,10 @@ def test_the_count_is_painted_over_the_interventions_column(window, tmp_path, ma
     file = make_task(tmp_path, "261002", "Foo")
 
     window.navigate_to(tmp_path)
-    image, (_, _, interventions, _) = _painter_row(
-        window, task_listing(window).row(find_task(window, file))
-    )
+    rows = task_listing(window)
+    image, rows, rect = _painter_row(window, rows.row(find_task(window, file)))
 
-    assert _ink(image, interventions) > 0
+    assert _ink(image, rows.column_rect(rect, 2)) > 0
 
 
 @freeze_time("2026-10-02")
@@ -338,8 +322,21 @@ def test_the_age_is_painted_over_the_last_activity_column(window, tmp_path, make
     file = make_task(tmp_path, "261002", "Foo")
 
     window.navigate_to(tmp_path)
-    image, (_, _, _, activity) = _painter_row(
-        window, task_listing(window).row(find_task(window, file))
-    )
+    rows = task_listing(window)
+    image, rows, rect = _painter_row(window, rows.row(find_task(window, file)))
 
-    assert _ink(image, activity) > 0
+    assert _ink(image, rows.column_rect(rect, 3)) > 0
+
+
+def test_a_heading_row_is_painted_across_the_whole_width(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    rows.item(0).setText("X" * 400)
+
+    image, _, rect = _painter_row(window, 0)
+
+    right_half = QRect(rect.width() // 2, 0, rect.width() // 2, rect.height())
+    assert _ink(image, right_half) > 0
