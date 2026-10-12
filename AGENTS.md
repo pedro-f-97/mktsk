@@ -355,7 +355,8 @@ Free text, with levels 2 to 6 available.
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
   `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_row_text.py`,
-  `tests/test_gui_state.py`, `tests/test_gui_close.py`, `tests/test_gui_reopen.py`
+  `tests/test_gui_date_column.py`, `tests/test_gui_state.py`, `tests/test_gui_close.py`,
+  `tests/test_gui_reopen.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
@@ -405,21 +406,27 @@ Free text, with levels 2 to 6 available.
 - The active tab survives a refresh or a new task; when its category is gone, `All`
   takes over again
 - Within a category, by last activity, newest first, alphabetical for tasks of the same
-  last activity. The task column shows the date of the folder and the last activity column
+  last activity. The date column shows the date of the folder and the last activity column
   says how long ago the last intervention was, so the date on a row and the order of the
   rows can disagree
 - A task folder with no `.md` is not listed; a task two levels down is not found
-- A task row is four columns, `Task`, `State`, `Interventions` and `Last activity`. The task
-  is `dd/mm/yyyy` + two spaces + `readable_title`, with the full path as tooltip; the state
-  is `entry.state`, spelled as the file spells it; the interventions are the count from the
+- A task row is five columns, `Date`, `Task`, `State`, `Interventions` and `Last activity`.
+  The date is `dd/mm/yyyy`, read from the folder name or, for a closed task, the archive
+  name; the task is `readable_title`, with the full path as tooltip; the state is
+  `entry.state`, spelled as the file spells it; the interventions are the count from the
   `.md`, `0` when there are none; the activity is `_relative_age`, which says `today`,
   `yesterday` or `N days ago`, and reads a date that has not come yet as `today`
+- The date and the task come from the `TaskEntry` the row carries, the same entry the state,
+  the count and the age come from, so the delegate reads the folder name without another
+  import; `_date_cell` reads the date out of the name with `standards`, falling back to the
+  raw prefix when the name is not a task folder
 - `TaskPanel` is what a tab holds: `_ColumnHeader` over `TaskListing`. The header is the
   only source of column geometry: the delegate reads each column's position and size from it
   (`sectionPosition` and `sectionSize`), so a heading never sits over a value of another
   column and dragging a separator moves the cells with it. `_column_widths` measures the
-  three right columns from the bold application font and is what the initial section sizes
-  come from; the task takes the rest of the room it had
+  three right columns from the bold application font; the date column is a date wide plus the
+  room the action bar reserves, and is held at that room as a minimum so the bar can never
+  cover the task column; the task takes the rest of the room it had
 - The width of every item is the header's `length()`, so a header wider than the viewport
   makes the list scroll horizontally, and the horizontal scrollbar's `valueChanged` moves
   the header's offset with it; `sectionResized` lays the cells out again and repaints the
@@ -432,10 +439,12 @@ Free text, with levels 2 to 6 available.
   where it stands, across the row
 - A task row empties `option.text` in `initStyleOption`, not in `paint`, because the base
   class refills it from the display role on every paint; the style then draws only the row
-  background, and the four cells are the whole text of the row, each inside its own column.
-  The selected row narrows the task cell from the left, so the bar sits over no text, and the
-  task cell starts a fixed gap in from the left of its column on every row, so the indicator a
-  style paints at its left edge never covers the first glyph
+  background, and the five cells are the whole text of the row, each inside its own column.
+  The date is the first text after the action bar, so the room the bar reserves and the
+  indicator gap are left in front of the date cell on every row, selected or not; the bar
+  sits over no text, the date never moves when a row is picked, and the indicator a style
+  paints at the left edge of the rect it is handed falls between the bar and the date. The
+  task follows the date in its own column and keeps no inset of its own
 - The pen of a cell is always paired with the background it is drawn on, and never a colour
   written down. The style paints the selection of a row, because the selection of a view is
   the style's, and the delegate only picks the text colour: a selected row asks the style
@@ -447,9 +456,9 @@ Free text, with levels 2 to 6 available.
   which is then what the text is measured against. The pen is remembered per style, group
   and selection, because the style does not change what it paints while the application
   runs. Only the selected row is handed to the style with its rect narrowed from the left
-  by the width of the bar, so the fill and the indicator start under the text and the bar
-  sits over the plain background. An unselected row reads `Text` of the group, which is
-  what keeps tasks and folders apart as they were
+  by the width of the bar, so the fill and the indicator start between the bar and the date
+  text and the bar sits over the plain room in front of the date. An unselected row reads
+  `Text` of the group, which is what keeps tasks and folders apart as they were
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it
@@ -463,9 +472,12 @@ Free text, with levels 2 to 6 available.
   is the one action that reaches an archive; `set_reopening` takes the other four buttons
   out until the folder stands again, and gives the resume button the reopen icon and
   tooltip while it stands for one, putting them back afterwards
-- Only the selected row is inset to make room for the bar, so the space appears when the
-  row is clicked and is given back when the selection goes; every row keeps the height
-  the bar needs, or the list would shift as the selection moves
+- The date cell is drawn after the room the bar reserves on every row, so the date never
+  moves when a row is selected; only the selected row hands the style a rect narrowed from
+  the left, so the space for the buttons appears when the row is clicked and is given back
+  when the selection goes. Every row keeps the height the bar needs, or the list would shift
+  as the selection moves. The date section is held at least as wide as the bar, so a
+  separator cannot drag it under the bar and over the start of the task
 - `Open` replaces the double click on a task; `Open` reveals the task folder in the file
   manager and touches nothing, `Resume` opens the `.md`, `Rename` does not open it, it
   just refreshes the list
