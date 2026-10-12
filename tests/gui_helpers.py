@@ -4,6 +4,8 @@ Plain functions rather than fixtures, because they read from a window that
 the test already asks for and give a result straight back.
 """
 
+from PySide6.QtCore import Qt
+
 from mktsk.gui.tasklist import _ENTRY_ROLE
 from mktsk.gui.tree import _PATH_ROLE
 
@@ -29,7 +31,12 @@ def task_listing(window, title="All"):
 
 def header_labels(window, title="All"):
     """The names of the columns above a tab of tasks."""
-    return [label.text() for label in task_panel(window, title).header.labels()]
+    header = task_panel(window, title).header
+    model = header.model()
+    return [
+        model.headerData(i, header.orientation(), Qt.DisplayRole)
+        for i in range(model.columnCount() if model is not None else 0)
+    ]
 
 
 def tab_labels(window, title="All"):
