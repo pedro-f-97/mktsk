@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from mktsk.gui.tasklist import TaskPanel, _cell_pen, _contrast_ratio
+from mktsk.gui import tasklist
+from mktsk.gui.tasklist import _PEN_CACHE, TaskPanel, _cell_pen, _contrast_ratio
 from tests.gui_helpers import (
     find_directory,
     find_task,
@@ -196,6 +197,17 @@ _UNSELECTED = QStyle.StateFlag.State_Enabled
 _MINIMUM_CONTRAST = 4.5
 
 
+@pytest.fixture(autouse=True)
+def _discard_cached_pens():
+    """Forgets the pens of a selection a previous test may have asked for.
+
+    The pen of a selected cell is remembered for the life of the process, so a
+    palette one test changes would linger in it for the next one. Every test
+    here starts from an empty recollection.
+    """
+    _PEN_CACHE.clear()
+
+
 def _render_row(view, item, state, background):
     """Renders one task or folder row offscreen, over a given background.
 
@@ -215,6 +227,7 @@ def _render_row(view, item, state, background):
     option.rect = QRect(0, 0, rect.width(), rect.height())
     option.state = state
     option.palette = view.viewport().palette()
+    option.widget = view
     painter = QPainter(image)
     delegate.paint(painter, option, index)
     painter.end()
@@ -320,42 +333,126 @@ def _rendered_readable(view, item, state):
     assert ratio >= _MINIMUM_CONTRAST, f"{text.name()} on {background.name()}: {ratio}"
 
 
-class _OwnSelectionStyle(QProxyStyle):
+# the fills a style of its own may paint: one light, where the palette would
+# choose a light text, and one dark, where it would choose a dark one
+_FILLS = (("light", QColor("#f5f5f5")), ("dark", QColor("#1a1a1a")))
+
+
+class _FilledSelectionStyle(QProxyStyle):
     """A style that paints a selection fill the palette does not describe.
 
     Some platform styles fill a selected row with a colour the palette knows
-    nothing about, which is what leaves a white text on a light fill. The proxy
-    reproduces one: it answers the selection panel with a light grey whatever
-    the palette says.
+    nothing about, which would leave a text of the colour the palette chose on
+    a background it was not chosen for. The proxy reproduces one, answering
+    both the panel and the control with the same fill, so the row is painted
+    the way such a style paints it and the pen has to be read back from the
+    row rather than taken from the palette.
+    """
+
+    def __init__(self, base, colour):
+        super().__init__(base)
+        self.colour = colour
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_ItemViewItem and (
+            option.state & QStyle.StateFlag.State_Selected
+        ):
+            painter.fillRect(option.rect, self.colour)
+            return
+        super().drawControl(element, option, painter, widget)
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+        if element == QStyle.PrimitiveElement.PE_PanelItemViewItem and (
+            option.state & QStyle.StateFlag.State_Selected
+        ):
+            painter.fillRect(option.rect, self.colour)
+            return
+        super().drawPrimitive(element, option, painter, widget)
+
+
+@pytest.fixture(params=_FILLS, ids=[name for name, _ in _FILLS])
+def filled_selection_style(qapp, request):
+    """Puts a style that paints its own selection fill on the application.
+
+    The palette is set against the fill the style paints, so the text the
+    palette alone would choose is the wrong one: light on a light fill, dark
+    on a dark one. Reading the fill back is the only way left to a readable
+    text.
+    """
+    name, colour = request.param
+    style_name = qapp.style().objectName()
+    original_palette = qapp.palette()
+    style = _FilledSelectionStyle(qapp.style(), colour)
+    style.setObjectName(name)
+    qapp.setStyle(style)
+    palette = qapp.palette()
+    if name == "light":
+        palette.setColor(QPalette.ColorRole.Highlight, QColor("#0067c0"))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#000000"))
+    else:
+        palette.setColor(QPalette.ColorRole.Highlight, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#000000"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#ffffff"))
+    qapp.setPalette(palette)
+    yield style
+    _restore_style(qapp, style_name)
+    qapp.setPalette(original_palette)
+
+
+class _NoSelectionStyle(QProxyStyle):
+    """A style that paints no selection of its own.
+
+    A style that draws nothing for a selected row leaves the row over the base
+    colour of the viewport, which is whatever the selection has to be read
+    against.
     """
 
     def drawControl(self, element, option, painter, widget=None):
         if element == QStyle.ControlElement.CE_ItemViewItem and (
             option.state & QStyle.StateFlag.State_Selected
         ):
-            painter.fillRect(option.rect, QColor("#f5f5f5"))
             return
+        super().drawControl(element, option, painter, widget)
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+        if element == QStyle.PrimitiveElement.PE_PanelItemViewItem and (
+            option.state & QStyle.StateFlag.State_Selected
+        ):
+            return
+        super().drawPrimitive(element, option, painter, widget)
+
+
+@pytest.fixture
+def no_selection_style(qapp):
+    """Puts a style that paints no selection on the application."""
+    style_name = qapp.style().objectName()
+    qapp.setStyle(_NoSelectionStyle(qapp.style()))
+    yield
+    _restore_style(qapp, style_name)
+
+
+class _RecordingStyle(QProxyStyle):
+    """A style that keeps the state of every row it paints."""
+
+    def __init__(self, base):
+        super().__init__(base)
+        self.states = []
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_ItemViewItem:
+            self.states.append(option.state)
         super().drawControl(element, option, painter, widget)
 
 
 @pytest.fixture
-def own_selection_style(qapp):
-    """Puts a style that paints its own selection fill on the application.
-
-    The palette is given the dark highlight a real Windows style carries, so
-    the text is drawn light and lands on the light fill the style paints: the
-    pair that makes a selected row unreadable.
-    """
+def recording_style(qapp):
+    """Puts a style on the application that records what it is asked to paint."""
     style_name = qapp.style().objectName()
-    original = qapp.palette()
-    qapp.setStyle(_OwnSelectionStyle(qapp.style()))
-    palette = qapp.palette()
-    palette.setColor(QPalette.ColorRole.Highlight, QColor("#0067c0"))
-    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
-    qapp.setPalette(palette)
-    yield
+    style = _RecordingStyle(qapp.style())
+    qapp.setStyle(style)
+    yield style
     _restore_style(qapp, style_name)
-    qapp.setPalette(original)
 
 
 def test_a_selected_task_row_renders_readable_text_in_every_style(
@@ -393,7 +490,7 @@ def test_an_unselected_folder_row_renders_readable_text_in_every_style(
 
 
 def test_a_selection_the_style_paints_itself_stays_readable(
-    own_selection_style, window, tmp_path, make_task
+    filled_selection_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
     window.navigate_to(tmp_path)
@@ -402,6 +499,82 @@ def test_a_selection_the_style_paints_itself_stays_readable(
 
     for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
         _rendered_readable(listing, item, state)
+
+
+def test_a_selected_row_paints_no_fill_of_its_own(
+    no_selection_style, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    item = find_task(window, file)
+    base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+
+    for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
+        assert _background_pixel(_render_row(listing, item, state, base)) == base
+
+
+def test_the_option_handled_to_the_style_keeps_the_selection(
+    recording_style, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    item = find_task(window, file)
+    base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+
+    # the window has already painted its tree and its list, so what matters
+    # is the row this test renders rather than the rows that came before it
+    recording_style.states.clear()
+    _render_row(listing, item, _SELECTED_ACTIVE, base)
+
+    assert recording_style.states
+    for state in recording_style.states:
+        assert state & QStyle.StateFlag.State_Selected
+
+
+def test_the_button_area_of_a_selected_row_keeps_the_plain_background(
+    filled_selection_style, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    item = find_task(window, file)
+    base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+    selected = _render_row(listing, item, _SELECTED_ACTIVE, base)
+
+    for x in range(listing.inset):
+        assert selected.pixelColor(x, selected.height() // 2) == base
+
+    region = selected.copy(
+        listing.inset, 0, selected.width() - listing.inset, selected.height()
+    )
+    fill = filled_selection_style.colour.rgb()
+    filled = sum(
+        1
+        for y in range(region.height())
+        for x in range(region.width())
+        if region.pixelColor(x, y).rgb() == fill
+    )
+    assert filled > region.width() * region.height() // 2
+
+
+def test_the_pen_of_a_selected_row_is_read_once(monkeypatch, filled_selection_style):
+    calls: list[QStyleOptionViewItem] = []
+
+    def record(option):
+        calls.append(option)
+        return QColor("#999999")
+
+    monkeypatch.setattr(tasklist, "_painted_background", record)
+    option = QStyleOptionViewItem()
+    option.state = _SELECTED_ACTIVE
+
+    first = _cell_pen(option)
+    second = _cell_pen(option)
+
+    assert first == second
+    assert [call.state for call in calls] == [option.state]
 
 
 def test_a_selected_task_row_paints_readable_text(window, tmp_path, make_task):
@@ -432,14 +605,12 @@ def test_an_unselected_folder_row_paints_readable_text(window, tmp_path):
     _readable(tree, item, _UNSELECTED)
 
 
-def test_a_disabled_cell_reads_its_pen_from_the_disabled_group():
+def test_a_disabled_cell_reads_its_pen_from_the_disabled_group(
+    filled_selection_style,
+):
     palette = QPalette()
-    for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
-        palette.setColor(group, QPalette.ColorRole.Highlight, QColor("#eeeeee"))
-        palette.setColor(group, QPalette.ColorRole.HighlightedText, QColor("#eeeeee"))
-        palette.setColor(group, QPalette.ColorRole.Text, QColor("#eeeeee"))
     palette.setColor(
-        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor("#ffffff")
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Base, QColor("#ffffff")
     )
     palette.setColor(
         QPalette.ColorGroup.Disabled,
@@ -454,7 +625,15 @@ def test_a_disabled_cell_reads_its_pen_from_the_disabled_group():
     option.state = QStyle.StateFlag.State_Selected
     option.palette = palette
 
-    assert _cell_pen(option) == QColor("#000000")
+    highlighted = QColor("#000000")
+    plain = QColor("#fefefe")
+    expected = (
+        plain
+        if _contrast_ratio(plain, filled_selection_style.colour)
+        > _contrast_ratio(highlighted, filled_selection_style.colour)
+        else highlighted
+    )
+    assert _cell_pen(option) == expected
 
 
 def test_a_selected_row_keeps_its_cells_inside_their_columns(

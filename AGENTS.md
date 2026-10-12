@@ -428,14 +428,19 @@ Free text, with levels 2 to 6 available.
   background, and the four cells are the whole text of the row, each inside its own column.
   The selected row narrows the task cell from the left, so the bar sits over no text
 - The pen of a cell is always paired with the background it is drawn on, and never a colour
-  written down. A selected row is filled by the delegate itself with the `Highlight` of the
-  palette group its state belongs to, never with a selection the platform style paints of
-  its own, because that colour is not in the palette and the text would be chosen against
-  something the row is not made of; the style is handed an option without `State_Selected`,
-  so it draws the focus rectangle but no fill over the one the delegate laid down. The text
-  is then the `HighlightedText` or the `Text` of that group, whichever holds better against
-  exactly that fill, so a light selection is readable. An unselected row reads `Text` of the
-  group, which is what keeps tasks and folders apart as they were
+  written down. The style paints the selection of a row, because the selection of a view is
+  the style's, and the delegate only picks the text colour: a selected row asks the style
+  to paint the panel item over an image of the row, reads back the fill, and takes the
+  `HighlightedText` or the `Text` of the palette group its state belongs to, whichever
+  holds better against exactly that fill. The fill of a real platform style is not always
+  in the palette, so the pen comes from what the style paints rather than from a palette
+  the row is not made of, and a style that paints no selection leaves the base colour,
+  which is then what the text is measured against. The pen is remembered per style, group
+  and selection, because the style does not change what it paints while the application
+  runs. Only the selected row is handed to the style with its rect narrowed from the left
+  by the width of the bar, so the fill and the indicator start under the text and the bar
+  sits over the plain background. An unselected row reads `Text` of the group, which is
+  what keeps tasks and folders apart as they were
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it
