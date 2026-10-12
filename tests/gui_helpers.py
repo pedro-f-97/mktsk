@@ -34,7 +34,7 @@ def header_labels(window, title="All"):
     header = task_panel(window, title).header
     model = header.model()
     return [
-        model.headerData(i, header.orientation(), Qt.DisplayRole)
+        model.headerData(i, header.orientation(), Qt.ItemDataRole.DisplayRole)
         for i in range(model.columnCount() if model is not None else 0)
     ]
 

@@ -139,8 +139,6 @@ def _header(qtbot, width):
     header.setFixedHeight(25)
     header.resize(width, header.sizeHint().height())
     header.show()
-    if hasattr(header, "set_row_width"):
-        header.set_row_width(width)
     return header
 
 
