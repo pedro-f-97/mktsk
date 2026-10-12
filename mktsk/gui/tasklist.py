@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
+    QImage,
     QPainter,
     QPalette,
     QStandardItem,
@@ -65,6 +66,13 @@ _HEADINGS = ("Task", "State", "Interventions", "Last activity")
 _OFFERED_STATES = tuple(state for state in parsing.STATES if state != "closed")
 
 _COLUMN_PADDING = 6
+
+# the windows11 style paints its selection indicator at the left edge of the
+# rect it is handed, which is where the task text starts, so the bar sits over
+# the first glyphs. The width of that indicator plus a small margin, kept clear
+# of the text on a selected row and left in place on an unselected one, so the
+# text does not shift when a row is picked
+_SELECTION_INDICATOR_GAP = 6
 
 # how the text of a cell sits in the column of it: read from the left and
 # centred, so a row of one line looks like the headings above it
@@ -256,8 +264,119 @@ class _ActionBar(QWidget):
             self.resume_button.setToolTip(self._resume_tooltip)
 
 
+def _relative_luminance(colour: QColor) -> float:
+    """Returns the relative luminance of a colour, as WCAG defines it.
+
+    Args:
+        colour: the colour to measure.
+
+    Returns:
+        The luminance, from 0 for black to 1 for white.
+    """
+
+    def channel(value: float) -> float:
+        if value <= 0.03928:
+            return value / 12.92
+
+        return ((value + 0.055) / 1.055) ** 2.4
+
+    return (
+        0.2126 * channel(colour.redF())
+        + 0.7152 * channel(colour.greenF())
+        + 0.0722 * channel(colour.blueF())
+    )
+
+
+def _contrast_ratio(first: QColor, second: QColor) -> float:
+    """Returns the contrast ratio between two colours, as WCAG defines it.
+
+    Args:
+        first: one of the two colours.
+        second: the other one.
+
+    Returns:
+        The ratio, from 1 for two equal colours upwards.
+    """
+    lighter = max(_relative_luminance(first), _relative_luminance(second))
+    darker = min(_relative_luminance(first), _relative_luminance(second))
+
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
+    """Returns the palette group the style paints a row of a state from.
+
+    The style picks the group from the state itself, so the text has to pick
+    the same one or it would read a colour from a group the background was not
+    painted with.
+
+    Args:
+        state: the state of the row being painted.
+
+    Returns:
+        The active, inactive or disabled group of the palette.
+    """
+    if not (state & QStyle.StateFlag.State_Enabled):
+        return QPalette.ColorGroup.Disabled
+
+    if state & QStyle.StateFlag.State_Active:
+        return QPalette.ColorGroup.Active
+
+    return QPalette.ColorGroup.Inactive
+
+
+# the pen of a selected cell, per style, palette group and selection: a style
+# paints the same selection for as long as the application runs, so what it
+# paints is read back once rather than on every paint
+_PEN_CACHE: dict[tuple[str, QPalette.ColorGroup, bool], QColor] = {}
+
+
+def _painted_background(option: QStyleOptionViewItem) -> QColor:
+    """Reads back the colour the style fills a selected row with.
+
+    The fill of a selected row is not always a colour the palette holds: a
+    platform style may paint one of its own, so the only way to know what the
+    text is drawn on is to paint it. The style is asked for the item panel over
+    an image that starts as the base colour, and the centre of the row is read
+    back, clear of the indicator some styles draw at its left edge. A style
+    that paints nothing leaves the base colour, which is then what the text is
+    measured against.
+
+    Args:
+        option: what the row is painted from, holding its palette and its state.
+
+    Returns:
+        The colour the style fills the middle of the row with.
+    """
+    group = _colour_group(option.state)
+    width = max(option.rect.width(), 1)
+    height = max(option.rect.height(), 1)
+    image = QImage(width, height, QImage.Format.Format_RGB32)
+    image.fill(option.palette.color(group, QPalette.ColorRole.Base))
+    sampled = QStyleOptionViewItem(option)
+    sampled.rect = QRect(0, 0, width, height)
+    style = (
+        option.widget.style() if option.widget is not None else QApplication.style()
+    )
+    painter = QPainter(image)
+    style.drawPrimitive(
+        QStyle.PrimitiveElement.PE_PanelItemViewItem, sampled, painter, option.widget
+    )
+    painter.end()
+
+    return image.pixelColor(width // 2, height // 2)
+
+
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
-    """Returns the colour of the text of a cell, which follows the selection.
+    """Returns the colour of the text of a cell, paired with its background.
+
+    An unselected row keeps the Text of the group its state belongs to. A
+    selected one is drawn on whatever the style filled it with, so the text is
+    the HighlightedText or the Text of that group, whichever holds better
+    against the colour read back from the style: both come from the palette and
+    the better contrast wins, so no colour is written down here. The choice is
+    remembered per style, group and selection, because the style does not
+    change what it paints while the application runs.
 
     Args:
         option: what the row is painted from, holding its palette and its state.
@@ -265,13 +384,31 @@ def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     Returns:
         The colour the row is drawn in.
     """
-    role = (
-        QPalette.ColorRole.HighlightedText
-        if option.state & QStyle.StateFlag.State_Selected
-        else QPalette.ColorRole.Text
-    )
+    group = _colour_group(option.state)
+    palette = option.palette
 
-    return option.palette.color(role)
+    if not (option.state & QStyle.StateFlag.State_Selected):
+        return palette.color(group, QPalette.ColorRole.Text)
+
+    style = (
+        option.widget.style() if option.widget is not None else QApplication.style()
+    )
+    key = (style.objectName(), group, True)
+    pen = _PEN_CACHE.get(key)
+    if pen is not None:
+        return pen
+
+    background = _painted_background(option)
+    highlighted = palette.color(group, QPalette.ColorRole.HighlightedText)
+    plain = palette.color(group, QPalette.ColorRole.Text)
+    pen = (
+        plain
+        if _contrast_ratio(plain, background) > _contrast_ratio(highlighted, background)
+        else highlighted
+    )
+    _PEN_CACHE[key] = pen
+
+    return pen
 
 
 class _InsetDelegate(QStyledItemDelegate):
@@ -358,11 +495,21 @@ class _InsetDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
 
-        # the row background is the style's; initStyleOption has emptied its
-        # text, so the cells drawn below never sit under the full title
-        super().paint(painter, option, index)
+        # the row background and the selection are the style's, as they are for
+        # any view. The bar sits on the selected row, so the region it covers is
+        # left to the base colour and the selection starts under the text, which
+        # keeps the buttons clear of it and the indicator between them and the
+        # text. The style's text is empty, emptied by initStyleOption, so the
+        # cells below are the whole text of the row.
+        style_option = option
+        if index.row() == self.inset_row:
+            style_option = QStyleOptionViewItem(option)
+            style_option.rect = QRect(option.rect)
+            style_option.rect.setLeft(option.rect.left() + self.inset)
+        super().paint(painter, style_option, index)
 
         task = self.column_rect(option.rect, 0)
+        task.setLeft(task.left() + _SELECTION_INDICATOR_GAP)
         if index.row() == self.inset_row:
             task.setLeft(task.left() + self.inset)
 

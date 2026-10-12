@@ -63,6 +63,13 @@ On Linux the path is `.venv/bin/python`. CI keeps the plain `pyright mktsk/`, wh
 does not help: pyright looks for a venv named `venv`, not `.venv`, and has no flag to
 change the name.
 
+## Simplicity first
+
+- Before implementing a fix, state in one line the simplest change that could work (for example, one palette role or one style flag) and why it is or is not enough. Prefer it.
+- Do not add caches, probing/rendering of the style, new abstractions or new helper layers for a UI fix unless the simple change was tried and shown to fail; then report the evidence.
+- If a fix grows beyond about 40 lines of production code or needs more than one new helper, stop and report before continuing: say what was tried, what failed, and what the simple alternative would cost.
+- Tests prove the behaviour with the least machinery that reproduces it. Do not build test infrastructure larger than the code it covers.
+
 ## Domain rules (do not break)
 
 - Date prefix: `datetime.now().astimezone().strftime("%y%m%d")` + `" - "`
@@ -426,7 +433,23 @@ Free text, with levels 2 to 6 available.
 - A task row empties `option.text` in `initStyleOption`, not in `paint`, because the base
   class refills it from the display role on every paint; the style then draws only the row
   background, and the four cells are the whole text of the row, each inside its own column.
-  The selected row narrows the task cell from the left, so the bar sits over no text
+  The selected row narrows the task cell from the left, so the bar sits over no text, and the
+  task cell starts a fixed gap in from the left of its column on every row, so the indicator a
+  style paints at its left edge never covers the first glyph
+- The pen of a cell is always paired with the background it is drawn on, and never a colour
+  written down. The style paints the selection of a row, because the selection of a view is
+  the style's, and the delegate only picks the text colour: a selected row asks the style
+  to paint the panel item over an image of the row, reads back the fill, and takes the
+  `HighlightedText` or the `Text` of the palette group its state belongs to, whichever
+  holds better against exactly that fill. The fill of a real platform style is not always
+  in the palette, so the pen comes from what the style paints rather than from a palette
+  the row is not made of, and a style that paints no selection leaves the base colour,
+  which is then what the text is measured against. The pen is remembered per style, group
+  and selection, because the style does not change what it paints while the application
+  runs. Only the selected row is handed to the style with its rect narrowed from the left
+  by the width of the bar, so the fill and the indicator start under the text and the bar
+  sits over the plain background. An unselected row reads `Text` of the group, which is
+  what keeps tasks and folders apart as they were
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it
