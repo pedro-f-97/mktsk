@@ -2,7 +2,7 @@
 
 import pytest
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPalette
+from PySide6.QtGui import QColor, QFontMetrics, QImage, QPainter, QPalette
 from PySide6.QtWidgets import (
     QLayout,
     QProxyStyle,
@@ -16,6 +16,8 @@ from mktsk.gui.tasklist import _PEN_CACHE, TaskPanel, _cell_pen, _contrast_ratio
 from tests.gui_helpers import (
     find_directory,
     find_task,
+    painted_texts,
+    row_texts,
     select_task,
     task_listing,
     task_panel,
@@ -24,21 +26,6 @@ from tests.gui_helpers import (
 LONG_TITLE = "ExtraordinarilyLongTaskTitleThatSurelyDoesNotFitInTheTaskColumn"
 SHORT_TITLE = "Fix"
 WIDTHS = (900, 500)
-
-
-def _recording_paint(monkeypatch, rows):
-    """Repaints a listing, recording every text the painting draws."""
-    painted = []
-    original = QPainter.drawText
-
-    def record(painter, *args):
-        if len(args) == 3 and isinstance(args[0], QRect):
-            painted.append((QRect(args[0]), args[1], args[2], QFont(painter.font())))
-        return original(painter, *args)
-
-    monkeypatch.setattr(QPainter, "drawText", record)
-    rows.viewport().repaint()
-    return painted
 
 
 def _ink_rect(rect, flags, text, font):
@@ -55,19 +42,10 @@ def _ink_rect(rect, flags, text, font):
     return QRect(left, rect.top(), advance, rect.height())
 
 
-def _row_texts(painted, row):
-    """The texts painted on one row, in the order the delegate paints them."""
-    return [
-        (rect, flags, text, font)
-        for rect, flags, text, font in painted
-        if row.top() <= rect.top() < row.bottom()
-    ]
-
-
 def _style_text(rows, item):
     """The text the style is asked to paint on a row, empty for a task row.
 
-    The four cells of a task row are painted by the delegate, so the option
+    The cells of a task row are painted by the delegate, so the option
     the style paints from carries no text and the whole row is what the cells
     draw. The base class fills that text on every paint, which is why the
     delegate empties it in `initStyleOption` rather than in `paint`.
@@ -111,14 +89,14 @@ def test_the_columns_of_a_row_start_where_the_headings_start(
     for file in (long_file, short_file):
         item = find_task(window, file)
         row = QRect(rows.visualItemRect(item))
-        cells = [rows.column_rect(row, column) for column in range(4)]
+        cells = [rows.column_rect(row, column) for column in range(5)]
 
         for column, cell in enumerate(cells):
             assert cell.left() == header.sectionPosition(column)
             assert cell.width() == header.sectionSize(column)
 
-        for left in range(4):
-            for right in range(left + 1, 4):
+        for left in range(5):
+            for right in range(left + 1, 5):
                 assert not cells[left].intersects(cells[right])
 
 
@@ -130,14 +108,14 @@ def test_the_painted_text_of_every_column_fits_its_rectangle(
     window.navigate_to(tmp_path)
     rows = task_listing(window)
 
-    painted = _recording_paint(monkeypatch, rows)
+    painted = painted_texts(monkeypatch, rows)
     for file in (long_file, short_file):
         item = find_task(window, file)
         row = QRect(rows.visualItemRect(item))
-        texts = _row_texts(painted, row)
+        texts = row_texts(painted, row)
 
         assert _style_text(rows, item) == ""
-        assert len(texts) == 4
+        assert len(texts) == 5
         for column, (rect, flags, text, font) in enumerate(texts):
             assert rows.column_rect(row, column).contains(
                 _ink_rect(rect, flags, text, font)
@@ -171,7 +149,7 @@ def test_the_action_bar_keeps_clear_of_the_painted_text(
 
     for width in WIDTHS:
         _at_width(qtbot, window, width)
-        painted = _recording_paint(monkeypatch, listing)
+        painted = painted_texts(monkeypatch, listing)
         row = QRect(listing.visualItemRect(listing.currentItem()))
         bar = QRect(listing.action_bar.geometry())
         viewport = listing.viewport()
@@ -181,7 +159,7 @@ def test_the_action_bar_keeps_clear_of_the_painted_text(
         assert bar.left() >= 0
         assert bar.right() < viewport.width()
         assert bar.bottom() < viewport.height()
-        for rect, flags, text, font in _row_texts(painted, row):
+        for rect, flags, text, font in row_texts(painted, row):
             assert not bar.intersects(_ink_rect(rect, flags, text, font))
 
 
@@ -643,10 +621,10 @@ def test_a_selected_row_keeps_its_cells_inside_their_columns(
     window.navigate_to(tmp_path)
     listing = select_task(window, file)
 
-    painted = _recording_paint(monkeypatch, listing)
+    painted = painted_texts(monkeypatch, listing)
     row = QRect(listing.visualItemRect(listing.currentItem()))
 
-    for column, (rect, flags, text, font) in enumerate(_row_texts(painted, row)):
+    for column, (rect, flags, text, font) in enumerate(row_texts(painted, row)):
         assert listing.column_rect(row, column).contains(
             _ink_rect(rect, flags, text, font)
         )
@@ -662,10 +640,10 @@ class _IndicatorStyle(QProxyStyle):
     """A style that paints a narrow indicator at the left edge of a selected row.
 
     A platform style such as windows11 paints its selection indicator at the
-    very left of the rect the delegate hands it, which is where the task text
-    starts. The proxy draws one of a known width and colour there, over whatever
-    the base style paints, so the gap before the first glyph can be read back
-    from the pixels.
+    very left of the rect the delegate hands it, which is the room the bar sits
+    in, just before the date text. The proxy draws one of a known width and
+    colour there, over whatever the base style paints, so the gap before the
+    first glyph can be read back from the pixels.
     """
 
     def drawControl(self, element, option, painter, widget=None):
@@ -743,7 +721,7 @@ def test_a_selected_row_leaves_the_indicator_clear_of_the_first_glyph(
     assert first_glyph - max(indicator) >= _INDICATOR_WIDTH
 
 
-def test_the_task_text_starts_at_the_same_x_when_selected_or_not(
+def test_the_first_text_starts_at_the_same_x_when_selected_or_not(
     window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)

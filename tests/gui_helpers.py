@@ -4,10 +4,35 @@ Plain functions rather than fixtures, because they read from a window that
 the test already asks for and give a result straight back.
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, Qt
+from PySide6.QtGui import QFont, QPainter
 
 from mktsk.gui.tasklist import _ENTRY_ROLE
 from mktsk.gui.tree import _PATH_ROLE
+
+
+def painted_texts(monkeypatch, rows):
+    """Repaints a listing, recording every text the painting draws."""
+    painted = []
+    original = QPainter.drawText
+
+    def record(painter, *args):
+        if len(args) == 3 and isinstance(args[0], QRect):
+            painted.append((QRect(args[0]), args[1], args[2], QFont(painter.font())))
+        return original(painter, *args)
+
+    monkeypatch.setattr(QPainter, "drawText", record)
+    rows.viewport().repaint()
+    return painted
+
+
+def row_texts(painted, row):
+    """The texts painted on one row, in the order the delegate paints them."""
+    return [
+        (rect, flags, text, font)
+        for rect, flags, text, font in painted
+        if row.top() <= rect.top() < row.bottom()
+    ]
 
 
 def tab_index(window, title):

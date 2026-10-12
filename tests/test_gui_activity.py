@@ -48,7 +48,7 @@ def test_a_column_rect_comes_from_the_header(window, tmp_path, make_task):
     header = task_panel(window).header
     row = QRect(0, 0, header.length(), rows.delegate.min_height)
 
-    for column in range(4):
+    for column in range(5):
         rect = rows.column_rect(row, column)
 
         assert rect.left() == header.sectionPosition(column)
@@ -65,11 +65,11 @@ def test_resizing_a_section_moves_the_columns_that_follow(
     rows = task_listing(window)
     header = task_panel(window).header
     row = QRect(0, 0, header.length(), rows.delegate.min_height)
-    before = [rows.column_rect(row, column) for column in range(4)]
+    before = [rows.column_rect(row, column) for column in range(5)]
 
     header.resizeSection(1, header.sectionSize(1) + 40)
 
-    after = [rows.column_rect(row, column) for column in range(4)]
+    after = [rows.column_rect(row, column) for column in range(5)]
     assert after[0] == before[0]
     assert after[1].left() == before[1].left()
     assert after[1].width() == before[1].width() + 40
@@ -77,6 +77,8 @@ def test_resizing_a_section_moves_the_columns_that_follow(
     assert after[2].width() == before[2].width()
     assert after[3].left() == before[3].left() + 40
     assert after[3].width() == before[3].width()
+    assert after[4].left() == before[4].left() + 40
+    assert after[4].width() == before[4].width()
 
 
 def test_the_width_of_a_row_is_the_length_of_the_header(
@@ -95,17 +97,19 @@ def test_the_header_starts_from_the_measured_columns(window, tmp_path, make_task
     make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
     header = task_panel(window).header
-    columns = _column_widths()
+    columns = _column_widths(task_panel(window).listing.inset)
 
-    assert header.sectionSize(1) == columns.state
-    assert header.sectionSize(2) == columns.interventions
-    assert header.sectionSize(3) == columns.activity
+    assert header.sectionSize(0) == columns.date
+    assert header.sectionSize(2) == columns.state
+    assert header.sectionSize(3) == columns.interventions
+    assert header.sectionSize(4) == columns.activity
 
 
 def test_the_header_names_the_columns(window, tmp_path):
     window.navigate_to(tmp_path)
 
     assert header_labels(window) == [
+        "Date",
         "Task",
         "State",
         "Interventions",
@@ -117,7 +121,7 @@ def test_a_heading_sits_over_its_own_column(qtbot):
     header = _header(qtbot, 600)
 
     columns = _columns_of(header)
-    for i in range(4):
+    for i in range(5):
         assert header.sectionViewportPosition(i) == columns[i].left()
         assert header.sectionSize(i) == columns[i].width()
 
@@ -126,7 +130,7 @@ def test_a_heading_fits_the_column_it_sits_over(qtbot):
     header = _header(qtbot, 600)
 
     _columns_of(header)
-    for i in range(4):
+    for i in range(5):
         assert header.sectionSize(i) >= 0
 
 
@@ -151,7 +155,7 @@ def _columns_of(header):
             header.sectionSize(i),
             header.height(),
         )
-        for i in range(4)
+            for i in range(5)
     ]
 
 
@@ -169,7 +173,7 @@ def test_the_headings_sit_over_the_columns_when_the_list_scrolls(
     # a scrollbar takes its width from the rows, so the headings have to be
     # placed over what is left of them
     assert rows.verticalScrollBar().isVisible()
-    for i in range(4):
+    for i in range(5):
         assert header.sectionViewportPosition(i) >= 0
         assert header.sectionSize(i) >= 0
 
@@ -315,7 +319,7 @@ def test_the_state_is_painted_over_the_state_column(window, tmp_path, make_task)
     rows = task_listing(window)
     image, rows, rect = _painter_row(window, rows.row(find_task(window, file)))
 
-    assert _ink(image, rows.column_rect(rect, 1)) > 0
+    assert _ink(image, rows.column_rect(rect, 2)) > 0
 
 
 @freeze_time("2026-10-02")
@@ -326,7 +330,7 @@ def test_the_count_is_painted_over_the_interventions_column(window, tmp_path, ma
     rows = task_listing(window)
     image, rows, rect = _painter_row(window, rows.row(find_task(window, file)))
 
-    assert _ink(image, rows.column_rect(rect, 2)) > 0
+    assert _ink(image, rows.column_rect(rect, 3)) > 0
 
 
 @freeze_time("2026-10-02")
@@ -337,7 +341,7 @@ def test_the_age_is_painted_over_the_last_activity_column(window, tmp_path, make
     rows = task_listing(window)
     image, rows, rect = _painter_row(window, rows.row(find_task(window, file)))
 
-    assert _ink(image, rows.column_rect(rect, 3)) > 0
+    assert _ink(image, rows.column_rect(rect, 4)) > 0
 
 
 def test_a_heading_row_is_painted_across_the_whole_width(
