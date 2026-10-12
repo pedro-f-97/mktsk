@@ -63,6 +63,13 @@ On Linux the path is `.venv/bin/python`. CI keeps the plain `pyright mktsk/`, wh
 does not help: pyright looks for a venv named `venv`, not `.venv`, and has no flag to
 change the name.
 
+## Simplicity first
+
+- Before implementing a fix, state in one line the simplest change that could work (for example, one palette role or one style flag) and why it is or is not enough. Prefer it.
+- Do not add caches, probing/rendering of the style, new abstractions or new helper layers for a UI fix unless the simple change was tried and shown to fail; then report the evidence.
+- If a fix grows beyond about 40 lines of production code or needs more than one new helper, stop and report before continuing: say what was tried, what failed, and what the simple alternative would cost.
+- Tests prove the behaviour with the least machinery that reproduces it. Do not build test infrastructure larger than the code it covers.
+
 ## Domain rules (do not break)
 
 - Date prefix: `datetime.now().astimezone().strftime("%y%m%d")` + `" - "`
