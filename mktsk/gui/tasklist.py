@@ -317,14 +317,34 @@ def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
     return QPalette.ColorGroup.Inactive
 
 
+def _selection_colour(option: QStyleOptionViewItem) -> QColor:
+    """Returns the colour the delegate fills a selected row with.
+
+    It is the Highlight of the palette group the state belongs to. The
+    delegate paints this fill itself rather than leaving it to the style,
+    because a platform style may paint a selection the palette does not
+    describe, and then the text would be chosen against a colour that is not
+    what the row is made of. Painting it here keeps the fill and the pen that
+    is measured against it the same colour.
+
+    Args:
+        option: what the row is painted from, holding its palette and its state.
+
+    Returns:
+        The colour a selected row is filled with.
+    """
+    return option.palette.color(
+        _colour_group(option.state), QPalette.ColorRole.Highlight
+    )
+
+
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     """Returns the colour of the text of a cell, paired with its background.
 
-    The style paints a selected row with the Highlight of the group its state
-    belongs to, and an unselected one with Base, so the text is read from the
-    same group. A selection background the HighlightedText of that group does
-    not hold against, which is what a light one gives, falls back to the Text
-    colour: both come from the palette and the better contrast wins, so no
+    An unselected row keeps the Text of the group its state belongs to. A
+    selected one is filled with `_selection_colour`, and the text is the
+    HighlightedText or the Text of that group, whichever holds better against
+    the fill: both come from the palette and the better contrast wins, so no
     colour is written down here.
 
     Args:
@@ -339,7 +359,7 @@ def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     if not (option.state & QStyle.StateFlag.State_Selected):
         return palette.color(group, QPalette.ColorRole.Text)
 
-    background = palette.color(group, QPalette.ColorRole.Highlight)
+    background = _selection_colour(option)
     highlighted = palette.color(group, QPalette.ColorRole.HighlightedText)
     plain = palette.color(group, QPalette.ColorRole.Text)
 
@@ -433,9 +453,20 @@ class _InsetDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
 
-        # the row background is the style's; initStyleOption has emptied its
-        # text, so the cells drawn below never sit under the full title
-        super().paint(painter, option, index)
+        # the selection fill is painted here rather than left to the style,
+        # because a platform style may fill a selected row with a colour the
+        # palette does not describe: the cells would then be drawn on a
+        # background their pen was not chosen against. The style is handed an
+        # option without the selection, so it draws no fill of its own over
+        # this one and the focus rectangle still comes from it. Its text is
+        # empty, emptied by initStyleOption, so the cells below are the whole
+        # text of the row.
+        style_option = option
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, _selection_colour(option))
+            style_option = QStyleOptionViewItem(option)
+            style_option.state &= ~QStyle.StateFlag.State_Selected
+        super().paint(painter, style_option, index)
 
         task = self.column_rect(option.rect, 0)
         if index.row() == self.inset_row:

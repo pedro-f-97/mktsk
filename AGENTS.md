@@ -428,10 +428,14 @@ Free text, with levels 2 to 6 available.
   background, and the four cells are the whole text of the row, each inside its own column.
   The selected row narrows the task cell from the left, so the bar sits over no text
 - The pen of a cell is always paired with the background it is drawn on, and never a colour
-  written down: a selected row reads `Highlight` and `HighlightedText` from the palette
-  group its state belongs to, and the `Text` of that group when it holds better against the
-  background, so a light selection is readable; an unselected row reads `Text` of the group,
-  which is what keeps tasks and folders apart as they were
+  written down. A selected row is filled by the delegate itself with the `Highlight` of the
+  palette group its state belongs to, never with a selection the platform style paints of
+  its own, because that colour is not in the palette and the text would be chosen against
+  something the row is not made of; the style is handed an option without `State_Selected`,
+  so it draws the focus rectangle but no fill over the one the delegate laid down. The text
+  is then the `HighlightedText` or the `Text` of that group, whichever holds better against
+  exactly that fill, so a light selection is readable. An unselected row reads `Text` of the
+  group, which is what keeps tasks and folders apart as they were
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it

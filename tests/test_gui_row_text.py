@@ -1,8 +1,15 @@
 """The text of a row, inside its columns and clear of the action bar."""
 
+import pytest
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPalette
-from PySide6.QtWidgets import QLayout, QStyle, QStyleOptionViewItem
+from PySide6.QtWidgets import (
+    QLayout,
+    QProxyStyle,
+    QStyle,
+    QStyleFactory,
+    QStyleOptionViewItem,
+)
 
 from mktsk.gui.tasklist import TaskPanel, _cell_pen, _contrast_ratio
 from tests.gui_helpers import (
@@ -241,6 +248,160 @@ def _contrast(view, item, state):
 def _readable(view, item, state):
     text, background, ratio = _contrast(view, item, state)
     assert ratio >= _MINIMUM_CONTRAST, f"{text.name()} on {background.name()}: {ratio}"
+
+
+# the styles the environment offers, so a row is rendered under each of them
+_STYLES = tuple(QStyleFactory.keys())
+
+
+def _restore_style(qapp, name):
+    """Puts back the style the application had, by name.
+
+    The application owns the style it is given and deletes the one it had, so
+    the old style is remembered by name rather than kept as a dangling object.
+    """
+    style = QStyleFactory.create(name)
+    if style is not None:
+        qapp.setStyle(style)
+
+
+@pytest.fixture(params=_STYLES)
+def styled(request, qapp):
+    """Sets a style on the application for one test and puts the old one back."""
+    original = qapp.style().objectName()
+    style = QStyleFactory.create(request.param)
+    if style is None:
+        pytest.skip(f"{request.param} cannot be created")
+    qapp.setStyle(style)
+    yield request.param
+    _restore_style(qapp, original)
+
+
+def _background_pixel(image):
+    """The colour most of a row is made of, which is its background."""
+    return QColor(_painted_colours(image)[0][0])
+
+
+def _glyph_colour(image, background):
+    """The pixel of a row that stands furthest from its background.
+
+    The body of a glyph is the colour the row was drawn in; its edges are
+    shades between that colour and the background, so the furthest pixel is
+    the one the text is made of.
+    """
+    furthest = background
+    best = 0.0
+    for y in range(image.height()):
+        for x in range(image.width()):
+            colour = image.pixelColor(x, y)
+            ratio = _contrast_ratio(colour, background)
+            if ratio > best:
+                best = ratio
+                furthest = colour
+    return furthest
+
+
+def _rendered_contrast(view, item, state):
+    """The rendered text, background and contrast of a row.
+
+    The row is rendered the way the view paints it and read back from its
+    pixels, so what is measured is what a person sees rather than what the
+    palette says.
+    """
+    base = view.viewport().palette().color(QPalette.ColorRole.Base)
+    image = _render_row(view, item, state, base)
+    background = _background_pixel(image)
+    text = _glyph_colour(image, background)
+    return text, background, _contrast_ratio(text, background)
+
+
+def _rendered_readable(view, item, state):
+    text, background, ratio = _rendered_contrast(view, item, state)
+    assert ratio >= _MINIMUM_CONTRAST, f"{text.name()} on {background.name()}: {ratio}"
+
+
+class _OwnSelectionStyle(QProxyStyle):
+    """A style that paints a selection fill the palette does not describe.
+
+    Some platform styles fill a selected row with a colour the palette knows
+    nothing about, which is what leaves a white text on a light fill. The proxy
+    reproduces one: it answers the selection panel with a light grey whatever
+    the palette says.
+    """
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_ItemViewItem and (
+            option.state & QStyle.StateFlag.State_Selected
+        ):
+            painter.fillRect(option.rect, QColor("#f5f5f5"))
+            return
+        super().drawControl(element, option, painter, widget)
+
+
+@pytest.fixture
+def own_selection_style(qapp):
+    """Puts a style that paints its own selection fill on the application.
+
+    The palette is given the dark highlight a real Windows style carries, so
+    the text is drawn light and lands on the light fill the style paints: the
+    pair that makes a selected row unreadable.
+    """
+    style_name = qapp.style().objectName()
+    original = qapp.palette()
+    qapp.setStyle(_OwnSelectionStyle(qapp.style()))
+    palette = qapp.palette()
+    palette.setColor(QPalette.ColorRole.Highlight, QColor("#0067c0"))
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+    qapp.setPalette(palette)
+    yield
+    _restore_style(qapp, style_name)
+    qapp.setPalette(original)
+
+
+def test_a_selected_task_row_renders_readable_text_in_every_style(
+    styled, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    item = find_task(window, file)
+
+    for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
+        _rendered_readable(listing, item, state)
+
+
+def test_an_unselected_task_row_renders_readable_text_in_every_style(
+    styled, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    item = find_task(window, file)
+
+    _rendered_readable(listing, item, _UNSELECTED)
+
+
+def test_an_unselected_folder_row_renders_readable_text_in_every_style(
+    styled, window, tmp_path
+):
+    (tmp_path / "Reports").mkdir()
+    window.navigate_to(tmp_path)
+    tree = window.directory_tree
+    item = find_directory(window, tmp_path / "Reports")
+
+    _rendered_readable(tree, item, _UNSELECTED)
+
+
+def test_a_selection_the_style_paints_itself_stays_readable(
+    own_selection_style, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    item = find_task(window, file)
+
+    for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
+        _rendered_readable(listing, item, state)
 
 
 def test_a_selected_task_row_paints_readable_text(window, tmp_path, make_task):
