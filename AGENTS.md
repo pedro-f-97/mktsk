@@ -433,7 +433,9 @@ Free text, with levels 2 to 6 available.
 - A task row empties `option.text` in `initStyleOption`, not in `paint`, because the base
   class refills it from the display role on every paint; the style then draws only the row
   background, and the four cells are the whole text of the row, each inside its own column.
-  The selected row narrows the task cell from the left, so the bar sits over no text
+  The selected row narrows the task cell from the left, so the bar sits over no text, and the
+  task cell starts a fixed gap in from the left of its column on every row, so the indicator a
+  style paints at its left edge never covers the first glyph
 - The pen of a cell is always paired with the background it is drawn on, and never a colour
   written down. The style paints the selection of a row, because the selection of a view is
   the style's, and the delegate only picks the text colour: a selected row asks the style

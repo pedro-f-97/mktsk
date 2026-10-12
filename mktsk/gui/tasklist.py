@@ -67,6 +67,13 @@ _OFFERED_STATES = tuple(state for state in parsing.STATES if state != "closed")
 
 _COLUMN_PADDING = 6
 
+# the windows11 style paints its selection indicator at the left edge of the
+# rect it is handed, which is where the task text starts, so the bar sits over
+# the first glyphs. The width of that indicator plus a small margin, kept clear
+# of the text on a selected row and left in place on an unselected one, so the
+# text does not shift when a row is picked
+_SELECTION_INDICATOR_GAP = 6
+
 # how the text of a cell sits in the column of it: read from the left and
 # centred, so a row of one line looks like the headings above it
 _CELL_ALIGNMENT = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -502,6 +509,7 @@ class _InsetDelegate(QStyledItemDelegate):
         super().paint(painter, style_option, index)
 
         task = self.column_rect(option.rect, 0)
+        task.setLeft(task.left() + _SELECTION_INDICATOR_GAP)
         if index.row() == self.inset_row:
             task.setLeft(task.left() + self.inset)
 

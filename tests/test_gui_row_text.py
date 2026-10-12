@@ -650,3 +650,112 @@ def test_a_selected_row_keeps_its_cells_inside_their_columns(
         assert listing.column_rect(row, column).contains(
             _ink_rect(rect, flags, text, font)
         )
+
+
+# the width and the colour of the indicator the proxy below paints, so the gap
+# left before the text can be measured from the pixels rather than trusted
+_INDICATOR_WIDTH = 3
+_INDICATOR_COLOUR = QColor("#ff00ff")
+
+
+class _IndicatorStyle(QProxyStyle):
+    """A style that paints a narrow indicator at the left edge of a selected row.
+
+    A platform style such as windows11 paints its selection indicator at the
+    very left of the rect the delegate hands it, which is where the task text
+    starts. The proxy draws one of a known width and colour there, over whatever
+    the base style paints, so the gap before the first glyph can be read back
+    from the pixels.
+    """
+
+    def drawControl(self, element, option, painter, widget=None):
+        super().drawControl(element, option, painter, widget)
+        if element == QStyle.ControlElement.CE_ItemViewItem and (
+            option.state & QStyle.StateFlag.State_Selected
+        ):
+            painter.fillRect(
+                QRect(
+                    option.rect.left(),
+                    option.rect.top(),
+                    _INDICATOR_WIDTH,
+                    option.rect.height(),
+                ),
+                _INDICATOR_COLOUR,
+            )
+
+
+@pytest.fixture
+def indicator_style(qapp):
+    """Puts a style that paints a known selection indicator on the application."""
+    style_name = qapp.style().objectName()
+    qapp.setStyle(_IndicatorStyle(qapp.style()))
+    yield
+    _restore_style(qapp, style_name)
+
+
+def _row_option(view, item, state):
+    """The option a row is rendered from, built the way `_render_row` builds it."""
+    rect = QRect(view.visualItemRect(item))
+    index = view.indexFromItem(item)
+    option = QStyleOptionViewItem()
+    view.itemDelegate().initStyleOption(option, index)
+    option.rect = QRect(0, 0, rect.width(), rect.height())
+    option.state = state
+    option.palette = view.viewport().palette()
+    option.widget = view
+    return option
+
+
+def _columns_of_colour(image, colour):
+    """The x positions of a row that hold at least one pixel of a colour."""
+    return [
+        x
+        for x in range(image.width())
+        if any(image.pixelColor(x, y) == colour for y in range(image.height()))
+    ]
+
+
+def _first_glyph_x(image, pen, start=0):
+    """The x of the leftmost pixel painted in the pen of the text."""
+    for x in range(start, image.width()):
+        if any(image.pixelColor(x, y) == pen for y in range(image.height())):
+            return x
+
+    raise AssertionError("no glyph was painted on the row")
+
+
+def test_a_selected_row_leaves_the_indicator_clear_of_the_first_glyph(
+    indicator_style, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    item = listing.currentItem()
+    base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+    option = _row_option(listing, item, _SELECTED_ACTIVE)
+
+    image = _render_row(listing, item, _SELECTED_ACTIVE, base)
+    indicator = _columns_of_colour(image, _INDICATOR_COLOUR)
+
+    assert indicator
+    assert max(indicator) - min(indicator) + 1 == _INDICATOR_WIDTH
+    first_glyph = _first_glyph_x(image, _cell_pen(option), max(indicator) + 1)
+    assert first_glyph - max(indicator) >= _INDICATOR_WIDTH
+
+
+def test_the_task_text_starts_at_the_same_x_when_selected_or_not(
+    window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    item = listing.currentItem()
+    base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+
+    starts = set()
+    for state in (_SELECTED_ACTIVE, _UNSELECTED):
+        option = _row_option(listing, item, state)
+        image = _render_row(listing, item, state, base)
+        starts.add(_first_glyph_x(image, _cell_pen(option)))
+
+    assert len(starts) == 1
