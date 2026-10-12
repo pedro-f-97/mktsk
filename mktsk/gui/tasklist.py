@@ -256,8 +256,76 @@ class _ActionBar(QWidget):
             self.resume_button.setToolTip(self._resume_tooltip)
 
 
+def _relative_luminance(colour: QColor) -> float:
+    """Returns the relative luminance of a colour, as WCAG defines it.
+
+    Args:
+        colour: the colour to measure.
+
+    Returns:
+        The luminance, from 0 for black to 1 for white.
+    """
+
+    def channel(value: float) -> float:
+        if value <= 0.03928:
+            return value / 12.92
+
+        return ((value + 0.055) / 1.055) ** 2.4
+
+    return (
+        0.2126 * channel(colour.redF())
+        + 0.7152 * channel(colour.greenF())
+        + 0.0722 * channel(colour.blueF())
+    )
+
+
+def _contrast_ratio(first: QColor, second: QColor) -> float:
+    """Returns the contrast ratio between two colours, as WCAG defines it.
+
+    Args:
+        first: one of the two colours.
+        second: the other one.
+
+    Returns:
+        The ratio, from 1 for two equal colours upwards.
+    """
+    lighter = max(_relative_luminance(first), _relative_luminance(second))
+    darker = min(_relative_luminance(first), _relative_luminance(second))
+
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
+    """Returns the palette group the style paints a row of a state from.
+
+    The style picks the group from the state itself, so the text has to pick
+    the same one or it would read a colour from a group the background was not
+    painted with.
+
+    Args:
+        state: the state of the row being painted.
+
+    Returns:
+        The active, inactive or disabled group of the palette.
+    """
+    if not (state & QStyle.StateFlag.State_Enabled):
+        return QPalette.ColorGroup.Disabled
+
+    if state & QStyle.StateFlag.State_Active:
+        return QPalette.ColorGroup.Active
+
+    return QPalette.ColorGroup.Inactive
+
+
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
-    """Returns the colour of the text of a cell, which follows the selection.
+    """Returns the colour of the text of a cell, paired with its background.
+
+    The style paints a selected row with the Highlight of the group its state
+    belongs to, and an unselected one with Base, so the text is read from the
+    same group. A selection background the HighlightedText of that group does
+    not hold against, which is what a light one gives, falls back to the Text
+    colour: both come from the palette and the better contrast wins, so no
+    colour is written down here.
 
     Args:
         option: what the row is painted from, holding its palette and its state.
@@ -265,13 +333,20 @@ def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     Returns:
         The colour the row is drawn in.
     """
-    role = (
-        QPalette.ColorRole.HighlightedText
-        if option.state & QStyle.StateFlag.State_Selected
-        else QPalette.ColorRole.Text
-    )
+    group = _colour_group(option.state)
+    palette = option.palette
 
-    return option.palette.color(role)
+    if not (option.state & QStyle.StateFlag.State_Selected):
+        return palette.color(group, QPalette.ColorRole.Text)
+
+    background = palette.color(group, QPalette.ColorRole.Highlight)
+    highlighted = palette.color(group, QPalette.ColorRole.HighlightedText)
+    plain = palette.color(group, QPalette.ColorRole.Text)
+
+    if _contrast_ratio(plain, background) > _contrast_ratio(highlighted, background):
+        return plain
+
+    return highlighted
 
 
 class _InsetDelegate(QStyledItemDelegate):

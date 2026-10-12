@@ -1,11 +1,17 @@
 """The text of a row, inside its columns and clear of the action bar."""
 
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QFont, QFontMetrics, QPainter
-from PySide6.QtWidgets import QLayout, QStyleOptionViewItem
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPalette
+from PySide6.QtWidgets import QLayout, QStyle, QStyleOptionViewItem
 
-from mktsk.gui.tasklist import TaskPanel
-from tests.gui_helpers import find_task, select_task, task_listing, task_panel
+from mktsk.gui.tasklist import TaskPanel, _cell_pen, _contrast_ratio
+from tests.gui_helpers import (
+    find_directory,
+    find_task,
+    select_task,
+    task_listing,
+    task_panel,
+)
 
 LONG_TITLE = "ExtraordinarilyLongTaskTitleThatSurelyDoesNotFitInTheTaskColumn"
 SHORT_TITLE = "Fix"
@@ -169,3 +175,138 @@ def test_the_action_bar_keeps_clear_of_the_painted_text(
         assert bar.bottom() < viewport.height()
         for rect, flags, text, font in _row_texts(painted, row):
             assert not bar.intersects(_ink_rect(rect, flags, text, font))
+
+
+_SELECTED_ACTIVE = (
+    QStyle.StateFlag.State_Enabled
+    | QStyle.StateFlag.State_Selected
+    | QStyle.StateFlag.State_Active
+)
+_SELECTED_INACTIVE = QStyle.StateFlag.State_Enabled | QStyle.StateFlag.State_Selected
+_UNSELECTED = QStyle.StateFlag.State_Enabled
+
+# the contrast WCAG AA asks of body text
+_MINIMUM_CONTRAST = 4.5
+
+
+def _render_row(view, item, state, background):
+    """Renders one task or folder row offscreen, over a given background.
+
+    The row is painted the way the view paints it: the option is filled from
+    the item, the state is the one a selected or unselected row carries, and
+    the palette is the one of the viewport. The style paints the row
+    background and the delegate paints the cells, so the image holds what a
+    person sees.
+    """
+    rect = QRect(view.visualItemRect(item))
+    image = QImage(rect.size(), QImage.Format.Format_RGB32)
+    image.fill(background)
+    index = view.indexFromItem(item)
+    delegate = view.itemDelegate()
+    option = QStyleOptionViewItem()
+    delegate.initStyleOption(option, index)
+    option.rect = QRect(0, 0, rect.width(), rect.height())
+    option.state = state
+    option.palette = view.viewport().palette()
+    painter = QPainter(image)
+    delegate.paint(painter, option, index)
+    painter.end()
+    return image
+
+
+def _painted_colours(image):
+    """Counts the colours of a row from its pixels, the most painted first."""
+    counts: dict[int, int] = {}
+    for y in range(image.height()):
+        for x in range(image.width()):
+            key = image.pixelColor(x, y).rgb()
+            counts[key] = counts.get(key, 0) + 1
+    return sorted(counts.items(), key=lambda pair: -pair[1])
+
+
+def _contrast(view, item, state):
+    """The text colour, the background colour and the contrast of a row.
+
+    The background is the colour the row is mostly made of, and the text is
+    the next one: the delegate draws its four cells in a single colour, so
+    every other pixel of the row is an edge of that text.
+    """
+    base = view.viewport().palette().color(QPalette.ColorRole.Base)
+    painted = _painted_colours(_render_row(view, item, state, base))
+    background = QColor(painted[0][0])
+    text = QColor(painted[1][0])
+    return text, background, _contrast_ratio(text, background)
+
+
+def _readable(view, item, state):
+    text, background, ratio = _contrast(view, item, state)
+    assert ratio >= _MINIMUM_CONTRAST, f"{text.name()} on {background.name()}: {ratio}"
+
+
+def test_a_selected_task_row_paints_readable_text(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    item = find_task(window, file)
+
+    for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
+        _readable(listing, item, state)
+
+
+def test_an_unselected_task_row_paints_readable_text(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    item = find_task(window, file)
+
+    _readable(listing, item, _UNSELECTED)
+
+
+def test_an_unselected_folder_row_paints_readable_text(window, tmp_path):
+    (tmp_path / "Reports").mkdir()
+    window.navigate_to(tmp_path)
+    tree = window.directory_tree
+    item = find_directory(window, tmp_path / "Reports")
+
+    _readable(tree, item, _UNSELECTED)
+
+
+def test_a_disabled_cell_reads_its_pen_from_the_disabled_group():
+    palette = QPalette()
+    for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+        palette.setColor(group, QPalette.ColorRole.Highlight, QColor("#eeeeee"))
+        palette.setColor(group, QPalette.ColorRole.HighlightedText, QColor("#eeeeee"))
+        palette.setColor(group, QPalette.ColorRole.Text, QColor("#eeeeee"))
+    palette.setColor(
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Highlight, QColor("#ffffff")
+    )
+    palette.setColor(
+        QPalette.ColorGroup.Disabled,
+        QPalette.ColorRole.HighlightedText,
+        QColor("#000000"),
+    )
+    palette.setColor(
+        QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor("#fefefe")
+    )
+    option = QStyleOptionViewItem()
+    # a lack of State_Enabled is what makes a row disabled
+    option.state = QStyle.StateFlag.State_Selected
+    option.palette = palette
+
+    assert _cell_pen(option) == QColor("#000000")
+
+
+def test_a_selected_row_keeps_its_cells_inside_their_columns(
+    monkeypatch, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", LONG_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+
+    painted = _recording_paint(monkeypatch, listing)
+    row = QRect(listing.visualItemRect(listing.currentItem()))
+
+    for column, (rect, flags, text, font) in enumerate(_row_texts(painted, row)):
+        assert listing.column_rect(row, column).contains(
+            _ink_rect(rect, flags, text, font)
+        )

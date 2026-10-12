@@ -427,6 +427,11 @@ Free text, with levels 2 to 6 available.
   class refills it from the display role on every paint; the style then draws only the row
   background, and the four cells are the whole text of the row, each inside its own column.
   The selected row narrows the task cell from the left, so the bar sits over no text
+- The pen of a cell is always paired with the background it is drawn on, and never a colour
+  written down: a selected row reads `Highlight` and `HighlightedText` from the palette
+  group its state belongs to, and the `Text` of that group when it holds better against the
+  background, so a light selection is readable; an unselected row reads `Text` of the group,
+  which is what keeps tasks and folders apart as they were
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it
