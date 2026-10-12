@@ -347,8 +347,8 @@ Free text, with levels 2 to 6 available.
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
-  `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_state.py`,
-  `tests/test_gui_close.py`, `tests/test_gui_reopen.py`
+  `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_row_text.py`,
+  `tests/test_gui_state.py`, `tests/test_gui_close.py`, `tests/test_gui_reopen.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
@@ -423,6 +423,10 @@ Free text, with levels 2 to 6 available.
   the date turns does not date half of the tasks to yesterday
 - A row without those roles is a heading, which has no activity of its own and is painted
   where it stands, across the row
+- A task row empties `option.text` in `initStyleOption`, not in `paint`, because the base
+  class refills it from the display role on every paint; the style then draws only the row
+  background, and the four cells are the whole text of the row, each inside its own column.
+  The selected row narrows the task cell from the left, so the bar sits over no text
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it

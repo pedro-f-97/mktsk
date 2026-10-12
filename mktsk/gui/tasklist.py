@@ -325,6 +325,28 @@ class _InsetDelegate(QStyledItemDelegate):
             row.height(),
         )
 
+    def initStyleOption(
+        self,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        """Fills the option the style paints a row from, without its text.
+
+        The base class fills option.text from the display role every time it
+        paints, so emptying it in paint is lost on the copy paint is handed;
+        a task row has to lose its text here, where that copy is filled. The
+        style then draws the row background and nothing else, and the four
+        cells are drawn by paint, each in its own column. A heading keeps its
+        text, so the style still paints it across the row.
+
+        Args:
+            option: the option the style will paint the row from.
+            index: the index of the row being painted.
+        """
+        super().initStyleOption(option, index)
+        if index.data(_COUNT_ROLE) is not None:
+            option.text = ""
+
     def paint(
         self,
         painter: QPainter,
@@ -336,9 +358,8 @@ class _InsetDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
 
-        # the row background is the style's, but its text is drawn below, in
-        # the column of the task and clear of the action bar
-        option.text = ""
+        # the row background is the style's; initStyleOption has emptied its
+        # text, so the cells drawn below never sit under the full title
         super().paint(painter, option, index)
 
         task = self.column_rect(option.rect, 0)
