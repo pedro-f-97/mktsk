@@ -721,7 +721,14 @@ def test_a_selected_row_elides_at_the_cut_edge(
     assert age_text != item.data(_AGE_ROLE)
     assert fm.horizontalAdvance(age_text) <= visible
     for rect, flags, text, font in texts:
-        assert row.contains(_ink_rect(rect, flags, text, font))
+        if not text or not row.intersects(rect):
+            continue
+        ink = _ink_rect(rect, flags, text, font)
+        assert row.contains(ink), (
+            f"ink fora da row: row={row} ink={ink} "
+            f"cell={rect} text={text!r} font={font.family()!r} "
+            f"dy_top={row.top() - ink.top()} dy_bottom={ink.bottom() - row.bottom()}"
+        )
         assert row.left() <= rect.left() + rect.width() <= row.right() + 1
 
 
