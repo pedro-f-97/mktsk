@@ -3,6 +3,7 @@
 import datetime
 
 from PySide6.QtCore import QRect
+from PySide6.QtWidgets import QStyle
 
 from mktsk import listing
 from mktsk.gui.tasklist import _COUNT_ROLE, _date_cell
@@ -11,6 +12,7 @@ from tests.gui_helpers import (
     painted_texts,
     row_texts,
     task_listing,
+    task_panel,
 )
 
 
@@ -91,3 +93,39 @@ def test_a_row_that_is_not_a_task_gets_no_date_cell(
 
     assert heading.data(_COUNT_ROLE) is None
     assert row_texts(painted_texts(monkeypatch, rows), row) == []
+
+
+def test_the_date_heading_and_the_date_value_share_one_padding(
+    monkeypatch, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    header = task_panel(window).header
+    item = find_task(window, file)
+    row = QRect(rows.visualItemRect(item))
+    padding = header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
+
+    texts = row_texts(painted_texts(monkeypatch, rows), row)
+
+    assert texts[0][0].left() == rows.column_rect(row, 0).left() + padding
+    assert header.sectionPosition(0) + padding == texts[0][0].left()
+
+
+def test_an_unselected_row_paints_nothing_left_of_the_date_text(
+    monkeypatch, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    item = find_task(window, file)
+    row = QRect(rows.visualItemRect(item))
+    padding = rows.header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
+
+    texts = row_texts(painted_texts(monkeypatch, rows), row)
+
+    assert texts
+    assert (
+        min(rect.left() for rect, *_ in texts)
+        == rows.column_rect(row, 0).left() + padding
+    )

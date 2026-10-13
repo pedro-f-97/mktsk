@@ -424,9 +424,8 @@ Free text, with levels 2 to 6 available.
   only source of column geometry: the delegate reads each column's position and size from it
   (`sectionPosition` and `sectionSize`), so a heading never sits over a value of another
   column and dragging a separator moves the cells with it. `_column_widths` measures the
-  three right columns from the bold application font; the date column is a date wide plus the
-  room the action bar reserves, and is held at that room as a minimum so the bar can never
-  cover the task column; the task takes the rest of the room it had
+  three right columns from the bold application font; the date column is a date wide, like
+  any other column; the task takes the rest of the room it had
 - The width of every item is the header's `length()`, so a header wider than the viewport
   makes the list scroll horizontally, and the horizontal scrollbar's `valueChanged` moves
   the header's offset with it; `sectionResized` lays the cells out again and repaints the
@@ -440,11 +439,12 @@ Free text, with levels 2 to 6 available.
 - A task row empties `option.text` in `initStyleOption`, not in `paint`, because the base
   class refills it from the display role on every paint; the style then draws only the row
   background, and the five cells are the whole text of the row, each inside its own column.
-  The date is the first text after the action bar, so the room the bar reserves and the
-  indicator gap are left in front of the date cell on every row, selected or not; the bar
-  sits over no text, the date never moves when a row is picked, and the indicator a style
-  paints at the left edge of the rect it is handed falls between the bar and the date. The
-  task follows the date in its own column and keeps no inset of its own
+  The date is the first text after the room the bar reserves on every row, so the date never
+  moves when a row is selected; only the selected row hands the style a rect narrowed from the
+  left, so the space for the buttons appears when the row is clicked and is given back when the
+  selection goes. Every row keeps the height the bar needs, or the list would shift as the
+  selection moves. The date section is held at least as wide as the bar, so a separator cannot
+  drag it under the bar and over the start of the task
 - The pen of a cell is always paired with the background it is drawn on, and never a colour
   written down. The style paints the selection of a row, because the selection of a view is
   the style's, and the delegate only picks the text colour: a selected row asks the style

@@ -2,7 +2,7 @@
 
 import pytest
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QImage, QPainter, QPalette
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPalette
 from PySide6.QtWidgets import (
     QLayout,
     QProxyStyle,
@@ -12,7 +12,14 @@ from PySide6.QtWidgets import (
 )
 
 from mktsk.gui import tasklist
-from mktsk.gui.tasklist import _PEN_CACHE, TaskPanel, _cell_pen, _contrast_ratio
+from mktsk.gui.tasklist import (
+    _AGE_ROLE,
+    _PEN_CACHE,
+    _SELECTION_INDICATOR_GAP,
+    TaskPanel,
+    _cell_pen,
+    _contrast_ratio,
+)
 from tests.gui_helpers import (
     find_directory,
     find_task,
@@ -614,20 +621,108 @@ def test_a_disabled_cell_reads_its_pen_from_the_disabled_group(
     assert _cell_pen(option) == expected
 
 
-def test_a_selected_row_keeps_its_cells_inside_their_columns(
+def test_the_cells_of_an_unselected_row_stay_inside_their_columns(
+    monkeypatch, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", LONG_TITLE)
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    item = find_task(window, file)
+    row = QRect(rows.visualItemRect(item))
+
+    painted = row_texts(painted_texts(monkeypatch, rows), row)
+    cells = [rows.column_rect(row, column) for column in range(5)]
+
+    for column, (rect, flags, text, font) in enumerate(painted):
+        assert cells[column].contains(_ink_rect(rect, flags, text, font))
+    for left in range(5):
+        for right in range(left + 1, 5):
+            assert not cells[left].intersects(cells[right])
+
+
+def test_a_selected_row_shifts_its_cells_and_leaves_the_others(
+    monkeypatch, window, tmp_path, make_task
+):
+    selected_file = make_task(tmp_path, "260918", SHORT_TITLE)
+    other_file = make_task(tmp_path, "260919", LONG_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, selected_file)
+    shift = listing.inset + _SELECTION_INDICATOR_GAP
+    padding = listing.header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
+
+    painted = painted_texts(monkeypatch, listing)
+    selected_row = QRect(listing.visualItemRect(find_task(window, selected_file)))
+    other_row = QRect(listing.visualItemRect(find_task(window, other_file)))
+    selected = row_texts(painted, selected_row)
+    other = row_texts(painted, other_row)
+
+    assert (
+        selected[0][0].left()
+        == listing.column_rect(selected_row, 0).left() + padding + shift
+    )
+    for column in range(1, 5):
+        assert (
+            selected[column][0].left()
+            == listing.column_rect(selected_row, column).left() + shift
+        )
+    assert other[0][0].left() == listing.column_rect(other_row, 0).left() + padding
+    for column in range(1, 5):
+        assert (
+            other[column][0].left() == listing.column_rect(other_row, column).left()
+        )
+
+
+def _painted_row(monkeypatch, rows, item, width):
+    """Paints one selected row at a chosen width, recording every text drawn."""
+    painted = []
+    original = QPainter.drawText
+
+    def record(painter, *args):
+        if len(args) == 3 and isinstance(args[0], QRect):
+            painted.append((QRect(args[0]), args[1], args[2], QFont(painter.font())))
+        return original(painter, *args)
+
+    monkeypatch.setattr(QPainter, "drawText", record)
+    index = rows.indexFromItem(item)
+    option = QStyleOptionViewItem()
+    rows.delegate.initStyleOption(option, index)
+    row = QRect(0, 0, width, rows.delegate.min_height)
+    option.rect = QRect(row)
+    option.state = _SELECTED_ACTIVE
+    option.palette = rows.viewport().palette()
+    option.widget = rows
+    image = QImage(row.size(), QImage.Format.Format_RGB32)
+    image.fill(rows.viewport().palette().color(QPalette.ColorRole.Base))
+    painter = QPainter(image)
+    rows.delegate.paint(painter, option, index)
+    painter.end()
+    return painted, row
+
+
+def test_a_selected_row_elides_at_the_cut_edge(
     monkeypatch, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", LONG_TITLE)
     window.navigate_to(tmp_path)
     listing = select_task(window, file)
+    item = listing.currentItem()
+    full = QRect(0, 0, listing.header.length(), listing.delegate.min_height)
+    activity = listing.column_rect(full, 4)
+    advance = QFontMetrics(listing.font()).horizontalAdvance(item.data(_AGE_ROLE))
+    visible = min(advance - 2, activity.width() - 1)
+    width = activity.left() + activity.width()
 
-    painted = painted_texts(monkeypatch, listing)
-    row = QRect(listing.visualItemRect(listing.currentItem()))
+    painted, row = _painted_row(monkeypatch, listing, item, width)
+    texts = row_texts(painted, row)
 
-    for column, (rect, flags, text, font) in enumerate(row_texts(painted, row)):
-        assert listing.column_rect(row, column).contains(
-            _ink_rect(rect, flags, text, font)
-        )
+    assert visible > 0
+    fm = QFontMetrics(listing.font())
+    age_text = texts[4][2] if len(texts) > 4 else item.data(_AGE_ROLE)
+    assert age_text != item.data(_AGE_ROLE)
+    assert fm.horizontalAdvance(age_text) <= visible
+    for rect, flags, text, font in texts:
+        assert row.contains(_ink_rect(rect, flags, text, font))
+        assert row.left() <= rect.left() + rect.width() <= row.right() + 1
 
 
 # the width and the colour of the indicator the proxy below paints, so the gap
@@ -721,19 +816,21 @@ def test_a_selected_row_leaves_the_indicator_clear_of_the_first_glyph(
     assert first_glyph - max(indicator) >= _INDICATOR_WIDTH
 
 
-def test_the_first_text_starts_at_the_same_x_when_selected_or_not(
-    window, tmp_path, make_task
+def test_a_selected_row_keeps_the_indicator_clear_of_its_text(
+    indicator_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
     window.navigate_to(tmp_path)
     listing = select_task(window, file)
     item = listing.currentItem()
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+    option = _row_option(listing, item, _SELECTED_ACTIVE)
 
-    starts = set()
-    for state in (_SELECTED_ACTIVE, _UNSELECTED):
-        option = _row_option(listing, item, state)
-        image = _render_row(listing, item, state, base)
-        starts.add(_first_glyph_x(image, _cell_pen(option)))
+    image = _render_row(listing, item, _SELECTED_ACTIVE, base)
+    indicator = _columns_of_colour(image, _INDICATOR_COLOUR)
+    bar_right = listing.inset
 
-    assert len(starts) == 1
+    assert indicator
+    assert min(indicator) >= bar_right
+    first_glyph = _first_glyph_x(image, _cell_pen(option), bar_right)
+    assert first_glyph >= bar_right + _SELECTION_INDICATOR_GAP

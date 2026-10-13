@@ -69,15 +69,15 @@ _OFFERED_STATES = tuple(state for state in parsing.STATES if state != "closed")
 _COLUMN_PADDING = 6
 
 # the windows11 style paints its selection indicator at the left edge of the
-# rect it is handed, which is where the task text starts, so the bar sits over
-# the first glyphs. The width of that indicator plus a small margin, kept clear
-# of the text on a selected row and left in place on an unselected one, so the
-# text does not shift when a row is picked
+# rect it is handed, just after the action bar. The width of that indicator plus
+# a small margin, kept clear between the bar and the text of a selected row, so
+# the indicator never touches a glyph
 _SELECTION_INDICATOR_GAP = 6
 
 # how the text of a cell sits in the column of it: read from the left and
 # centred, so a row of one line looks like the headings above it
 _CELL_ALIGNMENT = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+_COUNT_ALIGNMENT = int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
 
 
 class _Columns(NamedTuple):
@@ -89,21 +89,18 @@ class _Columns(NamedTuple):
     activity: int
 
 
-def _column_widths(inset: int = 0) -> _Columns:
+def _column_widths() -> _Columns:
     """Measures the fixed columns as wide as their contents.
 
     A heading is the widest thing its column holds, so measuring one keeps the
-    column as narrow as it can be and never clipping it. The date column is the
-    exception: the action bar sits at the left of every row and the date is the
-    first text after it, so the date column carries the room the bar needs on
-    top of the date itself. That is what lets the date stay where it is whether
-    a row is selected or not. The widths come from the font in use rather than
-    from numbers written down, so a font of another size needs no constant of
-    its own. They are the initial sizes the header starts its sections from;
-    after that the header owns its geometry and the cells read it back.
-
-    Args:
-        inset: the width the action bar reserves at the left of a row.
+    column as narrow as it can be and never clipping it. The date column is
+    measured from the date itself, like any other column, and is narrowed to
+    just that: the room the action bar needs is taken only by the selected row,
+    which shifts as a whole, so no column has to carry it. The widths come from
+    the font in use rather than from numbers written down, so a font of another
+    size needs no constant of its own. They are the initial sizes the header
+    starts its sections from; after that the header owns its geometry and the
+    cells read it back.
 
     Returns:
         The width of the date column, of the state one, of the interventions
@@ -115,7 +112,7 @@ def _column_widths(inset: int = 0) -> _Columns:
     body = QFontMetrics(QApplication.font())
 
     return _Columns(
-        inset + body.horizontalAdvance("dd/mm/yyyy") + 2 * _COLUMN_PADDING,
+        body.horizontalAdvance("dd/mm/yyyy") + 2 * _COLUMN_PADDING,
         headings.horizontalAdvance(_HEADINGS[2]) + 2 * _COLUMN_PADDING,
         headings.horizontalAdvance(_HEADINGS[3]) + 2 * _COLUMN_PADDING,
         headings.horizontalAdvance(_HEADINGS[4]) + 2 * _COLUMN_PADDING,
@@ -181,13 +178,12 @@ class _ColumnHeader(QHeaderView):
     more or less room, and the delegate reads every column back from here rather
     than measuring one of its own. The date and the three right columns start
     from the widths of their contents, and the task takes the rest of the room
-    a row has. The date is as wide as the date and the room the action bar
-    reserves together, so the bar never covers the date and the date stays put.
+    a row has. No section is held wider than its contents: the action bar is
+    taken by the selected row alone, which shifts its cells, so the date is a
+    column like any other.
     """
 
-    def __init__(
-        self, height: int, inset: int = 0, parent: QWidget | None = None
-    ) -> None:
+    def __init__(self, height: int, parent: QWidget | None = None) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
         self.setFixedHeight(height)
         model = QStandardItemModel(0, 5, self)
@@ -203,7 +199,7 @@ class _ColumnHeader(QHeaderView):
         self.setDefaultAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        cols = _column_widths(inset)
+        cols = _column_widths()
         self.setMinimumSectionSize(cols.state)
         total = cols.state + cols.interventions + cols.activity
         self.resizeSection(0, cols.date)
@@ -464,15 +460,19 @@ class _InsetDelegate(QStyledItemDelegate):
     fills from the task, so painting reads no file and holds no date of its own.
     A row without them is a heading, painted across the whole item.
 
-    The date is drawn after the room the action bar reserves, on every row, so
-    the date never moves when a row is selected; the task follows it in its own
-    column. Only the selected row hands the style a rect narrowed from the left,
-    so the fill and the indicator start after the bar, and the bar itself covers
-    the plain room left in front of the date. Every row keeps the height the bar
-    needs, which stops the list from shifting as the selection moves.
+    With no selection every cell starts at the left edge of the row, laid out
+    from the header. The action bar sits on the selected row alone, so that one
+    row shifts its whole content right by the room the bar takes and nothing is
+    drawn under it; the other rows stay where they were and the columns are left
+    unaligned while the selection lasts. Only the selected row hands the style a
+    rect narrowed from the left, so the fill and the indicator start after the
+    bar and before the shifted content. The date is drawn after the same margin
+    the header draws its own text with, so a heading and its value line up.
+    Every row keeps the height the bar needs, which stops the list from shifting
+    as the selection moves.
 
     Args:
-        inset: width the action bar reserves at the left of every row.
+        inset: the width of the action bar, taken only by the selected row.
         min_height: height a row needs to hold the action bar.
         header: the header the geometry of every column is read from.
     """
@@ -505,6 +505,33 @@ class _InsetDelegate(QStyledItemDelegate):
             self.header.sectionSize(column),
             row.height(),
         )
+
+    def content_rect(self, row: QRect, column: int, selected: bool) -> QRect:
+        """Returns the rectangle a cell is painted in, clear of the bar.
+
+        A cell is its column of the row, and the selected row alone carries the
+        bar at its left, so the cells of that row are shifted right by the width
+        of the bar and the gap left for the selection indicator. A cell the
+        shift pushes past the right edge of the row is cut back to what the row
+        still holds, so nothing of a row is ever painted outside it; the left
+        edge is kept whatever the cut, so a cell that falls entirely past the
+        edge keeps the position the shift gave it.
+
+        Args:
+            row: the row the column belongs to.
+            column: the index of the column, from the date on the left.
+            selected: whether the cell belongs to the selected row.
+
+        Returns:
+            The rectangle the cell is painted in.
+        """
+        cell = self.column_rect(row, column)
+        if selected:
+            cell.translate(self.inset + _SELECTION_INDICATOR_GAP, 0)
+        available = row.right() - cell.left() + 1
+        if available < cell.width():
+            cell.setWidth(max(available, 0))
+        return cell
 
     def initStyleOption(
         self,
@@ -540,59 +567,83 @@ class _InsetDelegate(QStyledItemDelegate):
             return
 
         # the row background and the selection are the style's, as they are for
-        # any view. The bar sits on the selected row, so the region it covers is
-        # left to the base colour and the selection starts after the bar, which
-        # keeps the buttons clear of the date and the indicator between them.
-        # The style's text is empty, emptied by initStyleOption, so the cells
-        # below are the whole text of the row.
+        # any view. The bar sits on the selected row alone, so that row has its
+        # whole content shifted right by the bar and the indicator gap; only that
+        # row hands the style a rect narrowed from the left, so the fill and the
+        # indicator start after the bar and before the shifted cells. The other
+        # rows stay as they were, so their columns are not aligned across rows
+        # while a selection lasts.
         style_option = option
-        if index.row() == self.inset_row:
+        selected = index.row() == self.inset_row
+        if selected:
             style_option = QStyleOptionViewItem(option)
             style_option.rect = QRect(option.rect)
             style_option.rect.setLeft(option.rect.left() + self.inset)
         super().paint(painter, style_option, index)
 
-        # the date is the first text after the bar, so the room the bar takes
-        # and the indicator gap are left in front of it on every row, selected
-        # or not. That is what keeps the date still when a row is picked: the
-        # selection changes only what the style paints behind it, never where
-        # the date sits. The date column is measured wide enough to hold both.
-        date_cell = self.column_rect(option.rect, 0)
-        date_cell.setLeft(date_cell.left() + self.inset + _SELECTION_INDICATOR_GAP)
-
-        # the task follows the date in its own column and keeps no inset of its
-        # own, so it starts at the left edge of that column
-        task_cell = self.column_rect(option.rect, 1)
+        padding = self.header.style().pixelMetric(
+            QStyle.PixelMetric.PM_HeaderMargin
+        )
         entry = index.data(_ENTRY_ROLE)
 
         painter.save()
         painter.setPen(_cell_pen(option))
+
+        date_cell = self.content_rect(option.rect, 0, selected)
+        date_cell.setLeft(date_cell.left() + padding)
+        date_text = option.fontMetrics.elidedText(
+            _date_cell(entry), Qt.TextElideMode.ElideRight, date_cell.width()
+        )
         painter.drawText(
             date_cell,
             _CELL_ALIGNMENT,
-            option.fontMetrics.elidedText(
-                _date_cell(entry), Qt.TextElideMode.ElideRight, date_cell.width()
-            ),
+            date_text,
+        )
+
+        task_cell = self.content_rect(option.rect, 1, selected)
+        task_text = option.fontMetrics.elidedText(
+            helpers.readable_title(entry.title),
+            Qt.TextElideMode.ElideRight,
+            task_cell.width(),
         )
         painter.drawText(
             task_cell,
             _CELL_ALIGNMENT,
-            option.fontMetrics.elidedText(
-                helpers.readable_title(entry.title),
-                Qt.TextElideMode.ElideRight,
-                task_cell.width(),
-            ),
+            task_text,
+        )
+
+        state_cell = self.content_rect(option.rect, 2, selected)
+        state_text = option.fontMetrics.elidedText(
+            index.data(_STATE_ROLE) or "",
+            Qt.TextElideMode.ElideRight,
+            state_cell.width(),
         )
         painter.drawText(
-            self.column_rect(option.rect, 2), _CELL_ALIGNMENT, index.data(_STATE_ROLE)
+            state_cell,
+            _CELL_ALIGNMENT,
+            state_text,
+        )
+        count_cell = self.content_rect(option.rect, 3, selected)
+        count_text = option.fontMetrics.elidedText(
+            index.data(_COUNT_ROLE) or "",
+            Qt.TextElideMode.ElideRight,
+            count_cell.width(),
         )
         painter.drawText(
-            self.column_rect(option.rect, 3),
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            count,
+            count_cell,
+            _COUNT_ALIGNMENT,
+            count_text,
+        )
+        age_cell = self.content_rect(option.rect, 4, selected)
+        age_text = option.fontMetrics.elidedText(
+            index.data(_AGE_ROLE) or "",
+            Qt.TextElideMode.ElideRight,
+            age_cell.width(),
         )
         painter.drawText(
-            self.column_rect(option.rect, 4), _CELL_ALIGNMENT, index.data(_AGE_ROLE)
+            age_cell,
+            _CELL_ALIGNMENT,
+            age_text,
         )
         painter.restore()
 
@@ -626,7 +677,7 @@ class TaskListing(QListWidget):
         self.action_bar = _ActionBar(self.viewport())
         self.inset = self.action_bar.minimumSizeHint().width() + 2 * _ACTION_BAR_PADDING
         self.header = _ColumnHeader(
-            self.action_bar.minimumSizeHint().height(), self.inset
+            self.action_bar.minimumSizeHint().height()
         )
         self.delegate = _InsetDelegate(
             self.inset,
@@ -677,18 +728,11 @@ class TaskListing(QListWidget):
     def _columns_changed(self, column: int, _old: int, new: int) -> None:
         """Keeps the cells with the header after a section is resized.
 
-        The date section is held at least as wide as the room the action bar
-        reserves, so the bar can never cover the start of the task column; a
-        separator dragged past that is put back.
-
         Args:
             column: the section that was resized.
             _old: the size it had, unused.
-            new: the size it was given.
+            new: the size it was given, unused.
         """
-        if column == 0 and new < self.inset:
-            self.header.resizeSection(0, self.inset)
-            return
         self.doItemsLayout()
         self.viewport().update()
 

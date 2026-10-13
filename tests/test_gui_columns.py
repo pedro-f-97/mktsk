@@ -1,10 +1,16 @@
 """The configuration of the task listing columns."""
 
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QFont, QFontMetrics
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QApplication, QHeaderView
 
-from mktsk.gui.tasklist import TaskListing, TaskPanel, _column_widths
+from mktsk.gui.tasklist import (
+    _COLUMN_PADDING,
+    _SELECTION_INDICATOR_GAP,
+    TaskListing,
+    TaskPanel,
+    _column_widths,
+)
 
 
 def _panel(qtbot):
@@ -12,6 +18,14 @@ def _panel(qtbot):
     panel = TaskPanel(TaskListing())
     qtbot.addWidget(panel)
     return panel
+
+
+def test_the_header_has_five_sections_and_no_leading_one(qtbot):
+    panel = _panel(qtbot)
+    header = panel.header
+
+    assert header.count() == 5
+    assert header.sectionPosition(0) == 0
 
 
 def test_every_section_can_be_resized_by_hand(qtbot):
@@ -45,26 +59,33 @@ def test_the_header_names_the_columns_in_order(qtbot):
     assert labels == ["Date", "Task", "State", "Interventions", "Last activity"]
 
 
-def test_the_date_column_starts_as_wide_as_a_date_and_the_bar(qtbot):
+def test_the_date_column_starts_as_wide_as_a_date(qtbot):
     panel = _panel(qtbot)
     header = panel.header
-    inset = panel.listing.inset
-    columns = _column_widths(inset)
+    columns = _column_widths()
+    text = QFontMetrics(QApplication.font()).horizontalAdvance("dd/mm/yyyy")
 
     assert header.sectionSize(0) == columns.date
+    assert text <= header.sectionSize(0) <= text + 2 * _COLUMN_PADDING
+    assert header.sectionSize(0) < 1.5 * text + _SELECTION_INDICATOR_GAP
 
-    metrics = QFontMetrics(QFont(QApplication.font()))
-    assert header.sectionSize(0) >= inset + metrics.horizontalAdvance("dd/mm/yyyy")
 
-
-def test_the_date_section_is_held_as_wide_as_the_room_the_bar_needs(qtbot):
+def test_the_date_section_can_be_dragged_narrower_and_wider(qtbot):
     panel = _panel(qtbot)
     header = panel.header
-    inset = panel.listing.inset
+    listing = panel.listing
+    row = QRect(0, 0, header.length(), listing.delegate.min_height)
+    default = header.sectionSize(0)
 
-    header.resizeSection(0, inset - 20)
+    header.resizeSection(0, default - 20)
+    narrowed = [listing.column_rect(row, column) for column in range(5)]
+    assert narrowed[0].width() < default
+    assert narrowed[1].left() == narrowed[0].right() + 1
 
-    assert header.sectionSize(0) == inset
+    header.resizeSection(0, default + 40)
+    widened = [listing.column_rect(row, column) for column in range(5)]
+    assert widened[0].width() == narrowed[0].width() + 60
+    assert widened[1].left() == widened[0].right() + 1
 
 
 def test_resizing_the_date_section_moves_the_following_cells(qtbot):

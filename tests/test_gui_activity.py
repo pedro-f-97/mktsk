@@ -97,7 +97,7 @@ def test_the_header_starts_from_the_measured_columns(window, tmp_path, make_task
     make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
     header = task_panel(window).header
-    columns = _column_widths(task_panel(window).listing.inset)
+    columns = _column_widths()
 
     assert header.sectionSize(0) == columns.date
     assert header.sectionSize(2) == columns.state
