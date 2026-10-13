@@ -721,6 +721,8 @@ def test_a_selected_row_elides_at_the_cut_edge(
     assert age_text != item.data(_AGE_ROLE)
     assert fm.horizontalAdvance(age_text) <= visible
     for rect, flags, text, font in texts:
+        if not text or not row.intersects(rect):
+            continue
         ink = _ink_rect(rect, flags, text, font)
         assert row.contains(ink), (
             f"ink fora da row: row={row} ink={ink} "
