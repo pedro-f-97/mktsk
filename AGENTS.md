@@ -12,7 +12,8 @@ workflow interactively.
 
 - Before implementing a fix, state in one line the simplest change that could work (for example, one palette role or one style flag) and why it is or is not enough. Prefer it.
 - Do not add caches, probing/rendering of the style, new abstractions or new helper layers for a UI fix unless the simple change was tried and shown to fail; then report the evidence.
-- If a fix grows beyond about 40 lines of production code or needs more than one new helper, stop and report before continuing: say what was tried, what failed, and what the simple alternative would cost.
+- If a change needs a new class, a cache, a model/proxy model, style probing or more than one new helper, stop and report before continuing: say what was tried, what failed, and what the simple alternative would cost.
+- Prefer clear code over short code. Do not shorten a design to meet a line count; report production lines per file for information only.
 - Tests prove the behaviour with the least machinery that reproduces it. Do not build test infrastructure larger than the code it covers.
 
 ## Docs
