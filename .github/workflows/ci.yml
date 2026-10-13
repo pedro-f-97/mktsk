@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, fix/row-text-fits-the-row]
+    branches: [main, fix/row-text-fits-the-row-ubuntu]
   pull_request:
     branches: [main]
 
