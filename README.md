@@ -344,8 +344,10 @@ Opens a window where you can:
   gets its own tab, the current folder included, plus an `All` tab that lists everything
   still standing under a heading per category, and a `Closed` tab with the archives,
   which appears only when there is at least one. By last activity, so the task you worked
-  on last comes first. Click a column heading to sort by it, once for ascending and again
-  for descending, and each tab keeps its own column and direction;
+  on last comes first. Every second task row is subtly striped, restarting under each
+  category heading, so the list is easier to follow. Click a column heading to sort by it,
+  once for ascending and again for descending, and each tab keeps its own column and
+  direction;
 * read each task as five columns under their headings: the date of the folder as
   `dd/mm/yyyy`, the title read as words, the state the task is in, the number of
   interventions, and how long ago the last of them was, as `today`, `yesterday` or

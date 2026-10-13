@@ -118,6 +118,16 @@
   by the width of the bar, so the fill and the indicator start between the bar and the date
   text and the bar sits over the plain room in front of the date. An unselected row reads
   `Text` of the group, which is what keeps tasks and folders apart as they were
+- The list is striped to keep the eye on a row, and the colours are derived from the
+  palette through one blend function rather than written down, so a dark mode needs no
+  change. Every second task row under a separator is filled with the `Base` of its palette
+  group blended a little towards the `Text`, a separator is filled the same way a touch
+  stronger, and the stripe restarts at every separator, so the first task under one is
+  always the plain `Base`. The delegate fills an unselected task row alone, before the
+  style paints, so hover and the native look stay on top; it never fills a selected row,
+  whose selection is the style's. A separator is painted as an enabled row, so its text
+  keeps the `Text` of a task row rather than the grey a non-selectable row would be drawn
+  in
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it

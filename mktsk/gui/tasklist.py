@@ -70,6 +70,12 @@ _OFFERED_STATES = tuple(state for state in parsing.STATES if state != "closed")
 
 _COLUMN_PADDING = 6
 
+# how far a stripe and a separator are blended from the base towards the text
+# colour: both subtle, the separator a touch stronger, so a category reads
+# apart from the rows under it without a colour written down
+_ZEBRA_WEIGHT = 0.03
+_SEPARATOR_WEIGHT = 0.08
+
 # the windows11 style paints its selection indicator at the left edge of the
 # rect it is handed, just after the action bar. The width of that indicator plus
 # a small margin, kept clear between the bar and the text of a selected row, so
@@ -389,6 +395,30 @@ def _contrast_ratio(first: QColor, second: QColor) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+def _blend(base: QColor, text: QColor, weight: float) -> QColor:
+    """Blends two colours by a weight, from the base towards the text one.
+
+    Both colours come from the same palette group, so a stripe stays a shade of
+    the background it is drawn on rather than a colour written down. A weight
+    of 0 gives the base, 1 gives the text, and anything between the colour that
+    far along; no channel leaves the 0-255 range.
+
+    Args:
+        base: the colour the blend starts from.
+        text: the colour the blend runs towards.
+        weight: how far to move, from 0 to 1.
+
+    Returns:
+        The blended colour.
+    """
+    channels = (
+        round(base.red() + (text.red() - base.red()) * weight),
+        round(base.green() + (text.green() - base.green()) * weight),
+        round(base.blue() + (text.blue() - base.blue()) * weight),
+    )
+    return QColor(*(max(0, min(255, value)) for value in channels))
+
+
 def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
     """Returns the palette group the style paints a row of a state from.
 
@@ -611,13 +641,52 @@ class _InsetDelegate(QStyledItemDelegate):
     ) -> None:
         count = index.data(_COUNT_ROLE)
         if count is None:
-            super().paint(painter, option, index)
+            # a separator is never selected and carries no bar, so it is painted
+            # as an enabled row: both the fill and the text then come from the
+            # palette group a task row uses, rather than the disabled grey a
+            # non-selectable item would otherwise be drawn in
+            separator_option = QStyleOptionViewItem(option)
+            separator_option.state |= QStyle.StateFlag.State_Enabled
+            group = _colour_group(separator_option.state)
+            painter.fillRect(
+                option.rect,
+                _blend(
+                    option.palette.color(group, QPalette.ColorRole.Base),
+                    option.palette.color(group, QPalette.ColorRole.Text),
+                    _SEPARATOR_WEIGHT,
+                ),
+            )
+            super().paint(painter, separator_option, index)
             return
 
         # the row background and the selection are the style's, as they are for
-        # any view. The bar sits on the selected row alone, so that row has its
-        # whole content shifted right by the bar and the indicator gap; only that
-        # row hands the style a rect narrowed from the left, so the fill and the
+        # any view. A stripe fills the whole row before the style paints, so
+        # hover and the native look still draw on top; a selected row gets no
+        # stripe of its own, because the style paints its selection. The stripes
+        # restart at every separator, so the first task under one is always the
+        # plain base colour: the parity is counted from the rows above, back to
+        # the row that carries no count, and nothing is remembered between
+        # paints, so sorting or refreshing cannot leave a stripe behind.
+        if not (option.state & QStyle.StateFlag.State_Selected):
+            above = 0
+            for row in range(index.row() - 1, -1, -1):
+                if index.model().index(row, 0).data(_COUNT_ROLE) is None:
+                    break
+                above += 1
+            if above % 2 == 1:
+                group = _colour_group(option.state)
+                painter.fillRect(
+                    option.rect,
+                    _blend(
+                        option.palette.color(group, QPalette.ColorRole.Base),
+                        option.palette.color(group, QPalette.ColorRole.Text),
+                        _ZEBRA_WEIGHT,
+                    ),
+                )
+
+        # the bar sits on the selected row alone, so that row has its whole
+        # content shifted right by the bar and the indicator gap; only that row
+        # hands the style a rect narrowed from the left, so the fill and the
         # indicator start after the bar and before the shifted cells. The other
         # rows stay as they were, so their columns are not aligned across rows
         # while a selection lasts.

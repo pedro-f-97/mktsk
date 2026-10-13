@@ -5,7 +5,8 @@ the test already asks for and give a result straight back.
 """
 
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QFont, QPainter
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPalette
+from PySide6.QtWidgets import QStyleOptionViewItem
 
 from mktsk.gui.tasklist import _ENTRY_ROLE
 from mktsk.gui.tree import _PATH_ROLE
@@ -137,3 +138,38 @@ def select_task(window, path, title="All"):
 
 def action_bar(window, path, title="All"):
     return select_task(window, path, title).action_bar
+
+
+def render_row(view, item, state, palette=None):
+    """Renders one row offscreen the way the view paints it.
+
+    The option is filled from the item, the state is the one an unselected or
+    selected row carries, and the palette is the viewport's unless the test
+    hands one over. The style paints the row and the delegate paints the
+    cells, so the image holds what a person sees.
+    """
+    rect = QRect(view.visualItemRect(item))
+    palette = palette or view.viewport().palette()
+    image = QImage(rect.size(), QImage.Format.Format_RGB32)
+    image.fill(palette.color(QPalette.ColorRole.Base))
+    index = view.indexFromItem(item)
+    option = QStyleOptionViewItem()
+    view.itemDelegate().initStyleOption(option, index)
+    option.rect = QRect(0, 0, rect.width(), rect.height())
+    option.state = state
+    option.palette = palette
+    option.widget = view
+    painter = QPainter(image)
+    view.itemDelegate().paint(painter, option, index)
+    painter.end()
+    return image
+
+
+def row_background(image):
+    """The colour most of a row is made of, which is its background."""
+    counts: dict[int, int] = {}
+    for y in range(image.height()):
+        for x in range(image.width()):
+            key = image.pixelColor(x, y).rgb()
+            counts[key] = counts.get(key, 0) + 1
+    return QColor(max(counts, key=counts.get))
