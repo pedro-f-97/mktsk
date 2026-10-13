@@ -73,6 +73,11 @@ def select_tab(window, title):
     window.tabs.setCurrentIndex(tab_index(window, title))
 
 
+def click_heading(window, column, title="All"):
+    """Clicks a column heading, which is what asks for that order."""
+    task_panel(window, title).header.sectionClicked.emit(column)
+
+
 def find_task(window, path, title="All"):
     listing = task_listing(window, title)
     for index in range(listing.count()):

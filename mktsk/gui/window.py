@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
     def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
         self.settings = settings or QSettings("mktsk", "mktsk")
+        self._sorts: dict[str, tuple[int, bool]] = {}
         last_path = self.settings.value("last_path", str(Path.cwd()))
         self.current_directory = Path(str(last_path))
         self.setWindowTitle("mktsk")
@@ -116,6 +117,7 @@ class MainWindow(QMainWindow):
             directory = Path.cwd()
         self.current_directory = directory
         self.path_label.setText(str(directory))
+        self._sorts.clear()
         self.refresh()
 
     def refresh(self) -> None:
@@ -190,8 +192,8 @@ class MainWindow(QMainWindow):
 
         self.tabs.clear()
 
-        every = self._new_listing()
-        shut = self._new_listing()
+        every = self._new_listing(_ALL_TAB)
+        shut = self._new_listing(_CLOSED_TAB)
         closed_here = False
 
         for title, group in sections:
@@ -216,7 +218,7 @@ class MainWindow(QMainWindow):
             if not standing:
                 continue
 
-            tab = self._new_listing()
+            tab = self._new_listing(title)
             for entry in standing:
                 self._add_task(tab, entry, today)
             self._add_tab(title, tab)
@@ -245,16 +247,27 @@ class MainWindow(QMainWindow):
         """Returns the title of the tab for the tasks of the current directory."""
         return self.current_directory.name or str(self.current_directory)
 
-    def _new_listing(self) -> TaskListing:
+    def _new_listing(self, title: str) -> TaskListing:
         tab = TaskListing()
         tab.open_requested.connect(self.open_task)
         tab.resume_requested.connect(self.resume_task)
         tab.rename_requested.connect(self.rename_task)
         tab.state_requested.connect(self.change_state)
         tab.close_requested.connect(self.close_task)
+        tab.order_changed.connect(
+            lambda column, descending, name=title: self._remember_sort(
+                name, column, descending
+            )
+        )
         return tab
 
+    def _remember_sort(self, title: str, column: int, descending: bool) -> None:
+        """Keeps the column and the direction a tab was last sorted by."""
+        self._sorts[title] = (column, descending)
+
     def _add_tab(self, title: str, tab: TaskListing) -> None:
+        if title in self._sorts:
+            tab.set_sort(*self._sorts[title])
         self.tabs.addTab(TaskPanel(tab), title)
 
     def _select_tab(self, title: str) -> None:
