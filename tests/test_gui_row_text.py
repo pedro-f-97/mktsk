@@ -12,10 +12,19 @@ from PySide6.QtWidgets import (
 )
 
 from mktsk.gui import tasklist
-from mktsk.gui.tasklist import _PEN_CACHE, TaskPanel, _cell_pen, _contrast_ratio
+from mktsk.gui.tasklist import (
+    _AGE_ROLE,
+    _PEN_CACHE,
+    _SELECTION_INDICATOR_GAP,
+    TaskPanel,
+    _cell_pen,
+    _contrast_ratio,
+)
 from tests.gui_helpers import (
     find_directory,
     find_task,
+    painted_texts,
+    row_texts,
     select_task,
     task_listing,
     task_panel,
@@ -24,21 +33,6 @@ from tests.gui_helpers import (
 LONG_TITLE = "ExtraordinarilyLongTaskTitleThatSurelyDoesNotFitInTheTaskColumn"
 SHORT_TITLE = "Fix"
 WIDTHS = (900, 500)
-
-
-def _recording_paint(monkeypatch, rows):
-    """Repaints a listing, recording every text the painting draws."""
-    painted = []
-    original = QPainter.drawText
-
-    def record(painter, *args):
-        if len(args) == 3 and isinstance(args[0], QRect):
-            painted.append((QRect(args[0]), args[1], args[2], QFont(painter.font())))
-        return original(painter, *args)
-
-    monkeypatch.setattr(QPainter, "drawText", record)
-    rows.viewport().repaint()
-    return painted
 
 
 def _ink_rect(rect, flags, text, font):
@@ -55,19 +49,10 @@ def _ink_rect(rect, flags, text, font):
     return QRect(left, rect.top(), advance, rect.height())
 
 
-def _row_texts(painted, row):
-    """The texts painted on one row, in the order the delegate paints them."""
-    return [
-        (rect, flags, text, font)
-        for rect, flags, text, font in painted
-        if row.top() <= rect.top() < row.bottom()
-    ]
-
-
 def _style_text(rows, item):
     """The text the style is asked to paint on a row, empty for a task row.
 
-    The four cells of a task row are painted by the delegate, so the option
+    The cells of a task row are painted by the delegate, so the option
     the style paints from carries no text and the whole row is what the cells
     draw. The base class fills that text on every paint, which is why the
     delegate empties it in `initStyleOption` rather than in `paint`.
@@ -111,14 +96,14 @@ def test_the_columns_of_a_row_start_where_the_headings_start(
     for file in (long_file, short_file):
         item = find_task(window, file)
         row = QRect(rows.visualItemRect(item))
-        cells = [rows.column_rect(row, column) for column in range(4)]
+        cells = [rows.column_rect(row, column) for column in range(5)]
 
         for column, cell in enumerate(cells):
             assert cell.left() == header.sectionPosition(column)
             assert cell.width() == header.sectionSize(column)
 
-        for left in range(4):
-            for right in range(left + 1, 4):
+        for left in range(5):
+            for right in range(left + 1, 5):
                 assert not cells[left].intersects(cells[right])
 
 
@@ -130,14 +115,14 @@ def test_the_painted_text_of_every_column_fits_its_rectangle(
     window.navigate_to(tmp_path)
     rows = task_listing(window)
 
-    painted = _recording_paint(monkeypatch, rows)
+    painted = painted_texts(monkeypatch, rows)
     for file in (long_file, short_file):
         item = find_task(window, file)
         row = QRect(rows.visualItemRect(item))
-        texts = _row_texts(painted, row)
+        texts = row_texts(painted, row)
 
         assert _style_text(rows, item) == ""
-        assert len(texts) == 4
+        assert len(texts) == 5
         for column, (rect, flags, text, font) in enumerate(texts):
             assert rows.column_rect(row, column).contains(
                 _ink_rect(rect, flags, text, font)
@@ -171,7 +156,7 @@ def test_the_action_bar_keeps_clear_of_the_painted_text(
 
     for width in WIDTHS:
         _at_width(qtbot, window, width)
-        painted = _recording_paint(monkeypatch, listing)
+        painted = painted_texts(monkeypatch, listing)
         row = QRect(listing.visualItemRect(listing.currentItem()))
         bar = QRect(listing.action_bar.geometry())
         viewport = listing.viewport()
@@ -181,7 +166,7 @@ def test_the_action_bar_keeps_clear_of_the_painted_text(
         assert bar.left() >= 0
         assert bar.right() < viewport.width()
         assert bar.bottom() < viewport.height()
-        for rect, flags, text, font in _row_texts(painted, row):
+        for rect, flags, text, font in row_texts(painted, row):
             assert not bar.intersects(_ink_rect(rect, flags, text, font))
 
 
@@ -636,20 +621,108 @@ def test_a_disabled_cell_reads_its_pen_from_the_disabled_group(
     assert _cell_pen(option) == expected
 
 
-def test_a_selected_row_keeps_its_cells_inside_their_columns(
+def test_the_cells_of_an_unselected_row_stay_inside_their_columns(
+    monkeypatch, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", LONG_TITLE)
+    window.navigate_to(tmp_path)
+    rows = task_listing(window)
+    item = find_task(window, file)
+    row = QRect(rows.visualItemRect(item))
+
+    painted = row_texts(painted_texts(monkeypatch, rows), row)
+    cells = [rows.column_rect(row, column) for column in range(5)]
+
+    for column, (rect, flags, text, font) in enumerate(painted):
+        assert cells[column].contains(_ink_rect(rect, flags, text, font))
+    for left in range(5):
+        for right in range(left + 1, 5):
+            assert not cells[left].intersects(cells[right])
+
+
+def test_a_selected_row_shifts_its_cells_and_leaves_the_others(
+    monkeypatch, window, tmp_path, make_task
+):
+    selected_file = make_task(tmp_path, "260918", SHORT_TITLE)
+    other_file = make_task(tmp_path, "260919", LONG_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, selected_file)
+    shift = listing.inset + _SELECTION_INDICATOR_GAP
+    padding = listing.header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
+
+    painted = painted_texts(monkeypatch, listing)
+    selected_row = QRect(listing.visualItemRect(find_task(window, selected_file)))
+    other_row = QRect(listing.visualItemRect(find_task(window, other_file)))
+    selected = row_texts(painted, selected_row)
+    other = row_texts(painted, other_row)
+
+    assert (
+        selected[0][0].left()
+        == listing.column_rect(selected_row, 0).left() + padding + shift
+    )
+    for column in range(1, 5):
+        assert (
+            selected[column][0].left()
+            == listing.column_rect(selected_row, column).left() + shift
+        )
+    assert other[0][0].left() == listing.column_rect(other_row, 0).left() + padding
+    for column in range(1, 5):
+        assert (
+            other[column][0].left() == listing.column_rect(other_row, column).left()
+        )
+
+
+def _painted_row(monkeypatch, rows, item, width):
+    """Paints one selected row at a chosen width, recording every text drawn."""
+    painted = []
+    original = QPainter.drawText
+
+    def record(painter, *args):
+        if len(args) == 3 and isinstance(args[0], QRect):
+            painted.append((QRect(args[0]), args[1], args[2], QFont(painter.font())))
+        return original(painter, *args)
+
+    monkeypatch.setattr(QPainter, "drawText", record)
+    index = rows.indexFromItem(item)
+    option = QStyleOptionViewItem()
+    rows.delegate.initStyleOption(option, index)
+    row = QRect(0, 0, width, rows.delegate.min_height)
+    option.rect = QRect(row)
+    option.state = _SELECTED_ACTIVE
+    option.palette = rows.viewport().palette()
+    option.widget = rows
+    image = QImage(row.size(), QImage.Format.Format_RGB32)
+    image.fill(rows.viewport().palette().color(QPalette.ColorRole.Base))
+    painter = QPainter(image)
+    rows.delegate.paint(painter, option, index)
+    painter.end()
+    return painted, row
+
+
+def test_a_selected_row_elides_at_the_cut_edge(
     monkeypatch, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", LONG_TITLE)
     window.navigate_to(tmp_path)
     listing = select_task(window, file)
+    item = listing.currentItem()
+    full = QRect(0, 0, listing.header.length(), listing.delegate.min_height)
+    activity = listing.column_rect(full, 4)
+    advance = QFontMetrics(listing.font()).horizontalAdvance(item.data(_AGE_ROLE))
+    visible = min(advance - 2, activity.width() - 1)
+    width = activity.left() + activity.width()
 
-    painted = _recording_paint(monkeypatch, listing)
-    row = QRect(listing.visualItemRect(listing.currentItem()))
+    painted, row = _painted_row(monkeypatch, listing, item, width)
+    texts = row_texts(painted, row)
 
-    for column, (rect, flags, text, font) in enumerate(_row_texts(painted, row)):
-        assert listing.column_rect(row, column).contains(
-            _ink_rect(rect, flags, text, font)
-        )
+    assert visible > 0
+    fm = QFontMetrics(listing.font())
+    age_text = texts[4][2] if len(texts) > 4 else item.data(_AGE_ROLE)
+    assert age_text != item.data(_AGE_ROLE)
+    assert fm.horizontalAdvance(age_text) <= visible
+    for rect, flags, text, font in texts:
+        assert row.contains(_ink_rect(rect, flags, text, font))
+        assert row.left() <= rect.left() + rect.width() <= row.right() + 1
 
 
 # the width and the colour of the indicator the proxy below paints, so the gap
@@ -662,10 +735,10 @@ class _IndicatorStyle(QProxyStyle):
     """A style that paints a narrow indicator at the left edge of a selected row.
 
     A platform style such as windows11 paints its selection indicator at the
-    very left of the rect the delegate hands it, which is where the task text
-    starts. The proxy draws one of a known width and colour there, over whatever
-    the base style paints, so the gap before the first glyph can be read back
-    from the pixels.
+    very left of the rect the delegate hands it, which is the room the bar sits
+    in, just before the date text. The proxy draws one of a known width and
+    colour there, over whatever the base style paints, so the gap before the
+    first glyph can be read back from the pixels.
     """
 
     def drawControl(self, element, option, painter, widget=None):
@@ -743,19 +816,21 @@ def test_a_selected_row_leaves_the_indicator_clear_of_the_first_glyph(
     assert first_glyph - max(indicator) >= _INDICATOR_WIDTH
 
 
-def test_the_task_text_starts_at_the_same_x_when_selected_or_not(
-    window, tmp_path, make_task
+def test_a_selected_row_keeps_the_indicator_clear_of_its_text(
+    indicator_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
     window.navigate_to(tmp_path)
     listing = select_task(window, file)
     item = listing.currentItem()
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+    option = _row_option(listing, item, _SELECTED_ACTIVE)
 
-    starts = set()
-    for state in (_SELECTED_ACTIVE, _UNSELECTED):
-        option = _row_option(listing, item, state)
-        image = _render_row(listing, item, state, base)
-        starts.add(_first_glyph_x(image, _cell_pen(option)))
+    image = _render_row(listing, item, _SELECTED_ACTIVE, base)
+    indicator = _columns_of_colour(image, _INDICATOR_COLOUR)
+    bar_right = listing.inset
 
-    assert len(starts) == 1
+    assert indicator
+    assert min(indicator) >= bar_right
+    first_glyph = _first_glyph_x(image, _cell_pen(option), bar_right)
+    assert first_glyph >= bar_right + _SELECTION_INDICATOR_GAP
