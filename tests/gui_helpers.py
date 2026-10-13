@@ -3,6 +3,7 @@
 Plain functions rather than fixtures, because they read from a window that
 the test already asks for and give a result straight back.
 """
+from collections import Counter
 
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPalette
@@ -167,9 +168,9 @@ def render_row(view, item, state, palette=None):
 
 def row_background(image):
     """The colour most of a row is made of, which is its background."""
-    counts: dict[int, int] = {}
-    for y in range(image.height()):
-        for x in range(image.width()):
-            key = image.pixelColor(x, y).rgb()
-            counts[key] = counts.get(key, 0) + 1
-    return QColor(max(counts, key=counts.get))
+    counts = Counter(
+        image.pixelColor(x, y).rgb()
+        for y in range(image.height())
+        for x in range(image.width())
+    )
+    return QColor(counts.most_common(1)[0][0])
