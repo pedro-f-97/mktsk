@@ -58,6 +58,16 @@
   last activity. The date column shows the date of the folder and the last activity column
   says how long ago the last intervention was, so the date on a row and the order of the
   rows can disagree
+- Clicking a column heading orders the rows of that tab by it, ascending on the first
+  click and descending on the next; clicking another heading starts ascending on that one,
+  and no click ever returns to the default order by itself. Each tab keeps the column and
+  the direction it was last sorted by while it is open, and a refresh re-applies it. Only
+  the task rows move: a heading of the `All` and `Closed` tabs stays where it is, so the
+  tasks of a category reorder among themselves. Ties keep the default order, the date is
+  read from the folder name with a name that is not a task folder last, the task ignores
+  case, the state follows the order of the domain, the interventions are counted as a
+  number, and the last activity is read as the date it carries. Dragging a separator still
+  resizes, and the native indicator marks the heading that is in force
 - A task folder with no `.md` is not listed; a task two levels down is not found
 - A task row is five columns, `Date`, `Task`, `State`, `Interventions` and `Last activity`.
   The date is `dd/mm/yyyy`, read from the folder name or, for a closed task, the archive

@@ -1,6 +1,7 @@
 """The tasks of a category as a list, with the actions on the selected row."""
 
 import datetime
+from itertools import groupby
 from typing import NamedTuple
 
 from PySide6.QtCore import (
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLayout,
     QListWidget,
+    QListWidgetItem,
     QMenu,
     QStyle,
     QStyledItemDelegate,
@@ -144,6 +146,25 @@ def _relative_age(last_activity: datetime.date, today: datetime.date) -> str:
     return f"{days} days ago"
 
 
+def _name_of(entry: listing.TaskEntry) -> str:
+    """Returns the name that carries the date of a task.
+
+    The date a task was created on is the one its folder carries, or the one
+    its archive carries when the task is closed.
+
+    Args:
+        entry: the task folder or archive.
+
+    Returns:
+        The task folder name, or the archive name without its suffix.
+    """
+    name = entry.file.name
+    if standards.is_task_archive(name):
+        return name.removesuffix(standards._ARCHIVE_SUFFIX)
+
+    return entry.file.parent.name
+
+
 def _date_cell(entry: listing.TaskEntry) -> str:
     """Says the date of a task, as the Date column shows it.
 
@@ -158,17 +179,44 @@ def _date_cell(entry: listing.TaskEntry) -> str:
     Returns:
         The date of the task as `dd/mm/yyyy`, or the raw prefix of its name.
     """
-    name = entry.file.name
-    if standards.is_task_archive(name):
-        name = name.removesuffix(standards._ARCHIVE_SUFFIX)
-    else:
-        name = entry.file.parent.name
-
+    name = _name_of(entry)
     parts = standards._task_date_and_title(name)
     if parts is None:
         return name.partition(standards._TASK_NAME_SEPARATOR)[0]
 
     return parts[0].strftime(helpers.DATE_FORMAT)
+
+
+def _order_key(item: QListWidgetItem, column: int) -> datetime.date | str | int:
+    """Returns the value a task row is ordered by, in a column.
+
+    The date is the one the folder name carries, so a name that is not a task
+    folder sorts last. The task compares without case, the state by the order
+    of the domain, and the interventions as a number, so ten comes after nine.
+
+    Args:
+        item: the row, carrying its task entry.
+        column: the index of the column, from the date on the left.
+
+    Returns:
+        The value the row sorts by.
+    """
+    entry = item.data(_ENTRY_ROLE)
+
+    if column == 0:
+        parts = standards._task_date_and_title(_name_of(entry))
+        return parts[0] if parts is not None else datetime.date.max
+
+    if column == 1:
+        return entry.title.casefold()
+
+    if column == 2:
+        return parsing.STATES.index(entry.state)
+
+    if column == 3:
+        return entry.interventions
+
+    return entry.last_activity
 
 
 class _ColumnHeader(QHeaderView):
@@ -194,7 +242,7 @@ class _ColumnHeader(QHeaderView):
             model.setHorizontalHeaderItem(i, item)
         self.setModel(model)
         self.setSectionsMovable(False)
-        self.setSectionsClickable(False)
+        self.setSectionsClickable(True)
         self.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.setDefaultAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -671,6 +719,7 @@ class TaskListing(QListWidget):
     rename_requested = Signal(object)
     state_requested = Signal(object, str)
     close_requested = Signal(object)
+    order_changed = Signal(int, bool)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -684,8 +733,11 @@ class TaskListing(QListWidget):
             self.action_bar.minimumSizeHint().height(),
             self.header,
         )
+        self.sort_column: int | None = None
+        self.sort_descending = False
         self.setItemDelegate(self.delegate)
         self.header.sectionResized.connect(self._columns_changed)
+        self.header.sectionClicked.connect(self._click_section)
         self.horizontalScrollBar().valueChanged.connect(self.header.setOffset)
 
         self.action_bar.open_button.clicked.connect(
@@ -712,6 +764,69 @@ class TaskListing(QListWidget):
         """Returns the task of the selected row, or None when none is."""
         item = self.currentItem()
         return item.data(_ENTRY_ROLE) if item else None
+
+    def set_sort(self, column: int, descending: bool) -> None:
+        """Orders the rows by a column and shows the indicator on it.
+
+        Args:
+            column: the index of the section that was clicked.
+            descending: whether the order runs from the last value to the first.
+        """
+        self.sort_column = column
+        self.sort_descending = descending
+        self.header.setSortIndicatorShown(True)
+        self.header.setSortIndicator(
+            column,
+            Qt.SortOrder.DescendingOrder if descending else Qt.SortOrder.AscendingOrder,
+        )
+        self.apply_sort(column, descending)
+
+    def _click_section(self, column: int) -> None:
+        """Sorts by a clicked heading, flipping the order on a second click.
+
+        A first click on a heading, or a click on another one, starts
+        ascending; a second click on the same heading turns it around.
+
+        Args:
+            column: the index of the section that was clicked.
+        """
+        descending = column == self.sort_column and not self.sort_descending
+        self.set_sort(column, descending)
+        self.order_changed.emit(column, descending)
+
+    def apply_sort(self, column: int, descending: bool) -> None:
+        """Orders the task rows by a column and a direction.
+
+        The headings of a tab that lists several categories are left where
+        they are, so only the task rows move, the group between two headings
+        keeping to itself. The row that was selected stays selected once the
+        rows are back in place.
+
+        Args:
+            column: the index of the column to order by.
+            descending: whether the order runs from the last value to the first.
+        """
+        rows = [self.item(index) for index in range(self.count())]
+        ordered: list[QListWidgetItem] = []
+        for is_heading, group in groupby(
+            rows, key=lambda row: row.data(_COUNT_ROLE) is None
+        ):
+            run = list(group)
+            if not is_heading:
+                run.sort(
+                    key=lambda row: _order_key(row, column),
+                    reverse=descending,
+                )
+            ordered.extend(run)
+
+        selected = self.currentItem()
+        while self.count():
+            self.takeItem(0)
+        for row in ordered:
+            self.addItem(row)
+        if selected is not None:
+            self.setCurrentItem(selected)
+            self._sync_action_bar()
 
     def column_rect(self, row: QRect, column: int) -> QRect:
         """Returns the rectangle of a column within a row.
