@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QCloseEvent, QPalette
+from PySide6.QtGui import QCloseEvent, QPalette, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTabWidget,
     QTreeWidgetItem,
@@ -39,6 +40,10 @@ from .tree import _PATH_ROLE, _CategoryTree
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
 
+# the outer margin the left path row, the tab bar and the bottom bar share, so
+# the two panes line up on a single grid
+_MARGIN = 6
+
 
 class MainWindow(QMainWindow):
     """Desktop interface over the CLI task logic."""
@@ -55,34 +60,19 @@ class MainWindow(QMainWindow):
         self.navigate_to(self.current_directory)
 
     def _build_ui(self) -> None:
-        central = QWidget(self)
-        self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-
-        bar = QHBoxLayout()
+        # the widgets are built in the order the old bar used, so the default
+        # tab order is unchanged; the two panels are assembled around them
         self.path_label = QLabel()
+        self.path_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         self.choose_button = QPushButton("Choose...")
         self.up_button = QPushButton("Up")
         self.refresh_button = QPushButton("Refresh")
-        bar.addWidget(self.path_label, 1)
-        bar.addWidget(self.choose_button)
-        bar.addWidget(self.up_button)
-        bar.addWidget(self.refresh_button)
-        layout.addLayout(bar)
-
         self.directory_tree = _CategoryTree()
         self.directory_tree.setHeaderLabel("Directory")
         self.directory_tree.setMinimumWidth(140)
-
         self.tabs = QTabWidget()
-
-        splitter = QSplitter()
-        splitter.addWidget(self.directory_tree)
-        splitter.addWidget(self.tabs)
-        splitter.setStretchFactor(1, 2)
-        layout.addWidget(splitter)
-
-        form = QHBoxLayout()
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Task title")
         self.target_label = QLabel()
@@ -97,10 +87,42 @@ class MainWindow(QMainWindow):
         self.target_label.setPalette(hint)
         self.target_label.hide()
         self.create_button = QPushButton("Create")
-        form.addWidget(self.title_input, 1)
-        form.addWidget(self.target_label)
-        form.addWidget(self.create_button)
-        layout.addLayout(form)
+
+        self.path_row = QWidget()
+        path_layout = QHBoxLayout(self.path_row)
+        path_layout.setContentsMargins(0, 0, 0, 0)
+        path_layout.addWidget(self.path_label, 1)
+        path_layout.addWidget(self.up_button)
+        path_layout.addWidget(self.choose_button)
+
+        self.left_panel = QWidget()
+        left_layout = QVBoxLayout(self.left_panel)
+        left_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
+        left_layout.setSpacing(0)
+        left_layout.addWidget(self.path_row)
+        left_layout.addWidget(self.directory_tree)
+
+        self.tabs.setCornerWidget(self.refresh_button, Qt.Corner.TopRightCorner)
+
+        self.bottom_bar = QWidget()
+        bottom_layout = QHBoxLayout(self.bottom_bar)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.addWidget(self.title_input, 1)
+        bottom_layout.addWidget(self.target_label)
+        bottom_layout.addWidget(self.create_button)
+
+        self.right_panel = QWidget()
+        right_layout = QVBoxLayout(self.right_panel)
+        right_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
+        right_layout.setSpacing(0)
+        right_layout.addWidget(self.tabs, 1)
+        right_layout.addWidget(self.bottom_bar)
+
+        self.splitter = QSplitter()
+        self.splitter.addWidget(self.left_panel)
+        self.splitter.addWidget(self.right_panel)
+        self.splitter.setStretchFactor(1, 2)
+        self.setCentralWidget(self.splitter)
 
         self.choose_button.clicked.connect(self.choose_directory)
         self.up_button.clicked.connect(self.go_up)
@@ -110,13 +132,47 @@ class MainWindow(QMainWindow):
         self.directory_tree.category_requested.connect(self.new_category)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
+        self.splitter.splitterMoved.connect(self._update_path_label)
+
+        # the old bar's focus order, kept by hand because the panels now hold
+        # the same widgets in a different tree
+        self.setTabOrder(self.choose_button, self.up_button)
+        self.setTabOrder(self.up_button, self.refresh_button)
+        self.setTabOrder(self.refresh_button, self.directory_tree)
+        self.setTabOrder(self.directory_tree, self.tabs)
+        self.setTabOrder(self.tabs, self.title_input)
+        self.setTabOrder(self.title_input, self.create_button)
+
+    def _align_path_row(self) -> None:
+        """Squares the path row off to the height of the tab bar it lines up with."""
+        self.path_row.setFixedHeight(self.tabs.tabBar().sizeHint().height())
+
+    def _update_path_label(self) -> None:
+        """Shows the current directory, elided to the room the row has."""
+        path = str(self.current_directory)
+        metrics = self.path_label.fontMetrics()
+        self.path_label.setText(
+            metrics.elidedText(
+                path, Qt.TextElideMode.ElideMiddle, self.path_label.width()
+            )
+        )
+        self.path_label.setToolTip(path)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._update_path_label()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._align_path_row()
+        self._update_path_label()
 
     def navigate_to(self, directory: Path) -> None:
         directory = directory.resolve()
         if not directory.is_dir():
             directory = Path.cwd()
         self.current_directory = directory
-        self.path_label.setText(str(directory))
+        self._update_path_label()
         self._sorts.clear()
         self.refresh()
 
