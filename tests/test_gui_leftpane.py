@@ -5,6 +5,7 @@ control sits, never how it looks.
 """
 
 from PySide6.QtCore import QPoint
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionHeader
 
 from mktsk.gui.tree import _HEADER_BUTTON_MARGIN
@@ -171,3 +172,33 @@ def test_the_outer_margins_and_the_gap_are_unchanged(window):
     assert window.right_panel.width() - _right(window.tabs, window.right_panel) == _MARGIN
     gap = _left(window.tabs, window) - _right(window.directory_tree, window)
     assert gap == window.splitter.handleWidth()
+
+
+def _path_label_pixel(window):
+    """The colour the path label paints behind its text, at its right end."""
+    label = window.path_label
+    image = label.grab().toImage()
+    return image.pixelColor(label.width() - 2, label.height() // 2)
+
+
+def test_the_path_label_takes_the_background_of_the_tree(window):
+    app = QApplication.instance()
+    original = app.palette()
+
+    try:
+        for base, window_colour in (
+            ("#ffffff", "#f0f0f0"),
+            ("#101010", "#202020"),
+        ):
+            palette = QPalette()
+            palette.setColor(QPalette.ColorRole.Base, QColor(base))
+            palette.setColor(QPalette.ColorRole.Window, QColor(window_colour))
+            app.setPalette(palette)
+            QApplication.processEvents()
+
+            tree_base = window.directory_tree.viewport().palette().color(
+                QPalette.ColorRole.Base
+            )
+            assert _path_label_pixel(window) == tree_base
+    finally:
+        app.setPalette(original)

@@ -26,6 +26,7 @@
 - The path sits directly under the header, full width of the pane, elided in the middle
   to the room it has, and indented by the same padding the header gives its title, so the
   path and the title line up as one column
+- The path label uses the `Base` background, like the tree, so the two share one fill
 - `Choose...` and `Up` sit in the `Directory` header, to the left of `+` and in the same
   size: `Choose...` opens the native dialog (`choose_directory`) and `Up` walks to the
   parent directory (`go_up`). The three share the header, so the tree's minimum width is

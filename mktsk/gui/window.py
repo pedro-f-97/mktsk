@@ -64,6 +64,11 @@ class MainWindow(QMainWindow):
         # the widgets are built in the order the old bar used, so the default
         # tab order is unchanged; the two panels are assembled around them
         self.path_label = QLabel()
+        # the path sits under the header and over the tree, so it takes the
+        # tree's Base background rather than the Window one, and follows it in
+        # a dark mode through the palette alone
+        self.path_label.setAutoFillBackground(True)
+        self.path_label.setBackgroundRole(QPalette.ColorRole.Base)
         self.path_label.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
