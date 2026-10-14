@@ -16,6 +16,12 @@ workflow interactively.
 - Prefer clear code over short code. Do not shorten a design to meet a line count; report production lines per file for information only.
 - Tests prove the behaviour with the least machinery that reproduces it. Do not build test infrastructure larger than the code it covers.
 
+## Scratch files
+
+- Never create files outside the repository, except in a temporary directory made with `tempfile` or pytest's `tmp_path`, and remove it before finishing. Never write to the user's home, Desktop, Documents, a drive root, or another user's profile, and never run commands from an administrator account.
+- For one-off probes use `python -c` or stdin. If a file is really needed, create it in a temp dir and delete it in a `finally` block. No `_probe*`, `_check*` or screenshot files in the repo root.
+- Before the final answer run `git status --short` and delete untracked scratch files. The report has a `Scratch:` line listing any file left outside the repo, or `none`.
+
 ## Docs
 
 Read the matching one before editing the module it covers.
