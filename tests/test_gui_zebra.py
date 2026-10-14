@@ -225,3 +225,35 @@ def test_the_separator_keeps_the_task_text_and_fills_the_whole_row(
     option = QStyleOptionViewItem()
     listing.delegate.initStyleOption(option, listing.indexFromItem(heading))
     assert option.font.bold()
+
+
+def test_the_separator_text_is_the_task_text_not_the_disabled_grey(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    recorder = _RecordingStyle(listing.style())
+    listing.setStyle(recorder)
+    palette = QPalette(listing.viewport().palette())
+    # the view hands a non-selectable separator a palette in the Disabled group,
+    # which is where the style would otherwise read the grey text from
+    palette.setCurrentColorGroup(QPalette.ColorGroup.Disabled)
+
+    render_row(listing, listing.item(0), QStyle.StateFlag.State_None, palette)
+
+    assert recorder.groups
+    assert QPalette.ColorGroup.Disabled not in recorder.groups
+
+
+class _RecordingStyle(QProxyStyle):
+    """A style that records the palette group of every item it draws."""
+
+    def __init__(self, base):
+        super().__init__(base)
+        self.groups = []
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_ItemViewItem:
+            self.groups.append(option.palette.currentColorGroup())
+        super().drawControl(element, option, painter, widget)

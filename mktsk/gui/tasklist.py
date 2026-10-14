@@ -653,6 +653,11 @@ class _InsetDelegate(QStyledItemDelegate):
             separator_option = QStyleOptionViewItem(option)
             separator_option.state |= QStyle.StateFlag.State_Enabled
             group = _colour_group(separator_option.state)
+            # the view fills the option's palette from the row it is about to
+            # paint, and a non-selectable row reads its text from the Disabled
+            # group; the state alone does not carry the style past that, so the
+            # palette is pointed at the enabled group the fill comes from
+            separator_option.palette.setCurrentColorGroup(group)
             painter.fillRect(
                 option.rect,
                 _blend(

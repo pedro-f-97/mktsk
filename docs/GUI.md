@@ -132,7 +132,9 @@
   style paints, so hover and the native look stay on top; it never fills a selected row,
   whose selection is the style's. A separator is painted as an enabled row, so its text
   keeps the `Text` of a task row rather than the grey a non-selectable row would be drawn
-  in
+  in; the enabled state alone does not carry a style that reads the disabled group the view
+  hands a non-selectable row, so the separator's palette is pointed at the group a task row
+  uses before the style paints it
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it
