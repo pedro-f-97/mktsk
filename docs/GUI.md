@@ -61,9 +61,11 @@
 - Clicking a column heading orders the rows of that tab by it, ascending on the first
   click and descending on the next; clicking another heading starts ascending on that one,
   and no click ever returns to the default order by itself. Each tab keeps the column and
-  the direction it was last sorted by while it is open, and a refresh re-applies it. Only
-  the task rows move: a heading of the `All` and `Closed` tabs stays where it is, so the
-  tasks of a category reorder among themselves. Ties keep the default order, the date is
+  the direction it was last sorted by while it is open, and a refresh re-applies it. The
+  tasks of a category reorder among themselves, and the categories of the `All` and
+  `Closed` tabs then reorder with them, by the first task under each heading, so the
+  category holding the first record leads and two categories whose first tasks tie keep the
+  order they had; a heading always stays above its own tasks. Ties keep the default order, the date is
   read from the folder name with a name that is not a task folder last, the task ignores
   case, the state follows the order of the domain, the interventions are counted as a
   number, and the last activity is read as the date it carries. Dragging a separator still
@@ -84,7 +86,10 @@
   (`sectionPosition` and `sectionSize`), so a heading never sits over a value of another
   column and dragging a separator moves the cells with it. `_column_widths` measures the
   three right columns from the bold application font; the date column is a date wide, like
-  any other column; the task takes the rest of the room it had
+  any other column; the task starts as the rest of the room a row has and is then widened
+  to fit the longest visible description, up to `_TASK_MAX_WIDTH`, never below that start
+  and never once a separator has been dragged by hand, so a long description reads in full
+  until the cap and elides past it
 - The width of every item is the header's `length()`, so a header wider than the viewport
   makes the list scroll horizontally, and the horizontal scrollbar's `valueChanged` moves
   the header's offset with it; `sectionResized` lays the cells out again and repaints the
@@ -127,7 +132,9 @@
   style paints, so hover and the native look stay on top; it never fills a selected row,
   whose selection is the style's. A separator is painted as an enabled row, so its text
   keeps the `Text` of a task row rather than the grey a non-selectable row would be drawn
-  in
+  in; the enabled state alone does not carry a style that reads the disabled group the view
+  hands a non-selectable row, so the separator's palette is pointed at the group a task row
+  uses before the style paints it
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it

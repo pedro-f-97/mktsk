@@ -9,6 +9,7 @@ from mktsk import listing
 from mktsk.gui.tasklist import _COUNT_ROLE, _ENTRY_ROLE, TaskListing
 from tests.gui_helpers import (
     click_heading,
+    fill_task,
     select_tab,
     select_task,
     tab_labels,
@@ -17,28 +18,21 @@ from tests.gui_helpers import (
 )
 
 
-def _fill(file, activity, state, count):
-    """Rewrites the .md of a task with a state, a count and an activity."""
-    days = [activity - datetime.timedelta(days=step) for step in range(count)]
-    body = "".join(f"# {day.strftime('%d/%m/%Y')}\n\n" for day in days)
-    file.write_text(body + f'[mktsk:2026-09-30T10:00]: # "{state}"\n', encoding="utf-8")
-
-
 def _three_tasks(tmp_path, make_task):
     """Three tasks whose five columns are each in a different order."""
-    _fill(
+    fill_task(
         make_task(tmp_path, "260901", "Alpha"),
         datetime.date(2026, 9, 20),
         "waiting",
         2,
     )
-    _fill(
+    fill_task(
         make_task(tmp_path, "260903", "Bravo"),
         datetime.date(2026, 9, 10),
         "open",
         1,
     )
-    _fill(
+    fill_task(
         make_task(tmp_path, "260902", "Charlie"),
         datetime.date(2026, 9, 30),
         "in-progress",
@@ -76,13 +70,13 @@ def test_clicking_each_heading_sorts_ascending_then_descending(
 
 
 def test_ties_keep_the_default_order(window, tmp_path, make_task):
-    _fill(
+    fill_task(
         make_task(tmp_path, "260910", "Alpha"),
         datetime.date(2026, 9, 30),
         "open",
         1,
     )
-    _fill(
+    fill_task(
         make_task(tmp_path, "260910", "Beta"),
         datetime.date(2026, 9, 20),
         "open",
@@ -130,8 +124,8 @@ def test_date_with_an_invalid_prefix_sorts_last(qtbot, tmp_path):
 
 
 def test_task_is_case_insensitive(window, tmp_path, make_task):
-    _fill(make_task(tmp_path, "260901", "Ab"), datetime.date(2026, 9, 1), "open", 1)
-    _fill(make_task(tmp_path, "260902", "AZ"), datetime.date(2026, 9, 2), "open", 1)
+    fill_task(make_task(tmp_path, "260901", "Ab"), datetime.date(2026, 9, 1), "open", 1)
+    fill_task(make_task(tmp_path, "260902", "AZ"), datetime.date(2026, 9, 2), "open", 1)
     window.navigate_to(tmp_path)
     title = tmp_path.name
 
@@ -141,8 +135,8 @@ def test_task_is_case_insensitive(window, tmp_path, make_task):
 
 
 def test_interventions_is_numeric(window, tmp_path, make_task):
-    _fill(make_task(tmp_path, "260901", "Nine"), datetime.date(2026, 9, 1), "open", 9)
-    _fill(make_task(tmp_path, "260902", "Ten"), datetime.date(2026, 9, 2), "open", 10)
+    fill_task(make_task(tmp_path, "260901", "Nine"), datetime.date(2026, 9, 1), "open", 9)
+    fill_task(make_task(tmp_path, "260902", "Ten"), datetime.date(2026, 9, 2), "open", 10)
     window.navigate_to(tmp_path)
     title = tmp_path.name
 
@@ -152,13 +146,13 @@ def test_interventions_is_numeric(window, tmp_path, make_task):
 
 
 def test_normal_folders_keep_their_position(window, tmp_path, make_task):
-    _fill(
+    fill_task(
         make_task(tmp_path, "260901", "Able"),
         datetime.date(2026, 9, 10),
         "open",
         1,
     )
-    _fill(
+    fill_task(
         make_task(tmp_path, "260902", "Bravo"),
         datetime.date(2026, 9, 30),
         "open",
@@ -241,8 +235,8 @@ def test_the_selected_task_stays_selected_after_a_resort(window, tmp_path, make_
 
 
 def test_two_tabs_keep_independent_sorting(window, tmp_path, make_task):
-    _fill(make_task(tmp_path, "260901", "Zulu"), datetime.date(2026, 9, 1), "open", 1)
-    _fill(make_task(tmp_path, "260902", "Alpha"), datetime.date(2026, 9, 2), "open", 1)
+    fill_task(make_task(tmp_path, "260901", "Zulu"), datetime.date(2026, 9, 1), "open", 1)
+    fill_task(make_task(tmp_path, "260902", "Alpha"), datetime.date(2026, 9, 2), "open", 1)
     make_task(tmp_path / "Veritas", "260903", "Charlie")
     make_task(tmp_path / "Veritas", "260904", "Delta")
     window.navigate_to(tmp_path)

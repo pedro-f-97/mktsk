@@ -268,6 +268,7 @@ class MainWindow(QMainWindow):
     def _add_tab(self, title: str, tab: TaskListing) -> None:
         if title in self._sorts:
             tab.set_sort(*self._sorts[title])
+        tab.fit_task_column()
         self.tabs.addTab(TaskPanel(tab), title)
 
     def _select_tab(self, title: str) -> None:
