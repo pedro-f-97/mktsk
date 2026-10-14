@@ -6,6 +6,7 @@ control sits and which pane it belongs to, never how it looks.
 
 from freezegun import freeze_time
 from PySide6.QtCore import QPoint, Qt
+from PySide6.QtWidgets import QApplication
 
 from mktsk.gui.window import _MARGIN
 from tests.gui_helpers import tab_labels, tree_child_labels
@@ -46,6 +47,14 @@ def _focus_order(window):
         if node in named:
             order.append(named[node])
     return order
+
+
+def _give_the_path_room(window, room):
+    """Widens the window to hold the room and sizes the path row to it."""
+    window.resize(window.width() + room + 200, window.height())
+    QApplication.processEvents()
+    window.splitter.setSizes([room, window.splitter.width() - room])
+    window._update_path_label()
 
 
 def test_the_path_row_holds_only_the_path_label(window):
@@ -91,9 +100,29 @@ def test_the_header_buttons_stay_inside_a_narrow_header(window):
         assert _right(button, header) <= header.width()
 
 
-def test_the_path_is_elided_in_the_room_the_row_has(window):
-    assert window.path_label.text() != str(window.current_directory)
+def test_the_path_is_elided_in_the_room_the_row_has(window, tmp_path):
+    directory = tmp_path / ("a-long-category-name" * 4)
+    directory.mkdir()
+    window.navigate_to(directory)
+    full = str(window.current_directory)
+    room = window.path_label.fontMetrics().horizontalAdvance(full) // 2
+
+    _give_the_path_room(window, room)
+
+    assert window.path_label.text() != full
     assert "\u2026" in window.path_label.text()
+    assert len(window.path_label.text()) < len(full)
+
+
+def test_the_path_is_shown_in_full_when_the_row_has_the_room(window, tmp_path):
+    window.navigate_to(tmp_path)
+    full = str(window.current_directory)
+    room = window.path_label.fontMetrics().horizontalAdvance(full) + 2 * _MARGIN
+
+    _give_the_path_room(window, room)
+
+    assert window.path_label.text() == full
+    assert "\u2026" not in window.path_label.text()
 
 
 def test_refresh_is_the_corner_widget_of_the_tab_bar(window):
