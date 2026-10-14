@@ -3,7 +3,7 @@ import os
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from mktsk.gui import MainWindow
 
@@ -62,3 +62,12 @@ def fake_messages(monkeypatch):
         QMessageBox, "warning", lambda *args: messages["warning"].append(args[2])
     )
     return messages
+
+
+@pytest.fixture(scope="session", autouse=True)
+def pytest_sessionfinish(session, exitstatus):
+    app = QApplication.instance()
+    if isinstance(app, QApplication):
+        app.closeAllWindows()
+        app.processEvents()
+    os._exit(exitstatus)
