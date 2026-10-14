@@ -367,7 +367,7 @@ def filled_selection_style(qapp, request):
     name, colour = request.param
     style_name = qapp.style().objectName()
     original_palette = qapp.palette()
-    style = _FilledSelectionStyle(qapp.style(), colour)
+    style = _FilledSelectionStyle(QStyleFactory.create(style_name), colour)
     style.setObjectName(name)
     qapp.setStyle(style)
     palette = qapp.palette()
@@ -412,7 +412,7 @@ class _NoSelectionStyle(QProxyStyle):
 def no_selection_style(qapp):
     """Puts a style that paints no selection on the application."""
     style_name = qapp.style().objectName()
-    qapp.setStyle(_NoSelectionStyle(qapp.style()))
+    qapp.setStyle(_NoSelectionStyle(QStyleFactory.create(style_name)))
     yield
     _restore_style(qapp, style_name)
 
@@ -434,7 +434,7 @@ class _RecordingStyle(QProxyStyle):
 def recording_style(qapp):
     """Puts a style on the application that records what it is asked to paint."""
     style_name = qapp.style().objectName()
-    style = _RecordingStyle(qapp.style())
+    style = _RecordingStyle(QStyleFactory.create(style_name))
     qapp.setStyle(style)
     yield style
     _restore_style(qapp, style_name)
@@ -768,7 +768,7 @@ class _IndicatorStyle(QProxyStyle):
 def indicator_style(qapp):
     """Puts a style that paints a known selection indicator on the application."""
     style_name = qapp.style().objectName()
-    qapp.setStyle(_IndicatorStyle(qapp.style()))
+    qapp.setStyle(_IndicatorStyle(QStyleFactory.create(style_name)))
     yield
     _restore_style(qapp, style_name)
 
