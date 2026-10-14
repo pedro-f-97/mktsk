@@ -3,7 +3,14 @@
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtWidgets import QToolButton, QTreeWidget, QWidget
+from PySide6.QtWidgets import (
+    QHeaderView,
+    QStyle,
+    QStyleOptionHeader,
+    QToolButton,
+    QTreeWidget,
+    QWidget,
+)
 
 from .icons import _draw_plus, _icon_button
 
@@ -17,8 +24,11 @@ _HEADER_BUTTONS = 3
 class _CategoryTree(QTreeWidget):
     """The directory tree, with a button on its header for a new category.
 
-    The button lives inside the header widget, at its right end, so it rides
-    along with the header row instead of taking a row of its own. The tree only
+    The header is a QHeaderView of its own, held beside the tree in the left
+    pane so the path can sit under it, and the tree's own header is hidden. It
+    shares the tree's single section, so it carries the same `Directory` title.
+    The button lives inside that header, at its right end, so it rides along
+    with the header row instead of taking a row of its own. The tree only
     reports that the button was pressed, leaving the category logic to the
     window.
     """
@@ -28,13 +38,17 @@ class _CategoryTree(QTreeWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._navigation: tuple[QToolButton, ...] = ()
+        self.setHeaderHidden(True)
+        self.header_view = QHeaderView(Qt.Orientation.Horizontal)
+        self.header_view.setModel(self.model())
+        self.header_view.setStretchLastSection(True)
         self.header_button = _icon_button(
-            self.header(), "New category", _draw_plus, "NewCategory"
+            self.header_view, "New category", _draw_plus, "NewCategory"
         )
         self.header_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.header_button.setIconSize(QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE))
         self.header_button.clicked.connect(self.category_requested.emit)
-        self.header().geometriesChanged.connect(self._place_header_buttons)
+        self.header_view.geometriesChanged.connect(self._place_header_buttons)
         self.header_button.show()
         self._place_header_buttons()
 
@@ -53,6 +67,23 @@ class _CategoryTree(QTreeWidget):
         reserved = _HEADER_BUTTONS * side + (_HEADER_BUTTONS + 1) * _HEADER_BUTTON_MARGIN
         self.setMinimumWidth(self.fontMetrics().horizontalAdvance(text) + reserved)
 
+    def header_text_indent(self) -> int:
+        """Returns the left padding the header gives its title.
+
+        The window lines the path up with it, so the header and the path read as
+        one column.
+
+        Returns:
+            The padding, in pixels.
+        """
+        option = QStyleOptionHeader()
+        option.rect = self.header_view.rect()
+        option.section = 0
+        option.state = QStyle.StateFlag.State_Enabled
+        return self.header_view.style().subElementRect(
+            QStyle.SubElement.SE_HeaderLabel, option, self.header_view
+        ).left()
+
     def set_navigation_buttons(self, choose: QToolButton, up: QToolButton) -> None:
         """Takes the two navigation buttons to sit beside the category one.
 
@@ -66,13 +97,9 @@ class _CategoryTree(QTreeWidget):
         """
         self._navigation = (choose, up)
         for button in self._navigation:
-            button.setParent(self.header())
+            button.setParent(self.header_view)
             button.setIconSize(self.header_button.iconSize())
             button.show()
-        self._place_header_buttons()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
         self._place_header_buttons()
 
     def select_subdirectory(self, directory: Path) -> None:
@@ -100,7 +127,7 @@ class _CategoryTree(QTreeWidget):
         button and squared off to the height of the header, so none of them
         overflows the row and the gaps between them are all the same.
         """
-        header = self.header()
+        header = self.header_view
         side = min(self.header_button.sizeHint().height(), header.height())
         x = header.width() - _HEADER_BUTTON_MARGIN
         for button in reversed(self._header_buttons()):

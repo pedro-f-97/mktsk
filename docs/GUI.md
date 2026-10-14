@@ -18,8 +18,15 @@
 - Two panes in a `QSplitter`: a `QTreeWidget` on the left holding the current directory
   and its immediate subdirectories, so it shows where new tasks are created; a
   `QTabWidget` on the right holding one `QListWidget` per task category
-- The left pane is the path row over the tree: the path is elided in the middle to the
-  room it has, and the row is squared off to the height of the tab bar it lines up with
+- The left pane is a unit of its own, top to bottom: the `Directory` header, the path
+  label, then the tree. The header is a standalone `QHeaderView` above the path, so it
+  keeps the native header look rather than a hand-painted row, and the tree's own header
+  is hidden. It shares the tree's single section, so it carries the same `Directory`
+  title and stays in step with `set_header_label`
+- The path sits directly under the header, full width of the pane, elided in the middle
+  to the room it has, and indented by the same padding the header gives its title, so the
+  path and the title line up as one column
+- The path label uses the `Base` background, like the tree, so the two share one fill
 - `Choose...` and `Up` sit in the `Directory` header, to the left of `+` and in the same
   size: `Choose...` opens the native dialog (`choose_directory`) and `Up` walks to the
   parent directory (`go_up`). The three share the header, so the tree's minimum width is
@@ -28,7 +35,7 @@
   of the tab bar (`setCornerWidget`), and the title field, the hint and `Create` sit under
   the task table, in the pane and not across the window. The field takes the rest of the
   row and `Create` sits at its right end
-- The path row and the tab bar share one top edge and height, and each pane keeps the
+- The header row and the tab bar share one top edge and height, and each pane keeps the
   window margin (`_MARGIN`) on its outer edge, so the two are separated by the splitter
   handle alone rather than by stacked margins
 - The tree lists folders only, one level deep, and never task folders or hidden

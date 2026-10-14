@@ -2,15 +2,15 @@ from freezegun import freeze_time
 from PySide6.QtCore import Qt
 
 from mktsk.gui.tree import _HEADER_BUTTON_MARGIN
-from tests.gui_helpers import answer_dialog, tree_child_labels
+from tests.gui_helpers import answer_dialog, directory_header, tree_child_labels
 
 
 def test_the_header_button_is_a_child_of_the_header(window):
-    assert window.directory_tree.header_button.parent() is window.directory_tree.header()
+    assert window.directory_tree.header_button.parent() is directory_header(window)
 
 
 def test_the_header_button_sits_at_the_right_end_of_the_header(window):
-    header = window.directory_tree.header()
+    header = directory_header(window)
     button = window.directory_tree.header_button
 
     assert button.x() + button.width() <= header.width()
@@ -18,23 +18,24 @@ def test_the_header_button_sits_at_the_right_end_of_the_header(window):
 
 
 def test_the_header_button_is_centred_in_the_header(window):
-    header = window.directory_tree.header()
+    header = directory_header(window)
     button = window.directory_tree.header_button
 
     assert button.y() == (header.height() - button.height()) // 2
 
 
 def test_the_header_button_never_overflows_the_header_height(window):
-    header = window.directory_tree.header()
+    header = directory_header(window)
     button = window.directory_tree.header_button
 
     assert button.height() <= header.height()
 
 
-def test_the_header_button_follows_the_tree_when_it_grows(window):
+def test_the_header_button_follows_the_header_when_it_grows(window):
     button = window.directory_tree.header_button
     before = button.x()
-    window.directory_tree.resize(window.directory_tree.width() + 80, window.directory_tree.height())
+    header = directory_header(window)
+    header.resize(header.width() + 80, header.height())
 
     assert button.x() > before
 

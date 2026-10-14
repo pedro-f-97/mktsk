@@ -98,6 +98,11 @@ def find_task(window, path, title="All"):
     raise AssertionError(f"{path} is not listed in the {title} tab")
 
 
+def directory_header(window):
+    """The standalone Directory header of the left pane."""
+    return window.directory_tree.header_view
+
+
 def tree_root(window):
     return window.directory_tree.topLevelItem(0)
 

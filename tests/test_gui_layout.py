@@ -9,7 +9,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QApplication
 
 from mktsk.gui.window import _MARGIN
-from tests.gui_helpers import tab_labels, tree_child_labels
+from tests.gui_helpers import directory_header, tab_labels, tree_child_labels
 
 
 def _left(widget, ancestor):
@@ -63,14 +63,14 @@ def test_the_path_row_holds_only_the_path_label(window):
 
 
 def test_the_header_holds_choose_and_up(window):
-    header = window.directory_tree.header()
+    header = directory_header(window)
 
     assert window.choose_button.parent() is header
     assert window.up_button.parent() is header
 
 
 def test_choose_and_up_sit_to_the_left_of_the_category_button(window):
-    header = window.directory_tree.header()
+    header = directory_header(window)
     choose = window.choose_button
     up = window.up_button
 
@@ -86,7 +86,7 @@ def test_the_path_sits_above_the_tree(window):
 
 def test_the_header_buttons_stay_inside_a_narrow_header(window):
     window.splitter.setSizes([1, window.splitter.width()])
-    header = window.directory_tree.header()
+    header = directory_header(window)
     text_width = header.fontMetrics().horizontalAdvance(
         window.directory_tree.headerItem().text(0)
     )
@@ -156,7 +156,7 @@ def test_the_title_field_fills_the_bottom_bar(window):
 
 
 def test_the_header_buttons_have_the_size_and_centre_of_the_category_button(window):
-    header = window.directory_tree.header()
+    header = directory_header(window)
     category = window.directory_tree.header_button
 
     for button in (window.choose_button, window.up_button, category):
@@ -165,7 +165,7 @@ def test_the_header_buttons_have_the_size_and_centre_of_the_category_button(wind
 
 
 def test_the_header_buttons_are_ordered_and_do_not_overlap(window):
-    header = window.directory_tree.header()
+    header = directory_header(window)
     choose = window.choose_button
     up = window.up_button
     category = window.directory_tree.header_button
@@ -178,12 +178,13 @@ def test_the_path_label_fills_the_path_row(window):
     assert window.path_label.width() == window.path_row.width()
 
 
-def test_the_path_row_lines_up_with_the_tab_bar(window):
+def test_the_header_row_lines_up_with_the_tab_bar(window):
+    header = directory_header(window)
     tab_bar = window.tabs.tabBar()
 
-    assert _left(window.path_row, window) == _MARGIN
-    assert _top(window.path_row, window) == _top(tab_bar, window)
-    assert window.path_row.height() == tab_bar.height()
+    assert _left(header, window) == _MARGIN
+    assert _top(header, window) == _top(tab_bar, window)
+    assert header.height() == tab_bar.height()
 
 
 def test_the_outer_edges_keep_the_window_margin(window):
