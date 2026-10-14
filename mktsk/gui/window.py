@@ -103,7 +103,9 @@ class MainWindow(QMainWindow):
 
         self.left_panel = QWidget()
         left_layout = QVBoxLayout(self.left_panel)
-        left_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
+        # the panes meet at the splitter, so the inner edges carry no margin and
+        # the gap between them is the handle alone
+        left_layout.setContentsMargins(_MARGIN, _MARGIN, 0, _MARGIN)
         left_layout.setSpacing(0)
         left_layout.addWidget(self.path_row)
         left_layout.addWidget(self.directory_tree)
@@ -119,7 +121,7 @@ class MainWindow(QMainWindow):
 
         self.right_panel = QWidget()
         right_layout = QVBoxLayout(self.right_panel)
-        right_layout.setContentsMargins(_MARGIN, _MARGIN, _MARGIN, _MARGIN)
+        right_layout.setContentsMargins(0, _MARGIN, _MARGIN, _MARGIN)
         right_layout.setSpacing(0)
         right_layout.addWidget(self.tabs, 1)
         right_layout.addWidget(self.bottom_bar)

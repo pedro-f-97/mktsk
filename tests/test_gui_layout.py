@@ -157,19 +157,19 @@ def test_the_path_row_lines_up_with_the_tab_bar(window):
     assert window.path_row.height() == tab_bar.height()
 
 
-def test_the_panes_share_their_outer_left_margins(window):
+def test_the_outer_edges_keep_the_window_margin(window):
     assert _left(window.path_row, window.left_panel) == _MARGIN
-    assert _left(window.tabs, window.right_panel) == _MARGIN
-    assert _left(window.bottom_bar, window.right_panel) == _MARGIN
-
-
-def test_the_panes_share_their_outer_right_margins(window):
-    assert window.left_panel.width() - _right(window.path_row, window.left_panel) == _MARGIN
     assert window.right_panel.width() - _right(window.tabs, window.right_panel) == _MARGIN
     assert (
         window.right_panel.width() - _right(window.bottom_bar, window.right_panel)
         == _MARGIN
     )
+
+
+def test_the_panes_are_separated_by_the_handle_alone(window):
+    gap = _left(window.tabs, window) - _right(window.directory_tree, window)
+
+    assert gap == window.splitter.handleWidth()
 
 
 def test_the_tab_order_is_unchanged(window):

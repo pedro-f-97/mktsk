@@ -26,9 +26,9 @@
   of the tab bar (`setCornerWidget`), and the title field, the hint and `Create` sit under
   the task table, in the pane and not across the window. The field takes the rest of the
   row and `Create` sits at its right end
-- The path row and the tab bar share one top edge and height, and the path row, the tab
-  bar and the bottom bar share one outer margin (`_MARGIN`), so the two panes line up on a
-  single grid
+- The path row and the tab bar share one top edge and height, and each pane keeps the
+  window margin (`_MARGIN`) on its outer edge, so the two are separated by the splitter
+  handle alone rather than by stacked margins
 - The tree lists folders only, one level deep, and never task folders or hidden
   directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
   and the root does nothing
