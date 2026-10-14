@@ -84,7 +84,10 @@
   (`sectionPosition` and `sectionSize`), so a heading never sits over a value of another
   column and dragging a separator moves the cells with it. `_column_widths` measures the
   three right columns from the bold application font; the date column is a date wide, like
-  any other column; the task takes the rest of the room it had
+  any other column; the task starts as the rest of the room a row has and is then widened
+  to fit the longest visible description, up to `_TASK_MAX_WIDTH`, never below that start
+  and never once a separator has been dragged by hand, so a long description reads in full
+  until the cap and elides past it
 - The width of every item is the header's `length()`, so a header wider than the viewport
   makes the list scroll horizontally, and the horizontal scrollbar's `valueChanged` moves
   the header's offset with it; `sectionResized` lays the cells out again and repaints the

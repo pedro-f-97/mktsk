@@ -87,6 +87,9 @@ _SELECTION_INDICATOR_GAP = 6
 _CELL_ALIGNMENT = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 _COUNT_ALIGNMENT = int(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
 
+# maximum width of the task column in logical pixels
+_TASK_MAX_WIDTH = 480
+
 
 class _Columns(NamedTuple):
     """The widths of the date column and the three right ones of a row."""
@@ -256,8 +259,11 @@ class _ColumnHeader(QHeaderView):
         cols = _column_widths()
         self.setMinimumSectionSize(cols.state)
         total = cols.state + cols.interventions + cols.activity
+        # the task column starts as the rest of the room a row has; auto-width
+        # grows it from here up to the cap and never below it
+        self.default_task_width = max(total, 100)
         self.resizeSection(0, cols.date)
-        self.resizeSection(1, max(total, 100))
+        self.resizeSection(1, self.default_task_width)
         self.resizeSection(2, cols.state)
         self.resizeSection(3, cols.interventions)
         self.resizeSection(4, cols.activity)
@@ -804,6 +810,8 @@ class TaskListing(QListWidget):
         )
         self.sort_column: int | None = None
         self.sort_descending = False
+        self._task_section_user_resized = False
+        self._fitting_task_column = False
         self.setItemDelegate(self.delegate)
         self.header.sectionResized.connect(self._columns_changed)
         self.header.sectionClicked.connect(self._click_section)
@@ -896,6 +904,40 @@ class TaskListing(QListWidget):
         if selected is not None:
             self.setCurrentItem(selected)
             self._sync_action_bar()
+        self.fit_task_column()
+
+    def fit_task_column(self) -> None:
+        """Widens the task column to hold the longest visible description.
+
+        The width is measured from the font of the rows and clamped between the
+        default task width and `_TASK_MAX_WIDTH`; a description past the cap
+        still elides. The user owns the width once the section is dragged by
+        hand, so this leaves a section they resized alone for the session.
+        """
+        if self._task_section_user_resized:
+            return
+
+        widest = 0
+        for index in range(self.count()):
+            item = self.item(index)
+            entry = item.data(_ENTRY_ROLE)
+            if entry is None or item.isHidden():
+                continue
+            text = helpers.readable_title(entry.title)
+            widest = max(
+                widest, QFontMetrics(item.font()).horizontalAdvance(text)
+            )
+
+        target = max(
+            self.header.default_task_width,
+            min(widest + 2 * _COLUMN_PADDING, _TASK_MAX_WIDTH),
+        )
+        if target == self.header.sectionSize(1):
+            return
+
+        self._fitting_task_column = True
+        self.header.resizeSection(1, target)
+        self._fitting_task_column = False
 
     def column_rect(self, row: QRect, column: int) -> QRect:
         """Returns the rectangle of a column within a row.
@@ -917,6 +959,8 @@ class TaskListing(QListWidget):
             _old: the size it had, unused.
             new: the size it was given, unused.
         """
+        if column == 1 and not self._fitting_task_column:
+            self._task_section_user_resized = True
         self.doItemsLayout()
         self.viewport().update()
 
