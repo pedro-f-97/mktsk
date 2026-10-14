@@ -347,7 +347,8 @@ Opens a window where you can:
   on last comes first. Every second task row is subtly striped, restarting under each
   category heading, so the list is easier to follow. The title column widens to fit the
   longest one it shows. Click a column heading to sort by it, once for ascending and again
-  for descending, and each tab keeps its own column and direction;
+  for descending, so the categories move with their rows and each tab keeps its own column
+  and direction;
 * read each task as five columns under their headings: the date of the folder as
   `dd/mm/yyyy`, the title read as words, the state the task is in, the number of
   interventions, and how long ago the last of them was, as `today`, `yesterday` or

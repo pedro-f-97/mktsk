@@ -3,6 +3,7 @@
 Plain functions rather than fixtures, because they read from a window that
 the test already asks for and give a result straight back.
 """
+import datetime
 from collections import Counter
 
 from PySide6.QtCore import QRect, Qt
@@ -11,6 +12,13 @@ from PySide6.QtWidgets import QStyleOptionViewItem
 
 from mktsk.gui.tasklist import _ENTRY_ROLE
 from mktsk.gui.tree import _PATH_ROLE
+
+
+def fill_task(file, activity, state, count):
+    """Rewrites the .md of a task with a state, a count and an activity."""
+    days = [activity - datetime.timedelta(days=step) for step in range(count)]
+    body = "".join(f"# {day.strftime('%d/%m/%Y')}\n\n" for day in days)
+    file.write_text(body + f'[mktsk:2026-09-30T10:00]: # "{state}"\n', encoding="utf-8")
 
 
 def painted_texts(monkeypatch, rows):

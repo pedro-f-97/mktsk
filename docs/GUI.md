@@ -61,9 +61,11 @@
 - Clicking a column heading orders the rows of that tab by it, ascending on the first
   click and descending on the next; clicking another heading starts ascending on that one,
   and no click ever returns to the default order by itself. Each tab keeps the column and
-  the direction it was last sorted by while it is open, and a refresh re-applies it. Only
-  the task rows move: a heading of the `All` and `Closed` tabs stays where it is, so the
-  tasks of a category reorder among themselves. Ties keep the default order, the date is
+  the direction it was last sorted by while it is open, and a refresh re-applies it. The
+  tasks of a category reorder among themselves, and the categories of the `All` and
+  `Closed` tabs then reorder with them, by the first task under each heading, so the
+  category holding the first record leads and two categories whose first tasks tie keep the
+  order they had; a heading always stays above its own tasks. Ties keep the default order, the date is
   read from the folder name with a name that is not a task folder last, the task ignores
   case, the state follows the order of the domain, the interventions are counted as a
   number, and the last activity is read as the date it carries. Dragging a separator still

@@ -1,7 +1,6 @@
 """The tasks of a category as a list, with the actions on the selected row."""
 
 import datetime
-from itertools import groupby
 from typing import NamedTuple
 
 from PySide6.QtCore import (
@@ -872,29 +871,51 @@ class TaskListing(QListWidget):
         self.order_changed.emit(column, descending)
 
     def apply_sort(self, column: int, descending: bool) -> None:
-        """Orders the task rows by a column and a direction.
+        """Orders the categories and the task rows by a column and a direction.
 
-        The headings of a tab that lists several categories are left where
-        they are, so only the task rows move, the group between two headings
-        keeping to itself. The row that was selected stays selected once the
-        rows are back in place.
+        A category is a separator row and the task run under it. The tasks of
+        every category are ordered among themselves, and then the categories
+        themselves are ordered by the key of the first task of each, so the
+        category holding the globally first record comes first and the next
+        follows. A category with no task carries no key, so it goes last
+        keeping its place among the other empty ones, and two categories whose
+        first tasks tie keep the order they had. A task of a tab with no
+        separator is a category of its own, ordered the same way. The row that
+        was selected stays selected once the rows are back in place.
 
         Args:
             column: the index of the column to order by.
             descending: whether the order runs from the last value to the first.
         """
         rows = [self.item(index) for index in range(self.count())]
+        blocks: list[tuple[QListWidgetItem | None, list[QListWidgetItem]]] = []
+        for row in rows:
+            if row.data(_COUNT_ROLE) is None:
+                blocks.append((row, []))
+            elif not blocks:
+                # a tab that holds no separator opens on its first task
+                blocks.append((None, [row]))
+            else:
+                blocks[-1][1].append(row)
+
+        for _, tasks in blocks:
+            tasks.sort(
+                key=lambda row: _order_key(row, column),
+                reverse=descending,
+            )
+
+        populated = [block for block in blocks if block[1]]
+        empty = [block for block in blocks if not block[1]]
+        populated.sort(
+            key=lambda block: _order_key(block[1][0], column),
+            reverse=descending,
+        )
+
         ordered: list[QListWidgetItem] = []
-        for is_heading, group in groupby(
-            rows, key=lambda row: row.data(_COUNT_ROLE) is None
-        ):
-            run = list(group)
-            if not is_heading:
-                run.sort(
-                    key=lambda row: _order_key(row, column),
-                    reverse=descending,
-                )
-            ordered.extend(run)
+        for separator, tasks in populated + empty:
+            if separator is not None:
+                ordered.append(separator)
+            ordered.extend(tasks)
 
         selected = self.currentItem()
         while self.count():
