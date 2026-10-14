@@ -41,8 +41,8 @@ from .tree import _PATH_ROLE, _CategoryTree
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
 
-# the outer margin the left path row, the tab bar and the bottom bar share, so
-# the two panes line up on a single grid
+# the outer margin the left Directory header, the tab bar and the bottom bar
+# share, so the two panes line up on a single grid
 _MARGIN = 6
 
 
@@ -69,12 +69,15 @@ class MainWindow(QMainWindow):
         )
         self.directory_tree = _CategoryTree()
         self.directory_tree.set_header_label("Directory")
+        self.path_label.setContentsMargins(
+            self.directory_tree.header_text_indent(), 0, 0, 0
+        )
         self.tabs = QTabWidget()
         self.choose_button = _icon_button(
-            self.directory_tree.header(), "Choose...", _draw_choose, "Choose"
+            self.directory_tree.header_view, "Choose...", _draw_choose, "Choose"
         )
         self.up_button = _icon_button(
-            self.directory_tree.header(), "Up", _draw_up, "Up"
+            self.directory_tree.header_view, "Up", _draw_up, "Up"
         )
         self.refresh_button = _icon_button(
             self.tabs, "Refresh", _draw_refresh, "Refresh"
@@ -107,6 +110,7 @@ class MainWindow(QMainWindow):
         # the gap between them is the handle alone
         left_layout.setContentsMargins(_MARGIN, _MARGIN, 0, _MARGIN)
         left_layout.setSpacing(0)
+        left_layout.addWidget(self.directory_tree.header_view)
         left_layout.addWidget(self.path_row)
         left_layout.addWidget(self.directory_tree)
 
@@ -151,18 +155,20 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.tabs, self.title_input)
         self.setTabOrder(self.title_input, self.create_button)
 
-    def _align_path_row(self) -> None:
-        """Squares the path row off to the height of the tab bar it lines up with."""
-        self.path_row.setFixedHeight(self.tabs.tabBar().sizeHint().height())
+    def _align_header(self) -> None:
+        """Squares the Directory header off to the height of the tab bar it lines up with."""
+        self.directory_tree.header_view.setFixedHeight(
+            self.tabs.tabBar().sizeHint().height()
+        )
 
     def _update_path_label(self) -> None:
         """Shows the current directory, elided to the room the row has."""
         path = str(self.current_directory)
         metrics = self.path_label.fontMetrics()
+        margins = self.path_label.contentsMargins()
+        room = self.path_label.width() - margins.left() - margins.right()
         self.path_label.setText(
-            metrics.elidedText(
-                path, Qt.TextElideMode.ElideMiddle, self.path_label.width()
-            )
+            metrics.elidedText(path, Qt.TextElideMode.ElideMiddle, room)
         )
         self.path_label.setToolTip(path)
 
@@ -172,7 +178,7 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
-        self._align_path_row()
+        self._align_header()
         self._update_path_label()
 
     def navigate_to(self, directory: Path) -> None:
