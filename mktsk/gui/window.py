@@ -7,6 +7,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QCloseEvent, QPalette, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -74,6 +75,7 @@ class MainWindow(QMainWindow):
         )
         self.directory_tree = _CategoryTree()
         self.directory_tree.set_header_label("Directory")
+        self.directory_tree.setFrameShape(QFrame.Shape.NoFrame)
         self.path_label.setContentsMargins(
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
