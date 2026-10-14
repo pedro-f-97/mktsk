@@ -181,7 +181,7 @@ class _NoSelectionStyle(QProxyStyle):
 def no_selection_style(qapp):
     """Puts a style that paints no selection on the application."""
     name = qapp.style().objectName()
-    qapp.setStyle(_NoSelectionStyle(qapp.style()))
+    qapp.setStyle(_NoSelectionStyle(QStyleFactory.create(name)))
     yield
     style = QStyleFactory.create(name)
     if style is not None:
@@ -233,7 +233,7 @@ def test_the_separator_text_is_the_task_text_not_the_disabled_grey(
     make_task(tmp_path, "260918", "Foo")
     window.navigate_to(tmp_path)
     listing = task_listing(window)
-    recorder = _RecordingStyle(listing.style())
+    recorder = _RecordingStyle(QStyleFactory.create(listing.style().objectName()))
     listing.setStyle(recorder)
     palette = QPalette(listing.viewport().palette())
     # the view hands a non-selectable separator a palette in the Disabled group,

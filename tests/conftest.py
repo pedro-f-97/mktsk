@@ -1,10 +1,9 @@
 import datetime
-import gc
 import os
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 from mktsk.gui import MainWindow
 
@@ -63,21 +62,3 @@ def fake_messages(monkeypatch):
         QMessageBox, "warning", lambda *args: messages["warning"].append(args[2])
     )
     return messages
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _close_qt_windows():
-    """Disposes of the windows while the QApplication is still alive.
-
-    A Qt object that outlives the QApplication can crash the interpreter at
-    shutdown, after every test has passed. The top-level windows are closed and
-    the wrappers collected here, at the end of the session, rather than left to
-    the interpreter to tear down in an order Qt does not own.
-    """
-    yield
-
-    app = QApplication.instance()
-    if app is not None:
-        app.closeAllWindows()
-        app.processEvents()
-    gc.collect()

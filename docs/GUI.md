@@ -9,6 +9,7 @@
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
+- A QProxyStyle must wrap a style of its own (QStyleFactory.create), never widget.style() or QApplication.style()
 - One module per responsibility, and a widget never takes over from its neighbour: the
   window imports the widgets it is built from, and a widget only reports what it was
   asked for, so new code goes in the module that matches what it does. No module of
