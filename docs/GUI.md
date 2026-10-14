@@ -4,8 +4,8 @@
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
   `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_row_text.py`,
-  `tests/test_gui_date_column.py`, `tests/test_gui_state.py`, `tests/test_gui_close.py`,
-  `tests/test_gui_reopen.py`
+  `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
+  `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - One module per responsibility, and a widget never takes over from its neighbour: the
@@ -16,6 +16,18 @@
 - Two panes in a `QSplitter`: a `QTreeWidget` on the left holding the current directory
   and its immediate subdirectories, so it shows where new tasks are created; a
   `QTabWidget` on the right holding one `QListWidget` per task category
+- The left pane is the path row over the tree: the path is elided in the middle to the
+  room it has, and `Up` and `Choose...` sit beside it at the right end, inside the pane.
+  `Up` walks to the parent directory (`go_up`), `Choose...` opens the native dialog
+  (`choose_directory`), and the row is squared off to the height of the tab bar it lines
+  up with. Nothing is added to the `Directory` header, which keeps its `+` alone
+- The right pane is the tabs over the bottom bar: `Refresh` is the top-right corner widget
+  of the tab bar (`setCornerWidget`), and the title field, the hint and `Create` sit under
+  the task table, in the pane and not across the window. The field takes the rest of the
+  row and `Create` sits at its right end
+- The path row and the tab bar share one top edge and height, and the path row, the tab
+  bar and the bottom bar share one outer margin (`_MARGIN`), so the two panes line up on a
+  single grid
 - The tree lists folders only, one level deep, and never task folders or hidden
   directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
   and the root does nothing
