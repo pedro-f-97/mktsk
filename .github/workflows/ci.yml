@@ -38,4 +38,4 @@ jobs:
         run: pyright mktsk/
 
       - name: Pytest
-        run: pytest
+        run: python -X faulthandler -m pytest
