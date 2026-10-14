@@ -1,13 +1,18 @@
 from PySide6.QtCore import QSize
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QIcon, QPalette
+from PySide6.QtWidgets import QWidget
 
 from mktsk.gui.icons import (
     _ICON_SIZE,
+    _draw_choose,
     _draw_close,
     _draw_folder,
     _draw_plus,
+    _draw_refresh,
     _draw_reopen,
     _draw_state,
+    _draw_up,
+    _icon_button,
     _stroked_icon,
 )
 
@@ -97,3 +102,72 @@ def test_the_reopen_icon_is_not_the_resume_icon(qapp):
     # reopening an archived task is not adding a note, so the two icons must
     # draw different images
     assert _ink(_draw_reopen) != _ink(_draw_plus)
+
+
+def test_the_up_icon_points_up(qapp):
+    ink = _ink(_draw_up)
+
+    # a shaft down the middle, and a head that is wider than it at the base
+    assert ink[5][9] is True
+    assert ink[14][9] is True
+    assert sum(ink[5]) < sum(ink[9])
+
+
+def test_the_choose_icon_is_more_than_the_folder(qapp):
+    # choosing a directory is a folder, with the arrow that tells it apart
+    assert _ink(_draw_choose) != _ink(_draw_folder)
+    assert _ink(_draw_choose) != _ink(_draw_up)
+
+
+def test_the_refresh_icon_is_not_the_reopen_icon(qapp):
+    # reloading the listing turns one way, restoring a task the other
+    assert _ink(_draw_refresh) != _ink(_draw_reopen)
+
+
+def _leading_ink(icon):
+    """The first painted pixel of an icon, which is its stroke colour."""
+    image = icon.pixmap(QSize(_ICON_SIZE, _ICON_SIZE)).toImage()
+    for y in range(image.height()):
+        for x in range(image.width()):
+            color = image.pixelColor(x, y)
+            if color.alpha() > 0:
+                return color
+    raise AssertionError("the icon has no ink")
+
+
+def test_the_button_icon_follows_the_palette(qapp):
+    light = QWidget()
+    dark = QWidget()
+    palette = dark.palette()
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor("#ffffff"))
+    dark.setPalette(palette)
+
+    light_button = _icon_button(light, "Up", _draw_up, "Up")
+    dark_button = _icon_button(dark, "Up", _draw_up, "Up")
+
+    assert _leading_ink(light_button.icon()) != _leading_ink(dark_button.icon())
+
+
+def test_the_disabled_icon_differs_from_the_enabled_one(qapp):
+    parent = QWidget()
+    button = _icon_button(parent, "Up", _draw_up, "Up")
+    size = QSize(_ICON_SIZE, _ICON_SIZE)
+
+    enabled = button.icon().pixmap(size, QIcon.Mode.Normal).toImage()
+    disabled = button.icon().pixmap(size, QIcon.Mode.Disabled).toImage()
+
+    assert enabled != disabled
+
+
+def test_the_navigation_buttons_are_icons_with_a_name(window):
+    expected = {
+        window.choose_button: "Choose...",
+        window.up_button: "Up",
+        window.refresh_button: "Refresh",
+    }
+
+    for button, text in expected.items():
+        assert button.text() == ""
+        assert button.icon().isNull() is False
+        assert button.toolTip() == text
+        assert button.accessibleName() == text

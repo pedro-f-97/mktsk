@@ -48,19 +48,26 @@ def _focus_order(window):
     return order
 
 
-def test_the_path_row_holds_the_path_up_and_choose(window):
+def test_the_path_row_holds_only_the_path_label(window):
     assert window.path_row.parent() is window.left_panel
     assert window.path_label.parent() is window.path_row
-    assert window.up_button.parent() is window.path_row
-    assert window.choose_button.parent() is window.path_row
 
 
-def test_up_and_choose_are_next_to_each_other(window):
-    up = window.up_button
+def test_the_header_holds_choose_and_up(window):
+    header = window.directory_tree.header()
+
+    assert window.choose_button.parent() is header
+    assert window.up_button.parent() is header
+
+
+def test_choose_and_up_sit_to_the_left_of_the_category_button(window):
+    header = window.directory_tree.header()
     choose = window.choose_button
+    up = window.up_button
+
     assert up.y() == choose.y()
-    assert _left(up, window.path_row) < _left(choose, window.path_row)
-    assert _right(up, window.path_row) <= _left(choose, window.path_row)
+    assert _left(choose, header) < _left(up, header)
+    assert _right(choose, header) <= _left(up, header)
 
 
 def test_the_path_sits_above_the_tree(window):
@@ -68,13 +75,20 @@ def test_the_path_sits_above_the_tree(window):
     assert window.path_row.geometry().bottom() < window.directory_tree.geometry().top()
 
 
-def test_the_buttons_stay_inside_a_narrow_panel(window, qtbot):
+def test_the_header_buttons_stay_inside_a_narrow_header(window):
     window.splitter.setSizes([1, window.splitter.width()])
-    panel = window.left_panel
+    header = window.directory_tree.header()
+    text_width = header.fontMetrics().horizontalAdvance(
+        window.directory_tree.headerItem().text(0)
+    )
 
-    for button in (window.up_button, window.choose_button):
-        assert _left(button, panel) >= 0
-        assert _right(button, panel) <= panel.width()
+    for button in (
+        window.choose_button,
+        window.up_button,
+        window.directory_tree.header_button,
+    ):
+        assert _left(button, header) >= text_width
+        assert _right(button, header) <= header.width()
 
 
 def test_the_path_is_elided_in_the_room_the_row_has(window):
@@ -112,6 +126,29 @@ def test_the_title_field_fills_the_bottom_bar(window):
     assert _right(create, window.bottom_bar) == window.bottom_bar.width()
 
 
+def test_the_header_buttons_have_the_size_and_centre_of_the_category_button(window):
+    header = window.directory_tree.header()
+    category = window.directory_tree.header_button
+
+    for button in (window.choose_button, window.up_button, category):
+        assert button.size() == category.size()
+        assert button.y() == (header.height() - button.height()) // 2
+
+
+def test_the_header_buttons_are_ordered_and_do_not_overlap(window):
+    header = window.directory_tree.header()
+    choose = window.choose_button
+    up = window.up_button
+    category = window.directory_tree.header_button
+
+    assert _left(choose, header) < _right(choose, header) <= _left(up, header)
+    assert _left(up, header) < _right(up, header) <= _left(category, header)
+
+
+def test_the_path_label_fills_the_path_row(window):
+    assert window.path_label.width() == window.path_row.width()
+
+
 def test_the_path_row_lines_up_with_the_tab_bar(window):
     tab_bar = window.tabs.tabBar()
 
@@ -120,19 +157,19 @@ def test_the_path_row_lines_up_with_the_tab_bar(window):
     assert window.path_row.height() == tab_bar.height()
 
 
-def test_the_panes_share_their_outer_left_margins(window):
+def test_the_outer_edges_keep_the_window_margin(window):
     assert _left(window.path_row, window.left_panel) == _MARGIN
-    assert _left(window.tabs, window.right_panel) == _MARGIN
-    assert _left(window.bottom_bar, window.right_panel) == _MARGIN
-
-
-def test_the_panes_share_their_outer_right_margins(window):
-    assert window.left_panel.width() - _right(window.path_row, window.left_panel) == _MARGIN
     assert window.right_panel.width() - _right(window.tabs, window.right_panel) == _MARGIN
     assert (
         window.right_panel.width() - _right(window.bottom_bar, window.right_panel)
         == _MARGIN
     )
+
+
+def test_the_panes_are_separated_by_the_handle_alone(window):
+    gap = _left(window.tabs, window) - _right(window.directory_tree, window)
+
+    assert gap == window.splitter.handleWidth()
 
 
 def test_the_tab_order_is_unchanged(window):
