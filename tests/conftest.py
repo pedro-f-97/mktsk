@@ -62,12 +62,3 @@ def fake_messages(monkeypatch):
         QMessageBox, "warning", lambda *args: messages["warning"].append(args[2])
     )
     return messages
-
-
-@pytest.fixture(scope="session", autouse=True)
-def pytest_sessionfinish(session, exitstatus):
-    app = QApplication.instance()
-    if isinstance(app, QApplication):
-        app.closeAllWindows()
-        app.processEvents()
-    os._exit(exitstatus)
