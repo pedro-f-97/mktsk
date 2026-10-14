@@ -17,10 +17,11 @@
   and its immediate subdirectories, so it shows where new tasks are created; a
   `QTabWidget` on the right holding one `QListWidget` per task category
 - The left pane is the path row over the tree: the path is elided in the middle to the
-  room it has, and `Up` and `Choose...` sit beside it at the right end, inside the pane.
-  `Up` walks to the parent directory (`go_up`), `Choose...` opens the native dialog
-  (`choose_directory`), and the row is squared off to the height of the tab bar it lines
-  up with. Nothing is added to the `Directory` header, which keeps its `+` alone
+  room it has, and the row is squared off to the height of the tab bar it lines up with
+- `Choose...` and `Up` sit in the `Directory` header, to the left of `+` and in the same
+  size: `Choose...` opens the native dialog (`choose_directory`) and `Up` walks to the
+  parent directory (`go_up`). The three share the header, so the tree's minimum width is
+  the label plus the room they need, and the label never runs under them
 - The right pane is the tabs over the bottom bar: `Refresh` is the top-right corner widget
   of the tab bar (`setCornerWidget`), and the title field, the hint and `Create` sit under
   the task table, in the pane and not across the window. The field takes the rest of the
@@ -36,10 +37,11 @@
   lists the categories it can read; this is why `refresh` in the GUI needs no `try` around
   `_reload_tree`, and it is also why a locked directory disappears instead of complaining
 - A `+` button sits at the right end of the `Directory` header row and creates a category
-  in the current directory (`create_category`); the button is a child of the header widget
-  and is placed by arithmetic against the header size, because
-  `QHeaderView.sectionViewportGeometry` is missing from the PySide6 stubs
-- The button is squared off to the header height, so it cannot overflow the row, and
+  in the current directory (`create_category`); `Choose...` and `Up` sit beside it to the
+  left, and the tree places all three from the right end of the header by arithmetic
+  against the header size, because `QHeaderView.sectionViewportGeometry` is missing from
+  the PySide6 stubs
+- Every header button is squared off to the header height, so none overflows the row, and
   carries an icon and a tooltip like every other button in the window
 - A new category is left selected, so it becomes the creation target at once; a category
   that is already there is not an error, it is just selected
@@ -153,7 +155,9 @@
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
   `Open`, a plus for `Resume`, a pencil for `Rename`, a ring with a dot for the state and
   an archive box for `Close`, all drawn with `QPainter` in `gui/icons.py`, so no image
-  file has to be collected for a frozen build
+  file has to be collected for a frozen build. `Choose...`, `Up` and `Refresh` are drawn
+  the same way, and `_icon_button` also gives each icon a faded copy for the disabled
+  state and the tooltip as its accessible name
 - The bar only ever sits on a task row; a heading is not selectable, and `TaskListing`
   checks the item holds a `TaskEntry` before showing or placing the bar. A row in the
   `Closed` tab gets a bar with only the reopen button, and room for it, because reopening

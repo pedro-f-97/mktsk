@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 
 from mktsk import files, helpers, listing, standards, state, tasks
 
+from .icons import _draw_choose, _draw_refresh, _draw_up, _icon_button
 from .tasklist import (
     _AGE_ROLE,
     _COUNT_ROLE,
@@ -66,13 +67,18 @@ class MainWindow(QMainWindow):
         self.path_label.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
-        self.choose_button = QPushButton("Choose...")
-        self.up_button = QPushButton("Up")
-        self.refresh_button = QPushButton("Refresh")
         self.directory_tree = _CategoryTree()
-        self.directory_tree.setHeaderLabel("Directory")
-        self.directory_tree.setMinimumWidth(140)
+        self.directory_tree.set_header_label("Directory")
         self.tabs = QTabWidget()
+        self.choose_button = _icon_button(
+            self.directory_tree.header(), "Choose...", _draw_choose, "Choose"
+        )
+        self.up_button = _icon_button(
+            self.directory_tree.header(), "Up", _draw_up, "Up"
+        )
+        self.refresh_button = _icon_button(
+            self.tabs, "Refresh", _draw_refresh, "Refresh"
+        )
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Task title")
         self.target_label = QLabel()
@@ -88,12 +94,12 @@ class MainWindow(QMainWindow):
         self.target_label.hide()
         self.create_button = QPushButton("Create")
 
+        self.directory_tree.set_navigation_buttons(self.choose_button, self.up_button)
+
         self.path_row = QWidget()
         path_layout = QHBoxLayout(self.path_row)
         path_layout.setContentsMargins(0, 0, 0, 0)
         path_layout.addWidget(self.path_label, 1)
-        path_layout.addWidget(self.up_button)
-        path_layout.addWidget(self.choose_button)
 
         self.left_panel = QWidget()
         left_layout = QVBoxLayout(self.left_panel)
