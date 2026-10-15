@@ -164,6 +164,7 @@
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it
+- `Esc` in the task table deselects the current task, so the bar goes with the selection
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
   `Open`, a plus for `Resume`, a pencil for `Rename`, a ring with a dot for the state and
   an archive box for `Close`, all drawn with `QPainter` in `gui/icons.py`, so no image

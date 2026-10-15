@@ -17,8 +17,10 @@ from PySide6.QtGui import (
     QFont,
     QFontMetrics,
     QImage,
+    QKeySequence,
     QPainter,
     QPalette,
+    QShortcut,
     QStandardItem,
     QStandardItemModel,
 )
@@ -840,6 +842,13 @@ class TaskListing(QListWidget):
             )
         self.currentItemChanged.connect(lambda *_: self._sync_action_bar())
         self.action_bar.hide()
+        # escape drops the selection only while the table, or a button on its
+        # row, holds the focus, so the field and the selector above keep theirs
+        self.escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        self.escape_shortcut.setContext(
+            Qt.ShortcutContext.WidgetWithChildrenShortcut
+        )
+        self.escape_shortcut.activated.connect(self._deselect)
 
     def selected_entry(self) -> listing.TaskEntry | None:
         """Returns the task of the selected row, or None when none is."""
@@ -1016,6 +1025,10 @@ class TaskListing(QListWidget):
         entry = self.selected_entry()
         if entry is not None:
             self.state_requested.emit(entry, new_state)
+
+    def _deselect(self) -> None:
+        """Clears the current row, which hides the action bar with it."""
+        self.setCurrentRow(-1)
 
     def _sync_action_bar(self) -> None:
         entry = self.selected_entry()
