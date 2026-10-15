@@ -8,6 +8,7 @@ from PySide6.QtGui import QCloseEvent, QPalette, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -50,6 +51,10 @@ _DIRECTORY_HEADER = "Directory"
 # share, so the two panes line up on a single grid
 _MARGIN = 6
 
+# the side rail is as wide as the Refresh button it carries plus this padding,
+# so its width follows the style rather than a pixel figure of its own
+_RAIL_PADDING = 2
+
 
 class MainWindow(QMainWindow):
     """Desktop interface over the CLI task logic."""
@@ -84,6 +89,7 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
         self.tabs = QTabWidget()
+        self.rail = QWidget()
         self.choose_button = _icon_button(
             self.directory_tree.header_view, "Choose...", _draw_choose, "Choose"
         )
@@ -91,7 +97,10 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_view, "Up", _draw_up, "Up"
         )
         self.refresh_button = _icon_button(
-            self.tabs, "Refresh", _draw_refresh, "Refresh"
+            self.rail, "Refresh", _draw_refresh, "Refresh"
+        )
+        self.rail.setFixedWidth(
+            self.refresh_button.sizeHint().width() + 2 * _RAIL_PADDING
         )
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Task title")
@@ -125,8 +134,6 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.path_row)
         left_layout.addWidget(self.directory_tree)
 
-        self.tabs.setCornerWidget(self.refresh_button, Qt.Corner.TopRightCorner)
-
         self.bottom_bar = QWidget()
         bottom_layout = QHBoxLayout(self.bottom_bar)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
@@ -134,12 +141,26 @@ class MainWindow(QMainWindow):
         bottom_layout.addWidget(self.target_label)
         bottom_layout.addWidget(self.create_button)
 
+        # the rail carries Refresh at its top and, below it, the pane toggle;
+        # it spans the full height of the right pane, to the left of everything
+        # else the pane holds
+        rail_layout = QVBoxLayout(self.rail)
+        rail_layout.setContentsMargins(_RAIL_PADDING, 0, _RAIL_PADDING, 0)
+        rail_layout.setSpacing(0)
+        rail_layout.addWidget(self.refresh_button)
+        rail_layout.addStretch(1)
+
+        # the rail spans the full height of the pane, so it takes the first
+        # column of a grid while the bar and the tabs share the second
         self.right_panel = QWidget()
-        right_layout = QVBoxLayout(self.right_panel)
+        right_layout = QGridLayout(self.right_panel)
         right_layout.setContentsMargins(0, _MARGIN, _MARGIN, _MARGIN)
         right_layout.setSpacing(0)
-        right_layout.addWidget(self.bottom_bar)
-        right_layout.addWidget(self.tabs, 1)
+        right_layout.addWidget(self.rail, 0, 0, 2, 1)
+        right_layout.addWidget(self.bottom_bar, 0, 1)
+        right_layout.addWidget(self.tabs, 1, 1)
+        right_layout.setColumnStretch(1, 1)
+        right_layout.setRowStretch(1, 1)
 
         self.splitter = QSplitter()
         self.splitter.addWidget(self.left_panel)

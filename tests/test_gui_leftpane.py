@@ -170,7 +170,7 @@ def test_the_outer_margins_and_the_gap_are_unchanged(window):
 
     assert _left(header, window.left_panel) == _MARGIN
     assert window.right_panel.width() - _right(window.tabs, window.right_panel) == _MARGIN
-    gap = _left(window.tabs, window) - _right(window.directory_tree, window)
+    gap = _left(window.rail, window) - _right(window.directory_tree, window)
     assert gap == window.splitter.handleWidth()
 
 

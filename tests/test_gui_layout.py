@@ -126,7 +126,8 @@ def test_the_path_is_shown_in_full_when_the_row_has_the_room(window, tmp_path):
 
 
 def test_refresh_is_the_corner_widget_of_the_tab_bar(window):
-    assert window.tabs.cornerWidget(Qt.Corner.TopRightCorner) is window.refresh_button
+    assert window.refresh_button.parent() is window.rail
+    assert _top(window.refresh_button, window) == _top(window.rail, window)
 
 
 def test_refresh_reloads_both_the_tree_and_the_lists(window, tmp_path, make_task):
@@ -197,7 +198,7 @@ def test_the_outer_edges_keep_the_window_margin(window):
 
 
 def test_the_panes_are_separated_by_the_handle_alone(window):
-    gap = _left(window.tabs, window) - _right(window.directory_tree, window)
+    gap = _left(window.rail, window) - _right(window.directory_tree, window)
 
     assert gap == window.splitter.handleWidth()
 

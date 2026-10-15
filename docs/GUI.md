@@ -35,10 +35,12 @@
 - The header title starts at the left padding the path is indented by, and the tree drops
   the title when the header is too narrow to hold it before the buttons, restoring it as
   soon as there is room again, so the buttons never sit over it
-- The right pane is the creation bar over the tabs: the title field, the hint and `Create`
-  sit above the task table, in the pane and not across the window, and `Refresh` is the
-  top-right corner widget of the tab bar (`setCornerWidget`) below them. The field takes
-  the rest of the row and `Create` sits at its right end
+- The right pane is a side rail beside the creation bar and the tabs: the rail is the
+  first column, spans the full height of the pane and is as wide as the `Refresh` button
+  it carries at its top, so the button no longer sits in the tab bar corner, which is
+  left empty. The title field, the hint and `Create` sit above the task table, in the
+  pane and not across the window, to the right of the rail. The field takes the rest of
+  the row and `Create` sits at its right end
 - The Directory header shares its top edge with the creation bar; the tab bar and the task
   table sit below the bar. Each pane keeps the window margin (`_MARGIN`) on its outer edge,
   so the two are separated by the splitter handle alone rather than by stacked margins
