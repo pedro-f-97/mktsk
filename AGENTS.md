@@ -11,8 +11,9 @@ workflow interactively.
 ## Simplicity first
 
 - Before implementing a fix, state in one line the simplest change that could work (for example, one palette role or one style flag) and why it is or is not enough. Prefer it.
-- Do not add caches, probing/rendering of the style, new abstractions or new helper layers for a UI fix unless the simple change was tried and shown to fail; then report the evidence.
-- If a change needs a new class, a cache, a model/proxy model, style probing or more than one new helper, stop and report before continuing: say what was tried, what failed, and what the simple alternative would cost.
+- Do not add caches, probing/rendering of the style, new abstractions or new helper layers for a UI fix unless the simple change was tried and shown to fail, or there is concrete evidence that it cannot work.
+- If a change appears to require a new class, a cache, a model/proxy model, style probing or additional helper layers, first assess whether a simpler alternative can meet the requirements. If not, explain the evidence and the trade-off before proceeding.
+- Do not stop solely because a solution requires additional structure. Keep the implementation proportional to the problem and explain any significant increase in complexity.
 - Prefer clear code over short code. Do not shorten a design to meet a line count; report production lines per file for information only.
 - Tests prove the behaviour with the least machinery that reproduces it. Do not build test infrastructure larger than the code it covers.
 
@@ -31,11 +32,11 @@ workflow interactively.
 
 ## Lean diagnostics
 
-- Never read other binary files (PDFs, archives, etc.); extract data with a script and print numbers.
-- Diagnose with one probe that prints a structured text report; do not repeat measurements or chain ad hoc probes.
-- Stop at the first evidence that confirms the cause; no further forensics (pixels, styles, geometry) beyond what the fix needs.
+- Never read other binary files (PDFs, archives, etc.); extract the required data with a script and print a concise text report.
+- Diagnose with one probe that prints a structured text report; avoid repeated measurements and ad hoc probes unless new evidence requires further investigation.
+- Stop investigating once the available evidence is sufficient to identify the cause and choose a fix. Gather additional evidence only when it could change the diagnosis or implementation.
 - Read large files with `grep` plus offset/limit; do not read them whole or re-read unchanged regions.
-- Never derive framework or library semantics from memory. If a decision needs "I think", "from memory" or "I am not sure" about an API (Qt, stdlib), run a one-line probe that prints the fact first. Do not reason it out in prose.
+- Do not guess framework or library semantics when they affect the implementation. Consult the official documentation or existing tests first; if uncertainty remains, run the smallest probe that verifies the relevant behaviour. Use the result to justify the implementation.
 
 ## Docs
 
@@ -48,7 +49,7 @@ Read the matching one before editing the module it covers.
 ## Structure
 
 `mktsk/` — CLI and domain logic, without Qt.
-`mktsk/gui/` — PySide6, one module per responsability.
+`mktsk/gui/` — PySide6, one module per responsibility.
 
 Run `tree mktsk/ tests/` or read the module docstrings for the layout.
 
@@ -101,9 +102,8 @@ recall it or guess. On this machine the venv is a Windows venv inside WSL
   `extend-select` cuts the default families back to `E`, `F` and `W`
 - Comment only when it adds value; never delete existing comments
 - Tests in `tests/test_*.py`; never write to real user folders (`tmp_path`)
-- One test file per subject, named after it (`test_gui_listing.py`, `test_gui_target.py`,
-  `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py`, `test_gui_window.py`);
-  a file that grows past a few hundred lines is split, never extended
+- Organize tests by subject, with descriptive filenames such as `test_gui_listing.py`, `test_gui_target.py`, `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py` and `test_gui_window.py`.
+- Split a test file when it covers distinct responsibilities, becomes difficult to navigate, or develops excessive setup and fixture complexity. Treat file length as a warning sign, not a fixed limit; do not split a cohesive test file solely because of its size.
 - Fixtures go in `tests/conftest.py`; the plain helpers shared across GUI test files live
   in `tests/gui_helpers.py` and are imported as `from tests.gui_helpers import ...`, because
   `tests/__init__.py` makes `tests/` a package
