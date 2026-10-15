@@ -24,8 +24,9 @@ workflow interactively.
 
 ## No images
 
-- Never render, grab, save or read screenshots or images (`widget.grab()`, `QPixmap.save`, `.png`/`.jpg` files, probe scripts that output images), not even as scratch files.
-- Verify GUI behaviour only with in-process tests that assert state and geometry (text, sizes, positions, visibility, `QFontMetrics` widths).
+- Never read or write image files or screenshots: `widget.grab().save(...)`, `QPixmap.save`, `.png`/`.jpg` files, or probe scripts that output images, not even as scratch files.
+- Rendering in-process to a `QImage` for a pixel assertion is the suite's existing convention (`tests/gui_helpers.render_row`, `row_background`) and is allowed; it is not "reading an image".
+- Prefer asserting state and geometry (text, sizes, positions, visibility, `QFontMetrics` widths). Use a pixel assertion only when no state or geometry proves the behaviour.
 - The user evaluates every visual result manually. If a visual check seems unavoidable, stop and report.
 
 ## Lean diagnostics
@@ -34,6 +35,7 @@ workflow interactively.
 - Diagnose with one probe that prints a structured text report; do not repeat measurements or chain ad hoc probes.
 - Stop at the first evidence that confirms the cause; no further forensics (pixels, styles, geometry) beyond what the fix needs.
 - Read large files with `grep` plus offset/limit; do not read them whole or re-read unchanged regions.
+- Never derive framework or library semantics from memory. If a decision needs "I think", "from memory" or "I am not sure" about an API (Qt, stdlib), run a one-line probe that prints the fact first. Do not reason it out in prose.
 
 ## Docs
 
@@ -78,6 +80,10 @@ On Linux the path is `.venv/bin/python`. CI keeps the plain `pyright mktsk/`, wh
 `gui` extra lands in the system interpreter that pyright already resolves. `--venvpath`
 does not help: pyright looks for a venv named `venv`, not `.venv`, and has no flag to
 change the name.
+
+The interpreter path above is authoritative. Copy it from this section; do not
+recall it or guess. On this machine the venv is a Windows venv inside WSL
+(`.venv/Scripts/python.exe`); `.venv/bin/python` does not exist.
 
 ## Conventions
 
