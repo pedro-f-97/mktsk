@@ -31,6 +31,9 @@
   size: `Choose...` opens the native dialog (`choose_directory`) and `Up` walks to the
   parent directory (`go_up`). The three share the header, so the tree's minimum width is
   the label plus the room they need, and the label never runs under them
+- The header title starts at the left padding the path is indented by, and the tree drops
+  the title when the header is too narrow to hold it before the buttons, restoring it as
+  soon as there is room again, so the buttons never sit over it
 - The right pane is the tabs over the bottom bar: `Refresh` is the top-right corner widget
   of the tab bar (`setCornerWidget`), and the title field, the hint and `Create` sit under
   the task table, in the pane and not across the window. The field takes the rest of the
