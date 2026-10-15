@@ -42,6 +42,10 @@ from .tree import _PATH_ROLE, _CategoryTree
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
 
+# the title of the left Directory header, kept in one place so the tree can hide
+# it when the header is too narrow to hold it before the buttons
+_DIRECTORY_HEADER = "Directory"
+
 # the outer margin the left Directory header, the tab bar and the bottom bar
 # share, so the two panes line up on a single grid
 _MARGIN = 6
@@ -74,7 +78,7 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         self.directory_tree = _CategoryTree()
-        self.directory_tree.set_header_label("Directory")
+        self.directory_tree.set_header_label(_DIRECTORY_HEADER)
         self.directory_tree.setFrameShape(QFrame.Shape.NoFrame)
         self.path_label.setContentsMargins(
             self.directory_tree.header_text_indent(), 0, 0, 0

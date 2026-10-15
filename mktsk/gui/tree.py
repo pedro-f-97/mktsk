@@ -38,10 +38,17 @@ class _CategoryTree(QTreeWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._navigation: tuple[QToolButton, ...] = ()
+        self._header_text = ""
         self.setHeaderHidden(True)
         self.header_view = QHeaderView(Qt.Orientation.Horizontal)
         self.header_view.setModel(self.model())
         self.header_view.setStretchLastSection(True)
+        # the title starts where the path label is indented, so the two read as
+        # one column; the default centres it over the section and would drift it
+        # under the buttons
+        self.header_view.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self.header_button = _icon_button(
             self.header_view, "New category", _draw_plus, "NewCategory"
         )
@@ -49,6 +56,7 @@ class _CategoryTree(QTreeWidget):
         self.header_button.setIconSize(QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE))
         self.header_button.clicked.connect(self.category_requested.emit)
         self.header_view.geometriesChanged.connect(self._place_header_buttons)
+        self.header_view.geometriesChanged.connect(self._update_directory_header_label)
         self.header_button.show()
         self._place_header_buttons()
 
@@ -62,10 +70,26 @@ class _CategoryTree(QTreeWidget):
         Args:
             text: the header label.
         """
+        self._header_text = text
         self.setHeaderLabel(text)
         side = self.header_button.sizeHint().height()
         reserved = _HEADER_BUTTONS * side + (_HEADER_BUTTONS + 1) * _HEADER_BUTTON_MARGIN
         self.setMinimumWidth(self.fontMetrics().horizontalAdvance(text) + reserved)
+        self._update_directory_header_label()
+
+    def _update_directory_header_label(self) -> None:
+        """Shows the header title only while it fits before the buttons.
+
+        The buttons take the right end of the header, so the title has the room
+        up to the leftmost one. When the header is narrower than the title and
+        that room together, the title is dropped so the two never cross, and it
+        comes back as soon as the header grows again.
+        """
+        room = self._header_buttons()[0].x() - self.header_text_indent()
+        text = self._header_text
+        if self.header_view.fontMetrics().horizontalAdvance(text) > room:
+            text = ""
+        self.setHeaderLabel(text)
 
     def header_text_indent(self) -> int:
         """Returns the left padding the header gives its title.
@@ -101,6 +125,7 @@ class _CategoryTree(QTreeWidget):
             button.setIconSize(self.header_button.iconSize())
             button.show()
         self._place_header_buttons()
+        self._update_directory_header_label()
 
     def select_subdirectory(self, directory: Path) -> None:
         """Puts the selection on a subdirectory of the current directory.

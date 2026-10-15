@@ -1,8 +1,64 @@
 from freezegun import freeze_time
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
 
 from mktsk.gui.tree import _HEADER_BUTTON_MARGIN
 from tests.gui_helpers import answer_dialog, directory_header, tree_child_labels
+
+
+def _set_pane_width(window, width):
+    """Sizes the left pane to the width, letting it go below its own minimum."""
+    window.directory_tree.setMinimumWidth(0)
+    QApplication.processEvents()
+    window.splitter.setSizes([width, window.splitter.width() - width])
+    QApplication.processEvents()
+
+
+def test_the_header_label_shows_when_there_is_room(window):
+    assert window.directory_tree.headerItem().text(0) == "Directory"
+
+
+def test_the_header_label_hides_when_it_does_not_fit(window):
+    _set_pane_width(window, 100)
+    header = directory_header(window)
+
+    assert window.directory_tree.headerItem().text(0) == ""
+    for button in (
+        window.choose_button,
+        window.up_button,
+        window.directory_tree.header_button,
+    ):
+        assert button.isVisible()
+        assert button.x() >= 0
+        assert button.x() + button.width() <= header.width()
+
+
+def test_the_header_label_stays_clear_at_the_narrowest_pane(window):
+    window.splitter.setSizes([1, window.splitter.width()])
+    QApplication.processEvents()
+    tree = window.directory_tree
+    text = tree.headerItem().text(0)
+
+    assert text == "Directory"
+    text_right = tree.header_text_indent() + tree.header_view.fontMetrics().horizontalAdvance(
+        text
+    )
+    leftmost = min(
+        window.choose_button,
+        window.up_button,
+        tree.header_button,
+        key=lambda button: button.x(),
+    )
+    assert text_right <= leftmost.x()
+
+
+def test_the_header_label_returns_when_the_room_does(window):
+    _set_pane_width(window, 100)
+    assert window.directory_tree.headerItem().text(0) == ""
+
+    _set_pane_width(window, 300)
+
+    assert window.directory_tree.headerItem().text(0) == "Directory"
 
 
 def test_the_header_button_is_a_child_of_the_header(window):
