@@ -18,9 +18,22 @@ workflow interactively.
 
 ## Scratch files
 
-- Never create files outside the repository, except in a temporary directory made with `tempfile` or pytest's `tmp_path`, and remove it before finishing. Never write to the user's home, Desktop, Documents, a drive root, or another user's profile, and never run commands from an administrator account.
+- Never create files outside the repository, except in a temporary directory made with `tempfile` or pytest's `tmp_path`, and remove it before finishing. Never write to the user's home, Desktop, Documents, a drive root, or another user's profile, and never run commands from an administrator account. Never use `mkdtemp()` without cleanup.
 - For one-off probes use `python -c` or stdin. If a file is really needed, create it in a temp dir and delete it in a `finally` block. No `_probe*`, `_check*` or screenshot files in the repo root.
 - Before the final answer run `git status --short` and delete untracked scratch files. The report has a `Scratch:` line listing any file left outside the repo, or `none`.
+
+## No images
+
+- Never render, grab, save or read screenshots or images (`widget.grab()`, `QPixmap.save`, `.png`/`.jpg` files, probe scripts that output images), not even as scratch files.
+- Verify GUI behaviour only with in-process tests that assert state and geometry (text, sizes, positions, visibility, `QFontMetrics` widths).
+- The user evaluates every visual result manually. If a visual check seems unavoidable, stop and report.
+
+## Lean diagnostics
+
+- Never read other binary files (PDFs, archives, etc.); extract data with a script and print numbers.
+- Diagnose with one probe that prints a structured text report; do not repeat measurements or chain ad hoc probes.
+- Stop at the first evidence that confirms the cause; no further forensics (pixels, styles, geometry) beyond what the fix needs.
+- Read large files with `grep` plus offset/limit; do not read them whole or re-read unchanged regions.
 
 ## Docs
 
