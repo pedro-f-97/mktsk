@@ -41,6 +41,14 @@
   left empty. The title field, the hint and `Create` sit above the task table, in the
   pane and not across the window, to the right of the rail. The field takes the rest of
   the row and `Create` sits at its right end
+- Below `Refresh` the rail carries the pane toggle, a flat `QToolButton` that fills the
+  rest of the rail and is not in the tab order. Clicking it while the pane is visible
+  remembers the width the pane had and collapses it through the same splitter sizes a
+  drag of the handle would set (`setSizes([0, total])`); clicking it while the pane is
+  collapsed restores that remembered width, or the split the splitter opened with when
+  the collapse came from a drag. Its tooltip is `Hide panel` while the pane is visible
+  and `Show panel` while it is collapsed, and follows a drag through the splitter's
+  `splitterMoved`
 - The Directory header shares its top edge with the creation bar; the tab bar and the task
   table sit below the bar. Each pane keeps the window margin (`_MARGIN`) on its outer edge,
   so the two are separated by the splitter handle alone rather than by stacked margins

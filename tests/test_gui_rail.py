@@ -7,6 +7,7 @@ rail and its buttons sit, never how they look.
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QApplication
 
+from mktsk.gui.window import _MARGIN
 from tests.gui_helpers import directory_header, tab_labels, task_listing
 
 
@@ -76,3 +77,92 @@ def test_the_rail_width_does_not_change_when_the_pane_is_collapsed(window):
     QApplication.processEvents()
 
     assert window.rail.width() == width
+
+
+def _bottom(widget, ancestor):
+    """The bottom edge of a widget in the coordinates of an ancestor."""
+    return widget.mapTo(ancestor, QPoint(0, widget.height())).y()
+
+
+def test_the_toggle_sits_below_refresh_in_the_rail(window):
+    assert window.toggle_button.parent() is window.rail
+    assert _top(window.toggle_button, window) >= _bottom(window.refresh_button, window)
+
+
+def test_clicking_the_toggle_collapses_the_left_pane(window, qtbot):
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+
+    assert window.splitter.sizes()[0] == 0
+    assert _left(window.rail, window) == window.splitter.handleWidth()
+    assert _right(window.tabs, window) == window.width() - _MARGIN
+    assert _right(window.bottom_bar, window) == window.width() - _MARGIN
+    assert _right(task_listing(window), window) <= window.width()
+
+
+def test_clicking_the_toggle_again_restores_the_previous_width(window, qtbot):
+    before = window.splitter.sizes()[0]
+
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+
+    assert window.splitter.sizes()[0] == before
+
+
+def test_clicking_the_toggle_after_a_drag_restores_the_pane(window, qtbot):
+    initial = window.splitter.sizes()[0]
+
+    window.splitter.setSizes([0, window.splitter.width()])
+    QApplication.processEvents()
+
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+
+    assert window.splitter.sizes()[0] == initial
+
+
+def test_showing_the_window_again_keeps_the_split_to_restore(window, qtbot):
+    initial = window.splitter.sizes()[0]
+    window.splitter.setSizes([0, window.splitter.width()])
+
+    window.hide()
+    window.show()
+    QApplication.processEvents()
+
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+
+    assert window.splitter.sizes()[0] == initial
+
+
+def test_the_toggle_tooltip_follows_the_state(window, qtbot):
+    assert window.toggle_button.toolTip() == "Hide panel"
+
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    assert window.toggle_button.toolTip() == "Show panel"
+
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    assert window.toggle_button.toolTip() == "Hide panel"
+
+    window.splitter.moveSplitter(0, 1)
+    assert window.toggle_button.toolTip() == "Show panel"
+
+
+def test_the_toggle_is_not_focusable(window):
+    assert window.toggle_button.focusPolicy() == Qt.FocusPolicy.NoFocus
+
+
+def test_refresh_stays_visible_and_works_with_the_pane_collapsed(
+    window, qtbot, tmp_path, make_task
+):
+    window.navigate_to(tmp_path)
+    make_task(tmp_path, "260918", "Foo")
+
+    qtbot.mouseClick(window.toggle_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.refresh_button, Qt.MouseButton.LeftButton)
+    QApplication.processEvents()
+
+    assert window.splitter.sizes()[0] == 0
+    assert window.refresh_button.isVisible()
+    assert tab_labels(window, tmp_path.name) == ["18/09/2026  Foo"]

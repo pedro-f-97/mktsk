@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QTabWidget,
+    QToolButton,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -63,6 +64,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings or QSettings("mktsk", "mktsk")
         self._sorts: dict[str, tuple[int, bool]] = {}
+        # the width the left pane had before the toggle bar collapsed it, and
+        # the split the splitter opened with, to fall back on when a collapse
+        # came from dragging the handle rather than from the bar
+        self._left_width: int | None = None
+        self._initial_left_width: int | None = None
         last_path = self.settings.value("last_path", str(Path.cwd()))
         self.current_directory = Path(str(last_path))
         self.setWindowTitle("mktsk")
@@ -99,9 +105,19 @@ class MainWindow(QMainWindow):
         self.refresh_button = _icon_button(
             self.rail, "Refresh", _draw_refresh, "Refresh"
         )
-        self.rail.setFixedWidth(
-            self.refresh_button.sizeHint().width() + 2 * _RAIL_PADDING
+        # the rail is as wide as the buttons it carries, and the toggle bar
+        # fills the rest of its height below Refresh
+        self.rail_width = self.refresh_button.sizeHint().width() + 2 * _RAIL_PADDING
+        self.rail.setFixedWidth(self.rail_width)
+        self.toggle_button = QToolButton(self.rail)
+        self.toggle_button.setAutoRaise(True)
+        self.toggle_button.setFixedWidth(self.rail_width)
+        self.toggle_button.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding
         )
+        self.toggle_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_button.setToolTip("Hide panel")
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Task title")
         self.target_label = QLabel()
@@ -145,10 +161,10 @@ class MainWindow(QMainWindow):
         # it spans the full height of the right pane, to the left of everything
         # else the pane holds
         rail_layout = QVBoxLayout(self.rail)
-        rail_layout.setContentsMargins(_RAIL_PADDING, 0, _RAIL_PADDING, 0)
+        rail_layout.setContentsMargins(0, 0, 0, 0)
         rail_layout.setSpacing(0)
-        rail_layout.addWidget(self.refresh_button)
-        rail_layout.addStretch(1)
+        rail_layout.addWidget(self.refresh_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        rail_layout.addWidget(self.toggle_button, 1)
 
         # the rail spans the full height of the pane, so it takes the first
         # column of a grid while the bar and the tabs share the second
@@ -176,7 +192,9 @@ class MainWindow(QMainWindow):
         self.directory_tree.category_requested.connect(self.new_category)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
+        self.toggle_button.clicked.connect(self.toggle_left_pane)
         self.splitter.splitterMoved.connect(self._update_path_label)
+        self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
 
         # the old bar's focus order, kept by hand because the panels now hold
         # the same widgets in a different tree
@@ -204,14 +222,42 @@ class MainWindow(QMainWindow):
         )
         self.path_label.setToolTip(path)
 
+    def toggle_left_pane(self) -> None:
+        """Collapses the left pane, or restores the width it had before.
+
+        The pane is collapsed and restored through the same splitter sizes a
+        drag of the handle would set, and the width to come back to is the one
+        remembered at the last collapse, or the split the splitter opened with
+        when the collapse came from a drag.
+        """
+        sizes = self.splitter.sizes()
+        total = sum(sizes)
+
+        if sizes[0] > 0:
+            self._left_width = sizes[0]
+            self.splitter.setSizes([0, total])
+        else:
+            width = self._left_width or self._initial_left_width or total
+            self.splitter.setSizes([width, max(total - width, 0)])
+
+        self._update_toggle_tooltip()
+
+    def _update_toggle_tooltip(self) -> None:
+        """Points the toggle bar at what the next click will do."""
+        collapsed = self.splitter.sizes()[0] == 0
+        self.toggle_button.setToolTip("Show panel" if collapsed else "Hide panel")
+
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._update_path_label()
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
+        if self._initial_left_width is None:
+            self._initial_left_width = self.splitter.sizes()[0]
         self._align_header()
         self._update_path_label()
+        self._update_toggle_tooltip()
 
     def navigate_to(self, directory: Path) -> None:
         directory = directory.resolve()
