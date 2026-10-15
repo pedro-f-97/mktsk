@@ -13,6 +13,7 @@ from PySide6.QtGui import (
     QIcon,
     QImage,
     QPainter,
+    QPainterPath,
     QPalette,
     QPen,
     QPixmap,
@@ -22,6 +23,12 @@ from PySide6.QtWidgets import QApplication, QToolButton, QWidget
 
 _ICON_SIZE = 18
 _ICON_STROKE = 2.0
+
+_CLIP_TOP = 3.5
+_CLIP_BOTTOM = 14.5
+_CLIP_WIDTH = 6.0
+_CLIP_INNER_INSET = 3.0
+_CLIP_TAIL = 4.5
 
 
 def _device_scale() -> int:
@@ -98,12 +105,35 @@ def _draw_state(painter: QPainter, box: QRectF) -> None:
 
 
 def _draw_clip(painter: QPainter, box: QRectF) -> None:
-    """Draws a paperclip, for the attachments a task carries."""
-    painter.drawLine(QPointF(12.5, 4.5), QPointF(12.5, 13))
-    painter.drawLine(QPointF(12.5, 13), QPointF(5.5, 13))
-    painter.drawLine(QPointF(5.5, 13), QPointF(5.5, 4.5))
-    painter.drawLine(QPointF(5.5, 4.5), QPointF(9, 4.5))
-    painter.drawLine(QPointF(9, 4.5), QPointF(9, 11))
+    """Draws a paperclip, for the attachments a task carries.
+
+    A slim wire of two straight legs joined by a wide rounded turn at the
+    bottom and a narrow one at the top, so the clip is tall and curved
+    rather than angular.
+    """
+    centre = box.center().x()
+    left = centre - _CLIP_WIDTH / 2
+    right = centre + _CLIP_WIDTH / 2
+    inner = left + _CLIP_INNER_INSET
+    outer_radius = _CLIP_WIDTH / 2
+    inner_radius = (right - inner) / 2
+
+    path = QPainterPath()
+    path.moveTo(left, _CLIP_TOP)
+    path.lineTo(left, _CLIP_BOTTOM - outer_radius)
+    path.arcTo(
+        QRectF(left, _CLIP_BOTTOM - _CLIP_WIDTH, _CLIP_WIDTH, _CLIP_WIDTH),
+        180,
+        180,
+    )
+    path.lineTo(right, _CLIP_TOP + inner_radius)
+    path.arcTo(
+        QRectF(inner, _CLIP_TOP, right - inner, right - inner),
+        0,
+        180,
+    )
+    path.lineTo(inner, _CLIP_TOP + inner_radius + _CLIP_TAIL)
+    painter.drawPath(path)
 
 
 def _draw_close(painter: QPainter, box: QRectF) -> None:

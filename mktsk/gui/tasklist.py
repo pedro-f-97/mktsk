@@ -774,7 +774,12 @@ class _InsetDelegate(QStyledItemDelegate):
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.translate(icon.left(), icon.top())
-            painter.setPen(_icon_pen(pen_colour))
+            clip_pen = (
+                pen_colour
+                if selected
+                else option.palette.color(QPalette.ColorRole.ButtonText)
+            )
+            painter.setPen(_icon_pen(clip_pen))
             _draw_clip(painter, QRectF(0, 0, _ICON_SIZE, _ICON_SIZE))
             painter.restore()
             clip_cell.setLeft(clip_cell.left() + _COLUMN_PADDING + _ICON_SIZE)
