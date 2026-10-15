@@ -24,7 +24,7 @@ def test_the_header_has_five_sections_and_no_leading_one(qtbot):
     panel = _panel(qtbot)
     header = panel.header
 
-    assert header.count() == 5
+    assert header.count() == 6
     assert header.sectionPosition(0) == 0
 
 
@@ -32,8 +32,11 @@ def test_every_section_can_be_resized_by_hand(qtbot):
     panel = _panel(qtbot)
     header = panel.header
 
-    for column in range(5):
+    for column in range(6):
+        if column == 2:
+            continue
         assert header.sectionResizeMode(column) == QHeaderView.ResizeMode.Interactive
+    assert header.sectionResizeMode(2) == QHeaderView.ResizeMode.Fixed
 
 
 def test_the_interventions_heading_is_centred(qtbot):
@@ -41,7 +44,7 @@ def test_the_interventions_heading_is_centred(qtbot):
     header = panel.header
 
     alignment = header.model().headerData(
-        3, Qt.Orientation.Horizontal, Qt.ItemDataRole.TextAlignmentRole
+        4, Qt.Orientation.Horizontal, Qt.ItemDataRole.TextAlignmentRole
     )
 
     assert alignment == Qt.AlignmentFlag.AlignCenter
@@ -56,7 +59,7 @@ def test_the_header_names_the_columns_in_order(qtbot):
         for index in range(model.columnCount())
     ]
 
-    assert labels == ["Date", "Task", "State", "Interventions", "Last activity"]
+    assert labels == ["Date", "Task", "", "State", "Interventions", "Last activity"]
 
 
 def test_the_date_column_starts_as_wide_as_a_date(qtbot):
@@ -78,12 +81,12 @@ def test_the_date_section_can_be_dragged_narrower_and_wider(qtbot):
     default = header.sectionSize(0)
 
     header.resizeSection(0, default - 20)
-    narrowed = [listing.column_rect(row, column) for column in range(5)]
+    narrowed = [listing.column_rect(row, column) for column in range(6)]
     assert narrowed[0].width() < default
     assert narrowed[1].left() == narrowed[0].right() + 1
 
     header.resizeSection(0, default + 40)
-    widened = [listing.column_rect(row, column) for column in range(5)]
+    widened = [listing.column_rect(row, column) for column in range(6)]
     assert widened[0].width() == narrowed[0].width() + 60
     assert widened[1].left() == widened[0].right() + 1
 
@@ -93,17 +96,17 @@ def test_resizing_the_date_section_moves_the_following_cells(qtbot):
     header = panel.header
     listing = panel.listing
     row = QRect(0, 0, header.length(), listing.delegate.min_height)
-    before = [listing.column_rect(row, column) for column in range(5)]
+    before = [listing.column_rect(row, column) for column in range(6)]
 
     header.resizeSection(0, header.sectionSize(0) + 40)
 
-    after = [listing.column_rect(row, column) for column in range(5)]
+    after = [listing.column_rect(row, column) for column in range(6)]
     assert after[0].left() == before[0].left()
     assert after[0].width() == before[0].width() + 40
-    for column in range(1, 5):
+    for column in range(1, 6):
         assert after[column].left() == before[column].left() + 40
         assert after[column].width() == before[column].width()
 
-    for left in range(5):
-        for right in range(left + 1, 5):
+    for left in range(6):
+        for right in range(left + 1, 6):
             assert not after[left].intersects(after[right])

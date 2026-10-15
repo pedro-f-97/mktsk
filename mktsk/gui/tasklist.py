@@ -7,6 +7,7 @@ from PySide6.QtCore import (
     QModelIndex,
     QPersistentModelIndex,
     QRect,
+    QRectF,
     QSize,
     Qt,
     Signal,
@@ -43,6 +44,8 @@ from PySide6.QtWidgets import (
 from mktsk import helpers, listing, parsing, standards
 
 from .icons import (
+    _ICON_SIZE,
+    _draw_clip,
     _draw_close,
     _draw_folder,
     _draw_pencil,
@@ -50,6 +53,7 @@ from .icons import (
     _draw_reopen,
     _draw_state,
     _icon_button,
+    _icon_pen,
     _stroked_icon,
 )
 
@@ -61,9 +65,10 @@ _STATE_ROLE = Qt.ItemDataRole.UserRole + 4
 _ACTION_BAR_PADDING = 4
 
 # the columns of a task row, from the left: the date of the folder, the task
-# itself, the state it is in, how many interventions it carries, and how long
-# ago the last was
-_HEADINGS = ("Date", "Task", "State", "Interventions", "Last activity")
+# itself, a paperclip and the number of attachments it carries when it has any,
+# the state it is in, how many interventions it carries, and how long ago the
+# last was. The clip heading carries no name, because the paperclip says it
+_HEADINGS = ("Date", "Task", "", "State", "Interventions", "Last activity")
 
 # the states the change-state action offers: `closed` only comes from closing
 # the task, which is a different operation
@@ -93,9 +98,10 @@ _TASK_MAX_WIDTH = 480
 
 
 class _Columns(NamedTuple):
-    """The widths of the date column and the three right ones of a row."""
+    """The widths of the fixed columns of a row, but the task one."""
 
     date: int
+    clip: int
     state: int
     interventions: int
     activity: int
@@ -105,18 +111,20 @@ def _column_widths() -> _Columns:
     """Measures the fixed columns as wide as their contents.
 
     A heading is the widest thing its column holds, so measuring one keeps the
-    column as narrow as it can be and never clipping it. The date column is
-    measured from the date itself, like any other column, and is narrowed to
-    just that: the room the action bar needs is taken only by the selected row,
-    which shifts as a whole, so no column has to carry it. The widths come from
-    the font in use rather than from numbers written down, so a font of another
-    size needs no constant of its own. They are the initial sizes the header
-    starts its sections from; after that the header owns its geometry and the
-    cells read it back.
+    column as narrow as it can be and never clipping it. The clip column has no
+    heading, so it is measured from the paperclip and the two digits it may hold
+    at once, taken from the icon size and the font in use rather than from
+    numbers of their own. The date column is measured from the date itself, like
+    any other column, and is narrowed to just that: the room the action bar
+    needs is taken only by the selected row, which shifts as a whole, so no
+    column has to carry it. The widths come from the font in use rather than
+    from numbers written down, so a font of another size needs no constant of
+    its own. They are the initial sizes the header starts its sections from;
+    after that the header owns its geometry and the cells read it back.
 
     Returns:
-        The width of the date column, of the state one, of the interventions
-        one and of the last activity one.
+        The width of the date column, of the clip one, of the state one, of the
+        interventions one and of the last activity one.
     """
     heading_font = QFont(QApplication.font())
     heading_font.setBold(True)
@@ -125,9 +133,10 @@ def _column_widths() -> _Columns:
 
     return _Columns(
         body.horizontalAdvance("dd/mm/yyyy") + 2 * _COLUMN_PADDING,
-        headings.horizontalAdvance(_HEADINGS[2]) + 2 * _COLUMN_PADDING,
+        _ICON_SIZE + body.horizontalAdvance("44") + 2 * _COLUMN_PADDING,
         headings.horizontalAdvance(_HEADINGS[3]) + 2 * _COLUMN_PADDING,
         headings.horizontalAdvance(_HEADINGS[4]) + 2 * _COLUMN_PADDING,
+        headings.horizontalAdvance(_HEADINGS[5]) + 2 * _COLUMN_PADDING,
     )
 
 
@@ -203,6 +212,7 @@ def _order_key(item: QListWidgetItem, column: int) -> datetime.date | str | int:
     The date is the one the folder name carries, so a name that is not a task
     folder sorts last. The task compares without case, the state by the order
     of the domain, and the interventions as a number, so ten comes after nine.
+    The clip column carries no order, so it is never asked for a key.
 
     Args:
         item: the row, carrying its task entry.
@@ -220,10 +230,10 @@ def _order_key(item: QListWidgetItem, column: int) -> datetime.date | str | int:
     if column == 1:
         return entry.title.casefold()
 
-    if column == 2:
+    if column == 3:
         return parsing.STATES.index(entry.state)
 
-    if column == 3:
+    if column == 4:
         return entry.interventions
 
     return entry.last_activity
@@ -234,40 +244,46 @@ class _ColumnHeader(QHeaderView):
 
     Each section is interactive, so a separator can be dragged to give a column
     more or less room, and the delegate reads every column back from here rather
-    than measuring one of its own. The date and the three right columns start
-    from the widths of their contents, and the task takes the rest of the room
-    a row has. No section is held wider than its contents: the action bar is
-    taken by the selected row alone, which shifts its cells, so the date is a
-    column like any other.
+    than measuring one of its own. The clip column is held at the width its
+    paperclip and its two digits need and cannot be dragged, because it holds
+    nothing a person would want to make room for. The date and the three right
+    columns start from the widths of their contents, and the task takes the rest
+    of the room a row has. No section is held wider than its contents: the
+    action bar is taken by the selected row alone, which shifts its cells, so
+    the date is a column like any other.
     """
 
     def __init__(self, height: int, parent: QWidget | None = None) -> None:
         super().__init__(Qt.Orientation.Horizontal, parent)
         self.setFixedHeight(height)
-        model = QStandardItemModel(0, 5, self)
+        model = QStandardItemModel(0, 6, self)
         for i, text in enumerate(_HEADINGS):
             item = QStandardItem(text)
-            if i == 3:
+            if i == 4:
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             model.setHorizontalHeaderItem(i, item)
         self.setModel(model)
         self.setSectionsMovable(False)
         self.setSectionsClickable(True)
         self.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        # the clip column is a fixed size, so it holds its paperclip and its
+        # number whatever the rest of the row does
+        self.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         self.setDefaultAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
         cols = _column_widths()
-        self.setMinimumSectionSize(cols.state)
-        total = cols.state + cols.interventions + cols.activity
+        self.setMinimumSectionSize(min(cols))
+        total = cols.clip + cols.state + cols.interventions + cols.activity
         # the task column starts as the rest of the room a row has; auto-width
         # grows it from here up to the cap and never below it
         self.default_task_width = max(total, 100)
         self.resizeSection(0, cols.date)
         self.resizeSection(1, self.default_task_width)
-        self.resizeSection(2, cols.state)
-        self.resizeSection(3, cols.interventions)
-        self.resizeSection(4, cols.activity)
+        self.resizeSection(2, cols.clip)
+        self.resizeSection(3, cols.state)
+        self.resizeSection(4, cols.interventions)
+        self.resizeSection(5, cols.activity)
 
 
 class _ActionBar(QWidget):
@@ -540,10 +556,11 @@ class _InsetDelegate(QStyledItemDelegate):
     Every column comes from the header, which owns the geometry: the delegate
     asks it for the position and the size of each section, so a heading never
     sits over a value of another column and dragging a separator moves the cells
-    with it. The date and the title come from the task entry, and the state, the
-    count and the age reach the delegate in the item roles, which the window
-    fills from the task, so painting reads no file and holds no date of its own.
-    A row without them is a heading, painted across the whole item.
+    with it. The date and the title come from the task entry, and so does the
+    number of attachments the clip column shows, while the state, the count and
+    the age reach the delegate in the item roles, which the window fills from
+    the task, so painting reads no file and holds no date of its own. A row
+    without them is a heading, painted across the whole item.
 
     With no selection every cell starts at the left edge of the row, laid out
     from the header. The action bar sits on the selected row alone, so that one
@@ -716,7 +733,8 @@ class _InsetDelegate(QStyledItemDelegate):
         entry = index.data(_ENTRY_ROLE)
 
         painter.save()
-        painter.setPen(_cell_pen(option))
+        pen_colour = _cell_pen(option)
+        painter.setPen(pen_colour)
 
         date_cell = self.content_rect(option.rect, 0, selected)
         date_cell.setLeft(date_cell.left() + padding)
@@ -741,7 +759,35 @@ class _InsetDelegate(QStyledItemDelegate):
             task_text,
         )
 
-        state_cell = self.content_rect(option.rect, 2, selected)
+        # the clip column is blank until the task carries an attachment, and
+        # then it shows the paperclip and the number of them, the number read
+        # from the entry the row already holds
+        clip_cell = self.content_rect(option.rect, 2, selected)
+        attachments = entry.attachments
+        if attachments:
+            icon = QRect(
+                clip_cell.left() + _COLUMN_PADDING,
+                clip_cell.top() + (clip_cell.height() - _ICON_SIZE) // 2,
+                _ICON_SIZE,
+                _ICON_SIZE,
+            )
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.translate(icon.left(), icon.top())
+            painter.setPen(_icon_pen(pen_colour))
+            _draw_clip(painter, QRectF(0, 0, _ICON_SIZE, _ICON_SIZE))
+            painter.restore()
+            clip_cell.setLeft(clip_cell.left() + _COLUMN_PADDING + _ICON_SIZE)
+        clip_text = str(attachments) if attachments else ""
+        painter.drawText(
+            clip_cell,
+            _CELL_ALIGNMENT,
+            option.fontMetrics.elidedText(
+                clip_text, Qt.TextElideMode.ElideRight, clip_cell.width()
+            ),
+        )
+
+        state_cell = self.content_rect(option.rect, 3, selected)
         state_text = option.fontMetrics.elidedText(
             index.data(_STATE_ROLE) or "",
             Qt.TextElideMode.ElideRight,
@@ -752,7 +798,7 @@ class _InsetDelegate(QStyledItemDelegate):
             _CELL_ALIGNMENT,
             state_text,
         )
-        count_cell = self.content_rect(option.rect, 3, selected)
+        count_cell = self.content_rect(option.rect, 4, selected)
         count_text = option.fontMetrics.elidedText(
             index.data(_COUNT_ROLE) or "",
             Qt.TextElideMode.ElideRight,
@@ -763,7 +809,7 @@ class _InsetDelegate(QStyledItemDelegate):
             _COUNT_ALIGNMENT,
             count_text,
         )
-        age_cell = self.content_rect(option.rect, 4, selected)
+        age_cell = self.content_rect(option.rect, 5, selected)
         age_text = option.fontMetrics.elidedText(
             index.data(_AGE_ROLE) or "",
             Qt.TextElideMode.ElideRight,
@@ -875,11 +921,15 @@ class TaskListing(QListWidget):
         """Sorts by a clicked heading, flipping the order on a second click.
 
         A first click on a heading, or a click on another one, starts
-        ascending; a second click on the same heading turns it around.
+        ascending; a second click on the same heading turns it around. The clip
+        heading carries no order, so clicking it does nothing.
 
         Args:
             column: the index of the section that was clicked.
         """
+        if column == 2:
+            return
+
         descending = column == self.sort_column and not self.sort_descending
         self.set_sort(column, descending)
         self.order_changed.emit(column, descending)

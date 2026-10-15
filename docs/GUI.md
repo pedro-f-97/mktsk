@@ -3,7 +3,8 @@
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
-  `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_row_text.py`,
+  `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_attachments.py`,
+  `tests/test_gui_row_text.py`,
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
   `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`
   and `tests/test_gui_window.py` with pytest-qt
@@ -86,7 +87,8 @@
   rows can disagree
 - Clicking a column heading orders the rows of that tab by it, ascending on the first
   click and descending on the next; clicking another heading starts ascending on that one,
-  and no click ever returns to the default order by itself. Each tab keeps the column and
+  and no click ever returns to the default order by itself; the clip heading carries no name
+  and orders nothing when clicked. Each tab keeps the column and
   the direction it was last sorted by while it is open, and a refresh re-applies it. The
   tasks of a category reorder among themselves, and the categories of the `All` and
   `Closed` tabs then reorder with them, by the first task under each heading, so the
@@ -97,38 +99,42 @@
   number, and the last activity is read as the date it carries. Dragging a separator still
   resizes, and the native indicator marks the heading that is in force
 - A task folder with no `.md` is not listed; a task two levels down is not found
-- A task row is five columns, `Date`, `Task`, `State`, `Interventions` and `Last activity`.
-  The date is `dd/mm/yyyy`, read from the folder name or, for a closed task, the archive
-  name; the task is `readable_title`, with the full path as tooltip; the state is
+- A task row is six columns, `Date`, `Task`, a clip column with no heading, `State`,
+  `Interventions` and `Last activity`. The date is `dd/mm/yyyy`, read from the folder name
+  or, for a closed task, the archive name; the task is `readable_title`, with the full path
+  as tooltip; the clip column is blank until the folder carries an attachment, and then
+  shows a paperclip and the number of them side by side; the state is
   `entry.state`, spelled as the file spells it; the interventions are the count from the
   `.md`, `0` when there are none; the activity is `_relative_age`, which says `today`,
   `yesterday` or `N days ago`, and reads a date that has not come yet as `today`
-- The date and the task come from the `TaskEntry` the row carries, the same entry the state,
-  the count and the age come from, so the delegate reads the folder name without another
-  import; `_date_cell` reads the date out of the name with `standards`, falling back to the
-  raw prefix when the name is not a task folder
+- The date and the task come from the `TaskEntry` the row carries, the same entry the
+  attachments, the state, the count and the age come from, so the delegate reads the folder
+  name without another import; `_date_cell` reads the date out of the name with
+  `standards`, falling back to the raw prefix when the name is not a task folder
 - `TaskPanel` is what a tab holds: `_ColumnHeader` over `TaskListing`. The header is the
   only source of column geometry: the delegate reads each column's position and size from it
   (`sectionPosition` and `sectionSize`), so a heading never sits over a value of another
-  column and dragging a separator moves the cells with it. `_column_widths` measures the
-  three right columns from the bold application font; the date column is a date wide, like
-  any other column; the task starts as the rest of the room a row has and is then widened
-  to fit the longest visible description, up to `_TASK_MAX_WIDTH`, never below that start
-  and never once a separator has been dragged by hand, so a long description reads in full
-  until the cap and elides past it
+  column and dragging a separator moves the cells with it. Every named column is measured
+  from the bold application font, the clip column from the paperclip and the two digits it
+  may hold at once, and the date column from a date; the clip column is held at that fixed
+  width and cannot be dragged; the task starts as the rest of the room a row has and is then
+  widened to fit the longest visible description, up to `_TASK_MAX_WIDTH`, never below that
+  start and never once a separator has been dragged by hand, so a long description reads in
+  full until the cap and elides past it
 - The width of every item is the header's `length()`, so a header wider than the viewport
   makes the list scroll horizontally, and the horizontal scrollbar's `valueChanged` moves
   the header's offset with it; `sectionResized` lays the cells out again and repaints the
   viewport, and a row without a count is a heading painted across the whole item width
 - The state, the count and the age reach the delegate in the item roles `_STATE_ROLE`,
-  `_COUNT_ROLE` and `_AGE_ROLE`, so painting reads no file and holds no date of its own.
+  `_COUNT_ROLE` and `_AGE_ROLE`, and the clip column reads its number from that same entry
+  rather than a role of its own, so painting reads no file and holds no date of its own.
   The window takes one day per reload and hands it to every row, so a refresh that runs as
   the date turns does not date half of the tasks to yesterday
 - A row without those roles is a heading, which has no activity of its own and is painted
   where it stands, across the row
 - A task row empties `option.text` in `initStyleOption`, not in `paint`, because the base
   class refills it from the display role on every paint; the style then draws only the row
-  background, and the five cells are the whole text of the row, each inside its own column.
+  background, and the six cells are the whole text of the row, each inside its own column.
   The date is the first text after the room the bar reserves on every row, so the date never
   moves when a row is selected; only the selected row hands the style a rect narrowed from the
   left, so the space for the buttons appears when the row is clicked and is given back when the

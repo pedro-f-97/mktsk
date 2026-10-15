@@ -97,6 +97,15 @@ def _draw_state(painter: QPainter, box: QRectF) -> None:
     painter.drawEllipse(QPointF(9, 9), 1.5, 1.5)
 
 
+def _draw_clip(painter: QPainter, box: QRectF) -> None:
+    """Draws a paperclip, for the attachments a task carries."""
+    painter.drawLine(QPointF(12.5, 4.5), QPointF(12.5, 13))
+    painter.drawLine(QPointF(12.5, 13), QPointF(5.5, 13))
+    painter.drawLine(QPointF(5.5, 13), QPointF(5.5, 4.5))
+    painter.drawLine(QPointF(5.5, 4.5), QPointF(9, 4.5))
+    painter.drawLine(QPointF(9, 4.5), QPointF(9, 11))
+
+
 def _draw_close(painter: QPainter, box: QRectF) -> None:
     """Draws an archive box with a lid, for closing a task into one."""
     painter.drawRect(QRectF(2, 3, 14, 5))

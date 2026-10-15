@@ -121,9 +121,9 @@ def test_the_other_sections_keep_their_defaults(qtbot):
     columns = _column_widths()
 
     assert header.sectionSize(0) == columns.date
-    assert header.sectionSize(2) == columns.state
-    assert header.sectionSize(3) == columns.interventions
-    assert header.sectionSize(4) == columns.activity
+    assert header.sectionSize(3) == columns.state
+    assert header.sectionSize(4) == columns.interventions
+    assert header.sectionSize(5) == columns.activity
 
 
 def test_the_cells_of_a_row_still_follow_the_header_at_the_fitted_width(qtbot):
@@ -134,12 +134,12 @@ def test_the_cells_of_a_row_still_follow_the_header_at_the_fitted_width(qtbot):
     row = QRect(rows.visualItemRect(item))
     header = rows.header
 
-    for column in range(5):
+    for column in range(6):
         cell = rows.column_rect(row, column)
         assert cell.left() == row.left() + header.sectionPosition(column)
         assert cell.width() == header.sectionSize(column)
-    for left in range(5):
-        for right in range(left + 1, 5):
+    for left in range(6):
+        for right in range(left + 1, 6):
             assert not rows.column_rect(row, left).intersects(
                 rows.column_rect(row, right)
             )

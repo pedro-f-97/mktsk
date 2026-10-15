@@ -96,14 +96,14 @@ def test_the_columns_of_a_row_start_where_the_headings_start(
     for file in (long_file, short_file):
         item = find_task(window, file)
         row = QRect(rows.visualItemRect(item))
-        cells = [rows.column_rect(row, column) for column in range(5)]
+        cells = [rows.column_rect(row, column) for column in range(6)]
 
         for column, cell in enumerate(cells):
             assert cell.left() == header.sectionPosition(column)
             assert cell.width() == header.sectionSize(column)
 
-        for left in range(5):
-            for right in range(left + 1, 5):
+        for left in range(6):
+            for right in range(left + 1, 6):
                 assert not cells[left].intersects(cells[right])
 
 
@@ -122,7 +122,7 @@ def test_the_painted_text_of_every_column_fits_its_rectangle(
         texts = row_texts(painted, row)
 
         assert _style_text(rows, item) == ""
-        assert len(texts) == 5
+        assert len(texts) == 6
         for column, (rect, flags, text, font) in enumerate(texts):
             assert rows.column_rect(row, column).contains(
                 _ink_rect(rect, flags, text, font)
@@ -631,12 +631,12 @@ def test_the_cells_of_an_unselected_row_stay_inside_their_columns(
     row = QRect(rows.visualItemRect(item))
 
     painted = row_texts(painted_texts(monkeypatch, rows), row)
-    cells = [rows.column_rect(row, column) for column in range(5)]
+    cells = [rows.column_rect(row, column) for column in range(6)]
 
     for column, (rect, flags, text, font) in enumerate(painted):
         assert cells[column].contains(_ink_rect(rect, flags, text, font))
-    for left in range(5):
-        for right in range(left + 1, 5):
+    for left in range(6):
+        for right in range(left + 1, 6):
             assert not cells[left].intersects(cells[right])
 
 
@@ -660,13 +660,13 @@ def test_a_selected_row_shifts_its_cells_and_leaves_the_others(
         selected[0][0].left()
         == listing.column_rect(selected_row, 0).left() + padding + shift
     )
-    for column in range(1, 5):
+    for column in range(1, 6):
         assert (
             selected[column][0].left()
             == listing.column_rect(selected_row, column).left() + shift
         )
     assert other[0][0].left() == listing.column_rect(other_row, 0).left() + padding
-    for column in range(1, 5):
+    for column in range(1, 6):
         assert (
             other[column][0].left() == listing.column_rect(other_row, column).left()
         )
@@ -707,7 +707,7 @@ def test_a_selected_row_elides_at_the_cut_edge(
     listing = select_task(window, file)
     item = listing.currentItem()
     full = QRect(0, 0, listing.header.length(), listing.delegate.min_height)
-    activity = listing.column_rect(full, 4)
+    activity = listing.column_rect(full, 5)
     advance = QFontMetrics(listing.font()).horizontalAdvance(item.data(_AGE_ROLE))
     visible = min(advance - 2, activity.width() - 1)
     width = activity.left() + activity.width()
@@ -717,7 +717,7 @@ def test_a_selected_row_elides_at_the_cut_edge(
 
     assert visible > 0
     fm = QFontMetrics(listing.font())
-    age_text = texts[4][2] if len(texts) > 4 else item.data(_AGE_ROLE)
+    age_text = texts[5][2] if len(texts) > 5 else item.data(_AGE_ROLE)
     assert age_text != item.data(_AGE_ROLE)
     assert fm.horizontalAdvance(age_text) <= visible
     for rect, flags, text, font in texts:

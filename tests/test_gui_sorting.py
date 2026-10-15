@@ -55,9 +55,9 @@ def test_clicking_each_heading_sorts_ascending_then_descending(
     ascending = {
         0: ["Alpha", "Charlie", "Bravo"],
         1: ["Alpha", "Bravo", "Charlie"],
-        2: ["Bravo", "Charlie", "Alpha"],
-        3: ["Bravo", "Alpha", "Charlie"],
+        3: ["Bravo", "Charlie", "Alpha"],
         4: ["Bravo", "Alpha", "Charlie"],
+        5: ["Bravo", "Alpha", "Charlie"],
     }
 
     for column, order in ascending.items():
@@ -140,7 +140,7 @@ def test_interventions_is_numeric(window, tmp_path, make_task):
     window.navigate_to(tmp_path)
     title = tmp_path.name
 
-    click_heading(window, 3, title)
+    click_heading(window, 4, title)
 
     assert _order(window, title) == ["Nine", "Ten"]
 
@@ -182,12 +182,12 @@ def test_the_sort_indicator_follows_the_heading(window, tmp_path, make_task):
     assert header.sortIndicatorSection() == 0
     assert header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
 
-    click_heading(window, 2, title)
-    assert header.sortIndicatorSection() == 2
+    click_heading(window, 3, title)
+    assert header.sortIndicatorSection() == 3
     assert header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
 
-    click_heading(window, 2, title)
-    assert header.sortIndicatorSection() == 2
+    click_heading(window, 3, title)
+    assert header.sortIndicatorSection() == 3
     assert header.sortIndicatorOrder() == Qt.SortOrder.DescendingOrder
 
 
