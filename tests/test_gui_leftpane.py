@@ -93,11 +93,11 @@ def test_the_path_label_lines_up_with_the_header_text(window):
     )
 
 
-def test_the_header_lines_up_with_the_tab_bar(window):
+def test_the_header_lines_up_with_the_creation_bar(window):
     header = directory_header(window)
     tab_bar = window.tabs.tabBar()
 
-    assert _top(header, window) == _top(tab_bar, window)
+    assert _top(header, window) == _top(window.bottom_bar, window)
     assert header.height() == tab_bar.height()
 
 

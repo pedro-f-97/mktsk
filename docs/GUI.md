@@ -34,13 +34,13 @@
 - The header title starts at the left padding the path is indented by, and the tree drops
   the title when the header is too narrow to hold it before the buttons, restoring it as
   soon as there is room again, so the buttons never sit over it
-- The right pane is the tabs over the bottom bar: `Refresh` is the top-right corner widget
-  of the tab bar (`setCornerWidget`), and the title field, the hint and `Create` sit under
-  the task table, in the pane and not across the window. The field takes the rest of the
-  row and `Create` sits at its right end
-- The header row and the tab bar share one top edge and height, and each pane keeps the
-  window margin (`_MARGIN`) on its outer edge, so the two are separated by the splitter
-  handle alone rather than by stacked margins
+- The right pane is the creation bar over the tabs: the title field, the hint and `Create`
+  sit above the task table, in the pane and not across the window, and `Refresh` is the
+  top-right corner widget of the tab bar (`setCornerWidget`) below them. The field takes
+  the rest of the row and `Create` sits at its right end
+- The Directory header shares its top edge with the creation bar; the tab bar and the task
+  table sit below the bar. Each pane keeps the window margin (`_MARGIN`) on its outer edge,
+  so the two are separated by the splitter handle alone rather than by stacked margins
 - The tree lists folders only, one level deep, and never task folders or hidden
   directories (`list_subdirectories`); double-clicking a subdirectory navigates to it
   and the root does nothing

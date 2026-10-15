@@ -138,8 +138,8 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(self.right_panel)
         right_layout.setContentsMargins(0, _MARGIN, _MARGIN, _MARGIN)
         right_layout.setSpacing(0)
-        right_layout.addWidget(self.tabs, 1)
         right_layout.addWidget(self.bottom_bar)
+        right_layout.addWidget(self.tabs, 1)
 
         self.splitter = QSplitter()
         self.splitter.addWidget(self.left_panel)

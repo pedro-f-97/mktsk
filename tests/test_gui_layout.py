@@ -178,12 +178,12 @@ def test_the_path_label_fills_the_path_row(window):
     assert window.path_label.width() == window.path_row.width()
 
 
-def test_the_header_row_lines_up_with_the_tab_bar(window):
+def test_the_header_row_lines_up_with_the_creation_bar(window):
     header = directory_header(window)
     tab_bar = window.tabs.tabBar()
 
     assert _left(header, window) == _MARGIN
-    assert _top(header, window) == _top(tab_bar, window)
+    assert _top(header, window) == _top(window.bottom_bar, window)
     assert header.height() == tab_bar.height()
 
 
