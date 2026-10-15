@@ -30,6 +30,11 @@ _CLIP_WIDTH = 6.0
 _CLIP_INNER_INSET = 3.0
 _CLIP_TAIL = 4.5
 
+# how far the chevron of the pane toggle reaches from its centre, small enough
+# to sit inside the toggle bar with a margin on each side
+_CHEVRON_HALF_WIDTH = 3.5
+_CHEVRON_HALF_HEIGHT = 5.5
+
 
 def _device_scale() -> int:
     """Returns the device pixel ratio the icons are rendered at.
@@ -170,6 +175,31 @@ def _draw_refresh(painter: QPainter, box: QRectF) -> None:
     painter.drawArc(QRectF(4, 4, 10, 10), 1440, -4320)
     painter.drawLine(QPointF(4, 9), QPointF(6.1, 11.1))
     painter.drawLine(QPointF(4, 9), QPointF(1.9, 11.1))
+
+
+def _draw_chevron(
+    painter: QPainter, box: QRectF, points_right: bool, color: QColor
+) -> None:
+    """Draws the two strokes of a chevron, for the pane toggle bar.
+
+    Args:
+        painter: painter over the bar, given the pen the icons are drawn with.
+        box: rectangle to centre the chevron in.
+        points_right: whether the tip points right rather than left.
+        color: colour of the strokes.
+    """
+    painter.setPen(_icon_pen(color))
+    centre = box.center()
+    dx = _CHEVRON_HALF_WIDTH if points_right else -_CHEVRON_HALF_WIDTH
+    back_x = centre.x() - dx
+    painter.drawLine(
+        QPointF(back_x, centre.y() - _CHEVRON_HALF_HEIGHT),
+        QPointF(centre.x() + dx, centre.y()),
+    )
+    painter.drawLine(
+        QPointF(centre.x() + dx, centre.y()),
+        QPointF(back_x, centre.y() + _CHEVRON_HALF_HEIGHT),
+    )
 
 
 def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QIcon:

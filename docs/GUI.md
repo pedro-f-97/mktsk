@@ -49,6 +49,11 @@
   the collapse came from a drag. Its tooltip is `Hide panel` while the pane is visible
   and `Show panel` while it is collapsed, and follows a drag through the splitter's
   `splitterMoved`
+- The bar draws a thin vertical line down its centre, broken by a chevron in its middle:
+  `<` while the pane is visible and `>` while it is collapsed, turned by the same state
+  that words the tooltip. The line is the palette's `Mid` while idle and takes the
+  chevron's `ButtonText` colour when the mouse is over the bar, and the chevron is always
+  drawn in that colour, the one the Directory header icon buttons carry
 - The Directory header shares its top edge with the creation bar; the tab bar and the task
   table sit below the bar. Each pane keeps the window margin (`_MARGIN`) on its outer edge,
   so the two are separated by the splitter handle alone rather than by stacked margins

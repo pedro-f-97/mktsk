@@ -3,8 +3,16 @@
 import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QCloseEvent, QPalette, QResizeEvent, QShowEvent
+from PySide6.QtCore import QPointF, QRectF, QSettings, Qt
+from PySide6.QtGui import (
+    QCloseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QPen,
+    QResizeEvent,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -29,7 +37,14 @@ from PySide6.QtWidgets import (
 
 from mktsk import files, helpers, listing, standards, state, tasks
 
-from .icons import _draw_choose, _draw_refresh, _draw_up, _icon_button
+from .icons import (
+    _CHEVRON_HALF_HEIGHT,
+    _draw_chevron,
+    _draw_choose,
+    _draw_refresh,
+    _draw_up,
+    _icon_button,
+)
 from .tasklist import (
     _AGE_ROLE,
     _COUNT_ROLE,
@@ -55,6 +70,54 @@ _MARGIN = 6
 # the side rail is as wide as the Refresh button it carries plus this padding,
 # so its width follows the style rather than a pixel figure of its own
 _RAIL_PADDING = 2
+
+# the separator line of the toggle bar: how far it stops short of the ends of
+# the bar, and of the chevron it is interrupted by, in logical pixels
+_TOGGLE_LINE_MARGIN = 6.0
+_TOGGLE_LINE_GAP = 4.0
+
+
+class _PaneToggle(QToolButton):
+    """The pane toggle, drawn as a line down its centre broken by a chevron.
+
+    The direction of the chevron is handed in by the window, from the same
+    state that words the tooltip, so the bar paints what it is told.
+    """
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._points_right = False
+
+    def set_points_right(self, points_right: bool) -> None:
+        """Turns the chevron to the side the next click opens, and repaints.
+
+        Args:
+            points_right: True for a chevron pointing right.
+        """
+        self._points_right = points_right
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        palette = self.palette()
+        chevron_colour = palette.color(QPalette.ColorRole.ButtonText)
+        idle = palette.color(QPalette.ColorRole.Mid)
+        line_colour = chevron_colour if self.underMouse() else idle
+        centre = self.rect().center()
+        x = centre.x()
+        painter.setPen(QPen(line_colour, 1))
+        painter.drawLine(
+            QPointF(x, _TOGGLE_LINE_MARGIN),
+            QPointF(x, centre.y() - _CHEVRON_HALF_HEIGHT - _TOGGLE_LINE_GAP),
+        )
+        painter.drawLine(
+            QPointF(x, centre.y() + _CHEVRON_HALF_HEIGHT + _TOGGLE_LINE_GAP),
+            QPointF(x, self.height() - _TOGGLE_LINE_MARGIN),
+        )
+        _draw_chevron(painter, QRectF(self.rect()), self._points_right, chevron_colour)
+        painter.end()
 
 
 class MainWindow(QMainWindow):
@@ -109,7 +172,7 @@ class MainWindow(QMainWindow):
         # fills the rest of its height below Refresh
         self.rail_width = self.refresh_button.sizeHint().width() + 2 * _RAIL_PADDING
         self.rail.setFixedWidth(self.rail_width)
-        self.toggle_button = QToolButton(self.rail)
+        self.toggle_button = _PaneToggle(self.rail)
         self.toggle_button.setAutoRaise(True)
         self.toggle_button.setFixedWidth(self.rail_width)
         self.toggle_button.setSizePolicy(
@@ -243,9 +306,10 @@ class MainWindow(QMainWindow):
         self._update_toggle_tooltip()
 
     def _update_toggle_tooltip(self) -> None:
-        """Points the toggle bar at what the next click will do."""
+        """Words and points the toggle bar at what the next click will do."""
         collapsed = self.splitter.sizes()[0] == 0
         self.toggle_button.setToolTip("Show panel" if collapsed else "Hide panel")
+        self.toggle_button.set_points_right(collapsed)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
