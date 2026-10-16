@@ -3,7 +3,7 @@
 import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, QSettings, Qt
+from PySide6.QtCore import QPointF, QRectF, QSettings, QSize, Qt
 from PySide6.QtGui import (
     QCloseEvent,
     QPainter,
@@ -39,8 +39,10 @@ from mktsk import files, helpers, listing, standards, state, tasks
 
 from .icons import (
     _CHEVRON_HALF_HEIGHT,
+    _SMALL_ICON_SIZE,
     _draw_chevron,
     _draw_choose,
+    _draw_cross,
     _draw_refresh,
     _draw_up,
     _icon_button,
@@ -214,10 +216,20 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.directory_tree)
 
         self.bottom_bar = QWidget()
+        self.clear_target_button = _icon_button(
+            self.bottom_bar, "Clear destination", _draw_cross, "ClearTarget"
+        )
+        self.clear_target_button.setIconSize(QSize(_SMALL_ICON_SIZE, _SMALL_ICON_SIZE))
+        self.clear_target_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.clear_target_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_target_button.hide()
         bottom_layout = QHBoxLayout(self.bottom_bar)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.addWidget(self.title_input, 1)
         bottom_layout.addWidget(self.target_label)
+        # the clear button rides with the label at the top of the row, so it
+        # takes no height from the bar
+        bottom_layout.addWidget(self.clear_target_button, 0, Qt.AlignmentFlag.AlignTop)
         bottom_layout.addWidget(self.create_button)
 
         # the rail carries Refresh at its top and, below it, the pane toggle;
@@ -250,6 +262,9 @@ class MainWindow(QMainWindow):
         self.choose_button.clicked.connect(self.choose_directory)
         self.up_button.clicked.connect(self.go_up)
         self.refresh_button.clicked.connect(self.refresh)
+        # clearing the selection is what hides the label and the button: it
+        # fires itemSelectionChanged, the same signal any tree click fires
+        self.clear_target_button.clicked.connect(self.directory_tree.clear_subdirectory)
         self.directory_tree.itemDoubleClicked.connect(self.open_directory)
         self.directory_tree.itemSelectionChanged.connect(self._sync_creation_target)
         self.directory_tree.category_requested.connect(self.new_category)
@@ -336,6 +351,7 @@ class MainWindow(QMainWindow):
         if not self.current_directory.is_dir():
             self.directory_tree.clear()
             self.target_label.hide()
+            self.clear_target_button.hide()
             self.tabs.clear()
             return
 
@@ -387,6 +403,7 @@ class MainWindow(QMainWindow):
 
         if target == self.current_directory:
             self.target_label.hide()
+            self.clear_target_button.hide()
             return
 
         # the path label beside it already names the base directory, so the name
@@ -394,6 +411,8 @@ class MainWindow(QMainWindow):
         self.target_label.setText(f"New tasks in {target.name}")
         self.target_label.setToolTip(str(target))
         self.target_label.show()
+        # the clear button is part of the line: it shows and hides with it
+        self.clear_target_button.show()
 
     def _reload_tasks(self) -> None:
         # one day for the whole listing, so a refresh that runs as the date turns

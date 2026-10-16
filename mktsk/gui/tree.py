@@ -144,6 +144,15 @@ class _CategoryTree(QTreeWidget):
                 self.setCurrentItem(item)
                 return
 
+    def clear_subdirectory(self) -> None:
+        """Drops the selection, so no subdirectory is the target any more.
+
+        The current item carries the selection, so an invalid index is what
+        takes it away; that is also the one way to a current item of None,
+        which the selection-change signal reports like any other.
+        """
+        self.setCurrentIndex(self.model().index(-1, -1))
+
     def _place_header_buttons(self) -> None:
         """Places the header buttons at the right end, centred and apart.
 

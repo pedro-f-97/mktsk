@@ -24,6 +24,10 @@ from PySide6.QtWidgets import QApplication, QToolButton, QWidget
 _ICON_SIZE = 18
 _ICON_STROKE = 2.0
 
+# the size of an icon that sits beside a line of text rather than alone in a
+# header, so it reads as part of the line instead of as a button of its own
+_SMALL_ICON_SIZE = 12
+
 _CLIP_TOP = 3.5
 _CLIP_BOTTOM = 14.5
 _CLIP_WIDTH = 6.0
@@ -85,6 +89,12 @@ def _draw_plus(painter: QPainter, box: QRectF) -> None:
     """Draws a plus, for adding an intervention to a task."""
     painter.drawLine(QPointF(9, 4), QPointF(9, 14))
     painter.drawLine(QPointF(4, 9), QPointF(14, 9))
+
+
+def _draw_cross(painter: QPainter, box: QRectF) -> None:
+    """Draws two crossing strokes, for clearing the destination."""
+    painter.drawLine(QPointF(5, 5), QPointF(13, 13))
+    painter.drawLine(QPointF(13, 5), QPointF(5, 13))
 
 
 def _draw_pencil(painter: QPainter, box: QRectF) -> None:

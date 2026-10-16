@@ -2,7 +2,8 @@
 
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
   `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
-  `tests/test_gui_actions.py`, `tests/test_gui_create.py`, `tests/test_gui_icons.py`,
+  `tests/test_gui_actions.py`, `tests/test_gui_create.py`,
+  `tests/test_gui_destination.py`, `tests/test_gui_icons.py`,
   `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_attachments.py`,
   `tests/test_gui_row_text.py`,
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
@@ -86,6 +87,13 @@
   target is not the current directory; it sits between the title field and the `Create`
   button, in the same font and only the colour tells it apart, so it adds no height, and
   the full path is its tooltip
+- The label carries a small flat `x` button at its right, shown exactly while
+  the label is and hidden with it: clicking it clears the tree selection through
+  the same path a selection change takes, so the line and the `x` go with it and
+  the next task is created in the base folder. The `x` is two crossing strokes
+  drawn like the other icons, in the colour the Directory header buttons carry,
+  smaller than their icons, out of the tab order and top-aligned in the row, so
+  the bar keeps its height and its line with the Directory header
 - The task list comes from `find_task_groups`: one tab per category, the current
   directory being a category named after itself, plus an `All` tab first; only
   categories that hold tasks get a tab
