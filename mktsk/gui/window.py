@@ -2,6 +2,7 @@
 
 import datetime
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QPointF, QRectF, QSettings, QSize, Qt
 from PySide6.QtGui import (
@@ -49,6 +50,7 @@ from .icons import (
 )
 from .tasklist import (
     _AGE_ROLE,
+    _CATEGORY_ROLE,
     _COUNT_ROLE,
     _ENTRY_ROLE,
     _STATE_ROLE,
@@ -356,8 +358,10 @@ class MainWindow(QMainWindow):
             return
 
         self._reload_tree()
-        self._sync_creation_target()
+        # the listings are built again on every reload, so they are told the
+        # destination the tree holds once they exist
         self._reload_tasks()
+        self._sync_creation_target()
 
     def _reload_tree(self) -> None:
         # the selection is read before the clear, which takes it with it
@@ -397,9 +401,28 @@ class MainWindow(QMainWindow):
         """
         return self._selected_directory() or self.current_directory
 
+    def select_destination(self, category: str) -> None:
+        """Selects a category in the tree, making it the creation target.
+
+        A category heading carries the folder it stands for, so clicking one
+        does what clicking that folder in the tree does: the tree keeps the
+        selection, the label names it and the next task lands in it.
+
+        Args:
+            category: the path the heading carries.
+        """
+        self.directory_tree.select_subdirectory(Path(category))
+
     def _sync_creation_target(self) -> None:
         """Points the target line at the directory a new task would land in."""
         target = self.creation_directory()
+        selected = self._selected_directory()
+
+        # the marker that stands for the destination is carried by the listings
+        # themselves, so every one of them follows the selection
+        for index in range(self.tabs.count()):
+            panel = cast(TaskPanel, self.tabs.widget(index))
+            panel.listing.set_destination(selected)
 
         if target == self.current_directory:
             self.target_label.hide()
@@ -432,7 +455,7 @@ class MainWindow(QMainWindow):
             archived = [entry for entry in group.entries if entry.state == "closed"]
 
             if standing:
-                self._add_heading(every, title)
+                self._add_heading(every, title, group.category)
                 for entry in standing:
                     self._add_task(every, entry, today)
 
@@ -490,6 +513,7 @@ class MainWindow(QMainWindow):
                 name, column, descending
             )
         )
+        tab.destination_requested.connect(self.select_destination)
         return tab
 
     def _remember_sort(self, title: str, column: int, descending: bool) -> None:
@@ -510,12 +534,19 @@ class MainWindow(QMainWindow):
 
         self.tabs.setCurrentIndex(0)
 
-    def _add_heading(self, tab: QListWidget, text: str) -> None:
+    def _add_heading(
+        self, tab: QListWidget, text: str, category: Path | None = None
+    ) -> None:
         item = QListWidgetItem(text)
         font = item.font()
         font.setBold(True)
         item.setFont(font)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
+        # only a heading that stands for a live category is worth storing: an
+        # archive heading names no folder a new task could land in, so clicking
+        # one cannot pick a destination
+        if category is not None:
+            item.setData(_CATEGORY_ROLE, str(category))
         tab.addItem(item)
 
     def _add_task(

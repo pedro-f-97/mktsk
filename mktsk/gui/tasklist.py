@@ -1,11 +1,13 @@
 """The tasks of a category as a list, with the actions on the selected row."""
 
 import datetime
+from pathlib import Path
 from typing import NamedTuple
 
 from PySide6.QtCore import (
     QModelIndex,
     QPersistentModelIndex,
+    QPointF,
     QRect,
     QRectF,
     QSize,
@@ -61,6 +63,9 @@ _ENTRY_ROLE = Qt.ItemDataRole.UserRole + 1
 _COUNT_ROLE = Qt.ItemDataRole.UserRole + 2
 _AGE_ROLE = Qt.ItemDataRole.UserRole + 3
 _STATE_ROLE = Qt.ItemDataRole.UserRole + 4
+# the category a heading stands for, carried by the `All` headings alone: an
+# archive heading lists no folder that a new task could land in, so it has none
+_CATEGORY_ROLE = Qt.ItemDataRole.UserRole + 5
 
 _ACTION_BAR_PADDING = 4
 
@@ -87,6 +92,11 @@ _SEPARATOR_WEIGHT = 0.08
 # a small margin, kept clear between the bar and the text of a selected row, so
 # the indicator never touches a glyph
 _SELECTION_INDICATOR_GAP = 6
+
+# the marker a heading carries when it stands for the destination: a small dot
+# at the right end of the row, clear of the name the style draws from the left
+_MARKER_RADIUS = 4.0
+_MARKER_INSET = 12
 
 # how the text of a cell sits in the column of it: read from the left and
 # centred, so a row of one line looks like the headings above it
@@ -585,6 +595,9 @@ class _InsetDelegate(QStyledItemDelegate):
         self.min_height = min_height
         self.header = header
         self.inset_row = -1
+        # the category a heading stands for when it is the destination, held as
+        # the string the row carries, or None when no category is the target
+        self.destination: str | None = None
 
     def column_rect(self, row: QRect, column: int) -> QRect:
         """Returns the rectangle of a column within a row.
@@ -686,6 +699,27 @@ class _InsetDelegate(QStyledItemDelegate):
                 ),
             )
             super().paint(painter, separator_option, index)
+            if self.destination is not None and (
+                index.data(_CATEGORY_ROLE) == self.destination
+            ):
+                # the marker of the destination: a small dot at the right end
+                # of its heading, clear of the name the style draws from the
+                # left, in the colour the header icons carry
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(
+                    option.palette.color(QPalette.ColorRole.ButtonText)
+                )
+                painter.drawEllipse(
+                    QPointF(
+                        option.rect.right() - _MARKER_INSET,
+                        option.rect.center().y(),
+                    ),
+                    _MARKER_RADIUS,
+                    _MARKER_RADIUS,
+                )
+                painter.restore()
             return
 
         # the row background and the selection are the style's, as they are for
@@ -852,6 +886,7 @@ class TaskListing(QListWidget):
     state_requested = Signal(object, str)
     close_requested = Signal(object)
     order_changed = Signal(int, bool)
+    destination_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -892,6 +927,7 @@ class TaskListing(QListWidget):
                 lambda checked=False, new_state=name: self._request_state(new_state)
             )
         self.currentItemChanged.connect(lambda *_: self._sync_action_bar())
+        self.itemClicked.connect(self._click_separator)
         self.action_bar.hide()
         # escape drops the selection only while the table, or a button on its
         # row, holds the focus, so the field and the selector above keep theirs
@@ -905,6 +941,15 @@ class TaskListing(QListWidget):
         """Returns the task of the selected row, or None when none is."""
         item = self.currentItem()
         return item.data(_ENTRY_ROLE) if item else None
+
+    def set_destination(self, directory: Path | None) -> None:
+        """Points the marker at the category a new task would land in.
+
+        Args:
+            directory: the selected category, or None with the base directory.
+        """
+        self.delegate.destination = str(directory) if directory is not None else None
+        self.viewport().update()
 
     def set_sort(self, column: int, descending: bool) -> None:
         """Orders the rows by a column and shows the indicator on it.
@@ -1084,6 +1129,24 @@ class TaskListing(QListWidget):
     def _deselect(self) -> None:
         """Clears the current row, which hides the action bar with it."""
         self.setCurrentRow(-1)
+
+    def _click_separator(self, item: QListWidgetItem) -> None:
+        """Reports a clicked category row, dropping the selected task with it.
+
+        A row that carries no category is a task or an archive heading, so it
+        says nothing about the destination and the click is left alone. A
+        category row is not a task, so the selection and its bar go through the
+        same path `Esc` takes before the destination is asked for.
+
+        Args:
+            item: the row that was clicked.
+        """
+        category = item.data(_CATEGORY_ROLE)
+        if category is None:
+            return
+
+        self._deselect()
+        self.destination_requested.emit(category)
 
     def _sync_action_bar(self) -> None:
         entry = self.selected_entry()

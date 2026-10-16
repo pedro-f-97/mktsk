@@ -94,6 +94,15 @@
   drawn like the other icons, in the colour the Directory header buttons carry,
   smaller than their icons, out of the tab order and top-aligned in the row, so
   the bar keeps its height and its line with the Directory header
+- Clicking a category heading in `All` picks that folder as the destination just as
+  clicking it in the tree does, so the label names it and the next task lands there; the
+  heading drops the selected task first, through the same path `Esc` takes. A task row
+  never changes the destination, and a `Closed` heading stands for no folder a task could
+  land in, so clicking one does nothing. The heading of the current destination carries a
+  small dot at its right end, drawn by the delegate in the colour the Directory header
+  buttons carry, which follows the tree however the selection moves and goes with it; a
+  category with no heading to carry it, because it is empty or its tasks are closed, shows
+  no marker
 - The task list comes from `find_task_groups`: one tab per category, the current
   directory being a category named after itself, plus an `All` tab first; only
   categories that hold tasks get a tab
