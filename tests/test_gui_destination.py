@@ -292,6 +292,114 @@ def test_clicking_the_selected_separator_keeps_the_destination(
 
 
 @freeze_time("2026-09-30")
+def test_escape_clears_the_task_and_the_destination(
+    window, tmp_path, make_task, qtbot, fake_open
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    category = tmp_path / "Veritas"
+    make_task(category, "260925", "Bar")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    separated = _separator(listing, "Veritas")
+    select_directory(window, category.resolve())
+    select_task(window, file)
+    listing.setFocus()
+
+    assert listing.action_bar.isVisible() is True
+    assert window.target_label.isVisible() is True
+    assert _marker_pixels(listing, separated) > 0
+
+    qtbot.keyClick(listing, Qt.Key.Key_Escape)
+
+    assert listing.currentItem() is None
+    assert listing.action_bar.isVisible() is False
+    assert window.directory_tree.currentItem() is None
+    assert window.target_label.isVisible() is False
+    assert window.clear_target_button.isVisible() is False
+    assert _marker_pixels(listing, separated) == 0
+
+    window.title_input.setText("Test Task")
+    window.create_task()
+
+    created = tmp_path / "260930 - TestTask" / "TestTask.md"
+    assert created.is_file()
+    assert fake_open == [created]
+
+
+def test_escape_with_only_a_destination_clears_it(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "Foo")
+    category = (tmp_path / "Veritas").resolve()
+    make_task(category, "260925", "Bar")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    select_directory(window, category)
+    listing.setFocus()
+
+    qtbot.keyClick(listing, Qt.Key.Key_Escape)
+
+    assert window.directory_tree.currentItem() is None
+    assert window.creation_directory() == tmp_path.resolve()
+    assert window.target_label.isVisible() is False
+    assert window.clear_target_button.isVisible() is False
+
+
+def test_escape_with_nothing_selected_changes_nothing(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    listing.setFocus()
+
+    qtbot.keyClick(listing, Qt.Key.Key_Escape)
+
+    assert listing.currentItem() is None
+    assert window.directory_tree.currentItem() is None
+    assert window.creation_directory() == tmp_path.resolve()
+    assert window.target_label.isVisible() is False
+
+
+def test_escape_in_the_title_field_keeps_the_destination(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "Foo")
+    category = (tmp_path / "Veritas").resolve()
+    make_task(category, "260925", "Bar")
+    window.navigate_to(tmp_path)
+    select_directory(window, category)
+    window.title_input.setFocus()
+
+    qtbot.keyClick(window.title_input, Qt.Key.Key_Escape)
+
+    assert window.directory_tree.currentItem() == find_directory(window, category)
+    assert window.creation_directory() == category
+    assert window.target_label.isVisible() is True
+
+
+def test_escape_clears_the_destination_with_the_left_pane_collapsed(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "Foo")
+    category = (tmp_path / "Veritas").resolve()
+    make_task(category, "260925", "Bar")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    select_directory(window, category)
+    window.toggle_left_pane()
+    listing.setFocus()
+
+    assert window.splitter.sizes()[0] == 0
+
+    qtbot.keyClick(listing, Qt.Key.Key_Escape)
+
+    assert window.directory_tree.currentItem() is None
+    assert window.creation_directory() == tmp_path.resolve()
+    assert window.target_label.isVisible() is False
+
+
+@freeze_time("2026-09-30")
 def test_the_destination_works_with_the_left_pane_collapsed(
     window, tmp_path, make_task, qtbot, fake_open
 ):

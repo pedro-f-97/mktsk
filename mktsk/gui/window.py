@@ -514,6 +514,11 @@ class MainWindow(QMainWindow):
             )
         )
         tab.destination_requested.connect(self.select_destination)
+        # escape in the table drops the task and, with it, the destination: it
+        # clears the tree through the same handler the label's 'x' calls
+        tab.escape_shortcut.activated.connect(
+            self.directory_tree.clear_subdirectory
+        )
         return tab
 
     def _remember_sort(self, title: str, column: int, descending: bool) -> None:
