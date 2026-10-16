@@ -926,7 +926,10 @@ class TaskListing(QListWidget):
             action.triggered.connect(
                 lambda checked=False, new_state=name: self._request_state(new_state)
             )
-        self.currentItemChanged.connect(lambda *_: self._sync_action_bar())
+        # a row becomes selected through a click, the keyboard or a programmatic
+        # selection, all of which fire itemSelectionChanged; focus alone moves
+        # only the current item, which must never show the bar or its room
+        self.itemSelectionChanged.connect(self._sync_action_bar)
         self.itemClicked.connect(self._click_separator)
         self.action_bar.hide()
         # escape drops the selection only while the table, or a button on its
@@ -939,7 +942,10 @@ class TaskListing(QListWidget):
 
     def selected_entry(self) -> listing.TaskEntry | None:
         """Returns the task of the selected row, or None when none is."""
-        item = self.currentItem()
+        selected_items = self.selectedItems()
+        if not selected_items:
+            return None
+        item = selected_items[0]
         return item.data(_ENTRY_ROLE) if item else None
 
     def set_destination(self, directory: Path | None) -> None:
