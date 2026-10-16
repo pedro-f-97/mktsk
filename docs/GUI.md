@@ -103,6 +103,9 @@
   buttons carry, which follows the tree however the selection moves and goes with it; a
   category with no heading to carry it, because it is empty or its tasks are closed, shows
   no marker
+- Clicking the heading of the base folder clears the destination, like the `x` on the
+  label: the tree selection drops, the line, the `x` and the marker go with it, and the
+  next task lands in the base folder
 - The task list comes from `find_task_groups`: one tab per category, the current
   directory being a category named after itself, plus an `All` tab first; only
   categories that hold tasks get a tab

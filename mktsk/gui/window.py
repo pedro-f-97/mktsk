@@ -406,12 +406,20 @@ class MainWindow(QMainWindow):
 
         A category heading carries the folder it stands for, so clicking one
         does what clicking that folder in the tree does: the tree keeps the
-        selection, the label names it and the next task lands in it.
+        selection, the label names it and the next task lands in it. The base
+        folder heading carries the directory itself, and clicking it clears
+        the tree through the same handler as the label's `x`, because no
+        selection is what stands for the base folder.
 
         Args:
             category: the path the heading carries.
         """
-        self.directory_tree.select_subdirectory(Path(category))
+        path = Path(category)
+        if path == self.current_directory:
+            self.directory_tree.clear_subdirectory()
+            return
+
+        self.directory_tree.select_subdirectory(path)
 
     def _sync_creation_target(self) -> None:
         """Points the target line at the directory a new task would land in."""
@@ -455,7 +463,11 @@ class MainWindow(QMainWindow):
             archived = [entry for entry in group.entries if entry.state == "closed"]
 
             if standing:
-                self._add_heading(every, title, group.category)
+                # the heading of the base folder carries the directory itself,
+                # so a click on it clears the destination instead of picking one
+                self._add_heading(
+                    every, title, group.category or self.current_directory
+                )
                 for entry in standing:
                     self._add_task(every, entry, today)
 

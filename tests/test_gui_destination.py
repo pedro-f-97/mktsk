@@ -292,6 +292,103 @@ def test_clicking_the_selected_separator_keeps_the_destination(
 
 
 @freeze_time("2026-09-30")
+def test_clicking_the_base_folder_heading_clears_the_destination(
+    window, tmp_path, make_task, qtbot, fake_open
+):
+    make_task(tmp_path, "260918", "Foo")
+    category = tmp_path / "Veritas"
+    make_task(category, "260925", "Bar")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    base = _separator(listing, tmp_path.name)
+    separated = _separator(listing, "Veritas")
+    select_directory(window, category.resolve())
+    select_task(window, tmp_path / "260918 - Foo" / "Foo.md")
+
+    assert listing.selected_entry() is not None
+    assert window.target_label.isVisible() is True
+    assert _marker_pixels(listing, separated) > 0
+    # the heading of the base folder stands for no destination of its own
+    assert _marker_pixels(listing, base) == 0
+
+    _click_row(qtbot, listing, base)
+
+    assert window.directory_tree.currentItem() is None
+    assert window.target_label.isVisible() is False
+    assert window.clear_target_button.isVisible() is False
+    assert _marker_pixels(listing, separated) == 0
+    assert listing.selected_entry() is None
+    assert listing.action_bar.isVisible() is False
+
+    window.title_input.setText("Test Task")
+    window.create_task()
+
+    created = tmp_path / "260930 - TestTask" / "TestTask.md"
+    assert created.is_file()
+    assert fake_open == [created]
+    assert not (category / "260930 - TestTask").exists()
+
+
+def test_clicking_the_base_folder_heading_with_no_destination_changes_nothing(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    base = _separator(listing, tmp_path.name)
+
+    _click_row(qtbot, listing, base)
+
+    assert window.directory_tree.currentItem() is None
+    assert window.creation_directory() == tmp_path.resolve()
+    assert window.target_label.isVisible() is False
+    assert window.clear_target_button.isVisible() is False
+    assert listing.selected_entry() is None
+    assert _marker_pixels(listing, base) == 0
+
+
+def test_clicking_the_base_folder_heading_clears_it_with_the_left_pane_collapsed(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "Foo")
+    category = tmp_path / "Veritas"
+    make_task(category, "260925", "Bar")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    select_directory(window, category.resolve())
+    window.toggle_left_pane()
+
+    assert window.splitter.sizes()[0] == 0
+
+    _click_row(qtbot, listing, _separator(listing, tmp_path.name))
+
+    assert window.directory_tree.currentItem() is None
+    assert window.creation_directory() == tmp_path.resolve()
+    assert window.target_label.isVisible() is False
+
+
+def test_clicking_the_base_folder_heading_in_the_closed_tab_changes_nothing(
+    window, tmp_path, make_task, qtbot
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    fill_task(file, datetime.date(2026, 9, 18), "closed", 0)
+    category = tmp_path / "Veritas"
+    make_task(category, "260925", "Bar")
+    window.navigate_to(tmp_path)
+    select_directory(window, category.resolve())
+    select_tab(window, "Closed")
+    listing = task_listing(window, "Closed")
+
+    _click_row(qtbot, listing, _separator(listing, tmp_path.name))
+
+    assert window.directory_tree.currentItem() == find_directory(
+        window, category.resolve()
+    )
+    assert window.creation_directory() == category.resolve()
+    assert window.target_label.isVisible() is True
+
+
+@freeze_time("2026-09-30")
 def test_escape_clears_the_task_and_the_destination(
     window, tmp_path, make_task, qtbot, fake_open
 ):
