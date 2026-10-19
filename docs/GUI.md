@@ -205,6 +205,12 @@
   the selection and disappears with it
 - `Esc` in the task table deselects the current task, so the bar goes with the
   selection, and clears the destination through the same handler the label's `x` calls
+- `TaskListing.select_task(path)` selects the row whose entry carries `path` and scrolls it
+  into view, answering `True`; a path no row of this listing or of another tab holds answers
+  `False`, with the selection and the current tab left as they were. A row in another tab is
+  reached by switching to that tab first, so the action bar and the preview follow the task
+  as they would after a click. It never changes the destination: no category is picked and
+  none is cleared, so a new task lands where it would have landed without it
 - Below the task table a read-only preview of the selected task shares the pane through
   a vertical `QSplitter`, the table over the preview and the two resizable between
   them, the table keeping the larger share. On the left the raw text of the `.md`,
