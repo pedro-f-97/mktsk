@@ -158,6 +158,13 @@
   dated heading a conversion left in the body is content rather than a visit. A `.md` that
   cannot be read never brings the listing down, the same rule as a directory that cannot be
   read
+- The attachments of a task are what its folder carries beside the task itself: every
+  direct entry counts, a subfolder as one whatever it holds, and the folder is read one
+  level deep and never walked into. The `.md` named after the task is the task rather than
+  an attachment, and hidden entries (a dot-prefixed name, or the Windows hidden or system
+  attribute), `desktop.ini`, `Thumbs.db` and Office lock files named `~$…` are not
+  attachments. A folder that is missing or cannot be read carries none and never raises,
+  and an archive carries none either, because it is never opened
 - Tasks of a category are listed by `last_activity`, newest first, and alphabetical for tasks
   of the same last activity. Coming back to a task moves it to the top, whichever day it was
   created

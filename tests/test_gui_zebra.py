@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 
 from mktsk.gui.tasklist import (
     _ENTRY_ROLE,
+    _SELECTION_TINT_WEIGHT,
     _SEPARATOR_WEIGHT,
     _ZEBRA_WEIGHT,
     _blend,
@@ -188,7 +189,7 @@ def no_selection_style(qapp):
         qapp.setStyle(style)
 
 
-def test_a_selected_row_keeps_the_base_and_a_striped_row_does_not(
+def test_a_selected_row_is_tinted_and_a_striped_row_does_not_become_one(
     no_selection_style, window, tmp_path, make_task
 ):
     make_task(tmp_path, "260918", "Foo")
@@ -198,9 +199,19 @@ def test_a_selected_row_keeps_the_base_and_a_striped_row_does_not(
     item = listing.item(1)
     base, text = _colours(listing, _UNSELECTED)
     stripe = _blend(base, text, _ZEBRA_WEIGHT)
+    group = _colour_group(_SELECTED)
+    palette = listing.viewport().palette()
+    tint = _blend(
+        palette.color(group, QPalette.ColorRole.Base),
+        palette.color(group, QPalette.ColorRole.Highlight),
+        _SELECTION_TINT_WEIGHT,
+    )
 
     assert row_background(render_row(listing, item, _UNSELECTED)) == stripe
-    assert row_background(render_row(listing, item, _SELECTED)) == base
+    # a selected row carries the selection of the delegate rather than a
+    # stripe, and the style paints no selection of its own to cover that
+    assert row_background(render_row(listing, item, _SELECTED)) == tint
+    assert tint != base
 
 
 def test_the_separator_keeps_the_task_text_and_fills_the_whole_row(

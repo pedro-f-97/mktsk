@@ -11,8 +11,9 @@ workflow interactively.
 ## Simplicity first
 
 - Before implementing a fix, state in one line the simplest change that could work (for example, one palette role or one style flag) and why it is or is not enough. Prefer it.
-- Do not add caches, probing/rendering of the style, new abstractions or new helper layers for a UI fix unless the simple change was tried and shown to fail; then report the evidence.
-- If a change needs a new class, a cache, a model/proxy model, style probing or more than one new helper, stop and report before continuing: say what was tried, what failed, and what the simple alternative would cost.
+- Do not add caches, probing/rendering of the style, new abstractions or new helper layers for a UI fix unless the simple change was tried and shown to fail, or there is concrete evidence that it cannot work.
+- If a change appears to require a new class, a cache, a model/proxy model, style probing or additional helper layers, first assess whether a simpler alternative can meet the requirements. If not, explain the evidence and the trade-off before proceeding.
+- Do not stop solely because a solution requires additional structure. Keep the implementation proportional to the problem and explain any significant increase in complexity.
 - Prefer clear code over short code. Do not shorten a design to meet a line count; report production lines per file for information only.
 - Tests prove the behaviour with the least machinery that reproduces it. Do not build test infrastructure larger than the code it covers.
 
@@ -24,16 +25,19 @@ workflow interactively.
 
 ## No images
 
-- Never render, grab, save or read screenshots or images (`widget.grab()`, `QPixmap.save`, `.png`/`.jpg` files, probe scripts that output images), not even as scratch files.
-- Verify GUI behaviour only with in-process tests that assert state and geometry (text, sizes, positions, visibility, `QFontMetrics` widths).
+- Never read or write image files or screenshots: `widget.grab().save(...)`, `QPixmap.save`, `.png`/`.jpg` files, or probe scripts that output images, not even as scratch files.
+- Rendering in-process to a `QImage` for a pixel assertion is the suite's existing convention (`tests/gui_helpers.render_row`, `row_background`) and is allowed; it is not "reading an image".
+- Prefer asserting state and geometry (text, sizes, positions, visibility, `QFontMetrics` widths). Use a pixel assertion only when no state or geometry proves the behaviour.
 - The user evaluates every visual result manually. If a visual check seems unavoidable, stop and report.
 
 ## Lean diagnostics
 
-- Never read other binary files (PDFs, archives, etc.); extract data with a script and print numbers.
-- Diagnose with one probe that prints a structured text report; do not repeat measurements or chain ad hoc probes.
-- Stop at the first evidence that confirms the cause; no further forensics (pixels, styles, geometry) beyond what the fix needs.
+- Never read other binary files (PDFs, archives, etc.); extract the required data with a script and print a concise text report.
+- Diagnose with one probe that prints a structured text report; avoid repeated measurements and ad hoc probes unless new evidence requires further investigation.
+- Stop investigating once the available evidence is sufficient to identify the cause and choose a fix. Gather additional evidence only when it could change the diagnosis or implementation.
 - Read large files with `grep` plus offset/limit; do not read them whole or re-read unchanged regions.
+- Do not guess framework or library semantics when they affect the implementation. Consult the official documentation or existing tests first; if uncertainty remains, run the smallest probe that verifies the relevant behaviour. Use the result to justify the implementation.
+- **Hard cap: two diagnostic runs per failing test.** If a test fails, you get at most two runs whose purpose is to observe behaviour (pytest invocations, or scripts whose only job is to print/measure — not to fix). After the second run, stop and report. Do not start a third.
 
 ## Docs
 
@@ -46,7 +50,7 @@ Read the matching one before editing the module it covers.
 ## Structure
 
 `mktsk/` — CLI and domain logic, without Qt.
-`mktsk/gui/` — PySide6, one module per responsability.
+`mktsk/gui/` — PySide6, one module per responsibility.
 
 Run `tree mktsk/ tests/` or read the module docstrings for the layout.
 
@@ -79,6 +83,10 @@ On Linux the path is `.venv/bin/python`. CI keeps the plain `pyright mktsk/`, wh
 does not help: pyright looks for a venv named `venv`, not `.venv`, and has no flag to
 change the name.
 
+The interpreter path above is authoritative. Copy it from this section; do not
+recall it or guess. On this machine the venv is a Windows venv inside WSL
+(`.venv/Scripts/python.exe`); `.venv/bin/python` does not exist.
+
 ## Conventions
 
 - English code, symbols, docs and example data; test data uses placeholders
@@ -95,9 +103,8 @@ change the name.
   `extend-select` cuts the default families back to `E`, `F` and `W`
 - Comment only when it adds value; never delete existing comments
 - Tests in `tests/test_*.py`; never write to real user folders (`tmp_path`)
-- One test file per subject, named after it (`test_gui_listing.py`, `test_gui_target.py`,
-  `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py`, `test_gui_window.py`);
-  a file that grows past a few hundred lines is split, never extended
+- Organize tests by subject, with descriptive filenames such as `test_gui_listing.py`, `test_gui_target.py`, `test_gui_header.py`, `test_gui_actions.py`, `test_gui_create.py` and `test_gui_window.py`.
+- Split a test file when it covers distinct responsibilities, becomes difficult to navigate, or develops excessive setup and fixture complexity. Treat file length as a warning sign, not a fixed limit; do not split a cohesive test file solely because of its size.
 - Fixtures go in `tests/conftest.py`; the plain helpers shared across GUI test files live
   in `tests/gui_helpers.py` and are imported as `from tests.gui_helpers import ...`, because
   `tests/__init__.py` makes `tests/` a package

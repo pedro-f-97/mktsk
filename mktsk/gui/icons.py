@@ -13,6 +13,7 @@ from PySide6.QtGui import (
     QIcon,
     QImage,
     QPainter,
+    QPainterPath,
     QPalette,
     QPen,
     QPixmap,
@@ -22,6 +23,21 @@ from PySide6.QtWidgets import QApplication, QToolButton, QWidget
 
 _ICON_SIZE = 18
 _ICON_STROKE = 2.0
+
+# the size of an icon that sits beside a line of text rather than alone in a
+# header, so it reads as part of the line instead of as a button of its own
+_SMALL_ICON_SIZE = 12
+
+_CLIP_TOP = 3.5
+_CLIP_BOTTOM = 14.5
+_CLIP_WIDTH = 6.0
+_CLIP_INNER_INSET = 3.0
+_CLIP_TAIL = 4.5
+
+# how far the chevron of the pane toggle reaches from its centre, small enough
+# to sit inside the toggle bar with a margin on each side
+_CHEVRON_HALF_WIDTH = 3.5
+_CHEVRON_HALF_HEIGHT = 5.5
 
 
 def _device_scale() -> int:
@@ -75,6 +91,12 @@ def _draw_plus(painter: QPainter, box: QRectF) -> None:
     painter.drawLine(QPointF(4, 9), QPointF(14, 9))
 
 
+def _draw_cross(painter: QPainter, box: QRectF) -> None:
+    """Draws two crossing strokes, for clearing the destination."""
+    painter.drawLine(QPointF(5, 5), QPointF(13, 13))
+    painter.drawLine(QPointF(13, 5), QPointF(5, 13))
+
+
 def _draw_pencil(painter: QPainter, box: QRectF) -> None:
     """Draws a pencil, for changing the title of a task."""
     painter.drawPolygon(
@@ -95,6 +117,38 @@ def _draw_state(painter: QPainter, box: QRectF) -> None:
     """Draws a ring with a dot, for the state a task is in."""
     painter.drawEllipse(QPointF(9, 9), 6, 6)
     painter.drawEllipse(QPointF(9, 9), 1.5, 1.5)
+
+
+def _draw_clip(painter: QPainter, box: QRectF) -> None:
+    """Draws a paperclip, for the attachments a task carries.
+
+    A slim wire of two straight legs joined by a wide rounded turn at the
+    bottom and a narrow one at the top, so the clip is tall and curved
+    rather than angular.
+    """
+    centre = box.center().x()
+    left = centre - _CLIP_WIDTH / 2
+    right = centre + _CLIP_WIDTH / 2
+    inner = left + _CLIP_INNER_INSET
+    outer_radius = _CLIP_WIDTH / 2
+    inner_radius = (right - inner) / 2
+
+    path = QPainterPath()
+    path.moveTo(left, _CLIP_TOP)
+    path.lineTo(left, _CLIP_BOTTOM - outer_radius)
+    path.arcTo(
+        QRectF(left, _CLIP_BOTTOM - _CLIP_WIDTH, _CLIP_WIDTH, _CLIP_WIDTH),
+        180,
+        180,
+    )
+    path.lineTo(right, _CLIP_TOP + inner_radius)
+    path.arcTo(
+        QRectF(inner, _CLIP_TOP, right - inner, right - inner),
+        0,
+        180,
+    )
+    path.lineTo(inner, _CLIP_TOP + inner_radius + _CLIP_TAIL)
+    painter.drawPath(path)
 
 
 def _draw_close(painter: QPainter, box: QRectF) -> None:
@@ -131,6 +185,31 @@ def _draw_refresh(painter: QPainter, box: QRectF) -> None:
     painter.drawArc(QRectF(4, 4, 10, 10), 1440, -4320)
     painter.drawLine(QPointF(4, 9), QPointF(6.1, 11.1))
     painter.drawLine(QPointF(4, 9), QPointF(1.9, 11.1))
+
+
+def _draw_chevron(
+    painter: QPainter, box: QRectF, points_right: bool, color: QColor
+) -> None:
+    """Draws the two strokes of a chevron, for the pane toggle bar.
+
+    Args:
+        painter: painter over the bar, given the pen the icons are drawn with.
+        box: rectangle to centre the chevron in.
+        points_right: whether the tip points right rather than left.
+        color: colour of the strokes.
+    """
+    painter.setPen(_icon_pen(color))
+    centre = box.center()
+    dx = _CHEVRON_HALF_WIDTH if points_right else -_CHEVRON_HALF_WIDTH
+    back_x = centre.x() - dx
+    painter.drawLine(
+        QPointF(back_x, centre.y() - _CHEVRON_HALF_HEIGHT),
+        QPointF(centre.x() + dx, centre.y()),
+    )
+    painter.drawLine(
+        QPointF(centre.x() + dx, centre.y()),
+        QPointF(back_x, centre.y() + _CHEVRON_HALF_HEIGHT),
+    )
 
 
 def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QIcon:

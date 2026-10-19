@@ -2,12 +2,22 @@
 
 import datetime
 from pathlib import Path
+from typing import cast
 
-from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QCloseEvent, QPalette, QResizeEvent, QShowEvent
+from PySide6.QtCore import QPointF, QRectF, QSettings, QSize, Qt
+from PySide6.QtGui import (
+    QCloseEvent,
+    QPainter,
+    QPaintEvent,
+    QPalette,
+    QPen,
+    QResizeEvent,
+    QShowEvent,
+)
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -16,10 +26,12 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSizePolicy,
     QSplitter,
     QTabWidget,
+    QToolButton,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -27,9 +39,19 @@ from PySide6.QtWidgets import (
 
 from mktsk import files, helpers, listing, standards, state, tasks
 
-from .icons import _draw_choose, _draw_refresh, _draw_up, _icon_button
+from .icons import (
+    _CHEVRON_HALF_HEIGHT,
+    _SMALL_ICON_SIZE,
+    _draw_chevron,
+    _draw_choose,
+    _draw_cross,
+    _draw_refresh,
+    _draw_up,
+    _icon_button,
+)
 from .tasklist import (
     _AGE_ROLE,
+    _CATEGORY_ROLE,
     _COUNT_ROLE,
     _ENTRY_ROLE,
     _STATE_ROLE,
@@ -50,6 +72,79 @@ _DIRECTORY_HEADER = "Directory"
 # share, so the two panes line up on a single grid
 _MARGIN = 6
 
+# the side rail is as wide as the Refresh button it carries plus this padding,
+# so its width follows the style rather than a pixel figure of its own
+_RAIL_PADDING = 2
+
+# the separator line of the toggle bar: how far it stops short of the ends of
+# the bar, and of the chevron it is interrupted by, in logical pixels
+_TOGGLE_LINE_MARGIN = 6.0
+_TOGGLE_LINE_GAP = 4.0
+
+
+def _task_text(file: Path) -> str:
+    """Reads the raw text of a task .md for the preview.
+
+    The text is shown as it stands, with no Markdown rendering, and a file
+    that cannot be read previews as empty rather than raising: one unreadable
+    file never brings the listing down, and it does not bring the preview down
+    either. A byte that is not valid utf-8 is replaced rather than failing the
+    read, so a file with one still shows everything around it.
+
+    Args:
+        file: the .md of the task.
+
+    Returns:
+        The text of the file, or nothing when it cannot be read.
+    """
+    try:
+        return file.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+class _PaneToggle(QToolButton):
+    """The pane toggle, drawn as a line down its centre broken by a chevron.
+
+    The direction of the chevron is handed in by the window, from the same
+    state that words the tooltip, so the bar paints what it is told.
+    """
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._points_right = False
+
+    def set_points_right(self, points_right: bool) -> None:
+        """Turns the chevron to the side the next click opens, and repaints.
+
+        Args:
+            points_right: True for a chevron pointing right.
+        """
+        self._points_right = points_right
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        palette = self.palette()
+        chevron_colour = palette.color(QPalette.ColorRole.ButtonText)
+        idle = palette.color(QPalette.ColorRole.Mid)
+        line_colour = chevron_colour if self.underMouse() else idle
+        centre = self.rect().center()
+        x = centre.x()
+        painter.setPen(QPen(line_colour, 1))
+        painter.drawLine(
+            QPointF(x, _TOGGLE_LINE_MARGIN),
+            QPointF(x, centre.y() - _CHEVRON_HALF_HEIGHT - _TOGGLE_LINE_GAP),
+        )
+        painter.drawLine(
+            QPointF(x, centre.y() + _CHEVRON_HALF_HEIGHT + _TOGGLE_LINE_GAP),
+            QPointF(x, self.height() - _TOGGLE_LINE_MARGIN),
+        )
+        _draw_chevron(painter, QRectF(self.rect()), self._points_right, chevron_colour)
+        painter.end()
+
 
 class MainWindow(QMainWindow):
     """Desktop interface over the CLI task logic."""
@@ -58,6 +153,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings or QSettings("mktsk", "mktsk")
         self._sorts: dict[str, tuple[int, bool]] = {}
+        # the width the left pane had before the toggle bar collapsed it, and
+        # the split the splitter opened with, to fall back on when a collapse
+        # came from dragging the handle rather than from the bar
+        self._left_width: int | None = None
+        self._initial_left_width: int | None = None
         last_path = self.settings.value("last_path", str(Path.cwd()))
         self.current_directory = Path(str(last_path))
         self.setWindowTitle("mktsk")
@@ -84,6 +184,32 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
         self.tabs = QTabWidget()
+        # the preview of the selected task: the raw text of the .md beside the
+        # names of the other attachments, both read-only and neither in the
+        # tab order, so the tabs keep the order they had
+        self.preview_text = QPlainTextEdit()
+        self.preview_text.setReadOnly(True)
+        self.preview_text.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.preview_list = QListWidget()
+        self.preview_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.preview_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.preview_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+        self.preview_list.setAlternatingRowColors(True)
+        self.preview_area = QSplitter(Qt.Orientation.Horizontal)
+        self.preview_area.addWidget(self.preview_text)
+        self.preview_area.addWidget(self.preview_list)
+        self.preview_area.setStretchFactor(0, 3)
+        self.preview_area.setStretchFactor(1, 1)
+        # hidden until a task is selected, so the table keeps the full height
+        self.preview_area.hide()
+        # the table over the preview, resizable between them, the table taking
+        # the larger share
+        self.table_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.table_splitter.addWidget(self.tabs)
+        self.table_splitter.addWidget(self.preview_area)
+        self.table_splitter.setStretchFactor(0, 3)
+        self.table_splitter.setStretchFactor(1, 2)
+        self.rail = QWidget()
         self.choose_button = _icon_button(
             self.directory_tree.header_view, "Choose...", _draw_choose, "Choose"
         )
@@ -91,8 +217,21 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_view, "Up", _draw_up, "Up"
         )
         self.refresh_button = _icon_button(
-            self.tabs, "Refresh", _draw_refresh, "Refresh"
+            self.rail, "Refresh", _draw_refresh, "Refresh"
         )
+        # the rail is as wide as the buttons it carries, and the toggle bar
+        # fills the rest of its height below Refresh
+        self.rail_width = self.refresh_button.sizeHint().width() + 2 * _RAIL_PADDING
+        self.rail.setFixedWidth(self.rail_width)
+        self.toggle_button = _PaneToggle(self.rail)
+        self.toggle_button.setAutoRaise(True)
+        self.toggle_button.setFixedWidth(self.rail_width)
+        self.toggle_button.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding
+        )
+        self.toggle_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_button.setToolTip("Hide panel")
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Task title")
         self.target_label = QLabel()
@@ -125,21 +264,44 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.path_row)
         left_layout.addWidget(self.directory_tree)
 
-        self.tabs.setCornerWidget(self.refresh_button, Qt.Corner.TopRightCorner)
-
         self.bottom_bar = QWidget()
+        self.clear_target_button = _icon_button(
+            self.bottom_bar, "Clear destination", _draw_cross, "ClearTarget"
+        )
+        self.clear_target_button.setIconSize(QSize(_SMALL_ICON_SIZE, _SMALL_ICON_SIZE))
+        self.clear_target_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.clear_target_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_target_button.hide()
         bottom_layout = QHBoxLayout(self.bottom_bar)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.addWidget(self.title_input, 1)
         bottom_layout.addWidget(self.target_label)
+        # the clear button rides with the label at the top of the row, so it
+        # takes no height from the bar
+        bottom_layout.addWidget(self.clear_target_button, 0, Qt.AlignmentFlag.AlignTop)
         bottom_layout.addWidget(self.create_button)
 
+        # the rail carries Refresh at its top and, below it, the pane toggle;
+        # it spans the full height of the right pane, to the left of everything
+        # else the pane holds
+        rail_layout = QVBoxLayout(self.rail)
+        rail_layout.setContentsMargins(0, 0, 0, 0)
+        rail_layout.setSpacing(0)
+        rail_layout.addWidget(self.refresh_button, 0, Qt.AlignmentFlag.AlignHCenter)
+        rail_layout.addWidget(self.toggle_button, 1)
+
+        # the rail spans the full height of the pane, so it takes the first
+        # column of a grid while the bar and the table share the second; the
+        # table and the preview below it share that cell through a splitter
         self.right_panel = QWidget()
-        right_layout = QVBoxLayout(self.right_panel)
+        right_layout = QGridLayout(self.right_panel)
         right_layout.setContentsMargins(0, _MARGIN, _MARGIN, _MARGIN)
         right_layout.setSpacing(0)
-        right_layout.addWidget(self.tabs, 1)
-        right_layout.addWidget(self.bottom_bar)
+        right_layout.addWidget(self.rail, 0, 0, 2, 1)
+        right_layout.addWidget(self.bottom_bar, 0, 1)
+        right_layout.addWidget(self.table_splitter, 1, 1)
+        right_layout.setColumnStretch(1, 1)
+        right_layout.setRowStretch(1, 1)
 
         self.splitter = QSplitter()
         self.splitter.addWidget(self.left_panel)
@@ -150,12 +312,20 @@ class MainWindow(QMainWindow):
         self.choose_button.clicked.connect(self.choose_directory)
         self.up_button.clicked.connect(self.go_up)
         self.refresh_button.clicked.connect(self.refresh)
+        # clearing the selection is what hides the label and the button: it
+        # fires itemSelectionChanged, the same signal any tree click fires
+        self.clear_target_button.clicked.connect(self.directory_tree.clear_subdirectory)
         self.directory_tree.itemDoubleClicked.connect(self.open_directory)
         self.directory_tree.itemSelectionChanged.connect(self._sync_creation_target)
         self.directory_tree.category_requested.connect(self.new_category)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
+        self.toggle_button.clicked.connect(self.toggle_left_pane)
         self.splitter.splitterMoved.connect(self._update_path_label)
+        self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
+        # the preview follows the selection of the current tab, so a new tab
+        # or a rebuilt one hides it until a task of it is selected
+        self.tabs.currentChanged.connect(self._sync_preview)
 
         # the old bar's focus order, kept by hand because the panels now hold
         # the same widgets in a different tree
@@ -183,14 +353,43 @@ class MainWindow(QMainWindow):
         )
         self.path_label.setToolTip(path)
 
+    def toggle_left_pane(self) -> None:
+        """Collapses the left pane, or restores the width it had before.
+
+        The pane is collapsed and restored through the same splitter sizes a
+        drag of the handle would set, and the width to come back to is the one
+        remembered at the last collapse, or the split the splitter opened with
+        when the collapse came from a drag.
+        """
+        sizes = self.splitter.sizes()
+        total = sum(sizes)
+
+        if sizes[0] > 0:
+            self._left_width = sizes[0]
+            self.splitter.setSizes([0, total])
+        else:
+            width = self._left_width or self._initial_left_width or total
+            self.splitter.setSizes([width, max(total - width, 0)])
+
+        self._update_toggle_tooltip()
+
+    def _update_toggle_tooltip(self) -> None:
+        """Words and points the toggle bar at what the next click will do."""
+        collapsed = self.splitter.sizes()[0] == 0
+        self.toggle_button.setToolTip("Show panel" if collapsed else "Hide panel")
+        self.toggle_button.set_points_right(collapsed)
+
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._update_path_label()
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
+        if self._initial_left_width is None:
+            self._initial_left_width = self.splitter.sizes()[0]
         self._align_header()
         self._update_path_label()
+        self._update_toggle_tooltip()
 
     def navigate_to(self, directory: Path) -> None:
         directory = directory.resolve()
@@ -205,12 +404,15 @@ class MainWindow(QMainWindow):
         if not self.current_directory.is_dir():
             self.directory_tree.clear()
             self.target_label.hide()
+            self.clear_target_button.hide()
             self.tabs.clear()
             return
 
         self._reload_tree()
-        self._sync_creation_target()
+        # the listings are built again on every reload, so they are told the
+        # destination the tree holds once they exist
         self._reload_tasks()
+        self._sync_creation_target()
 
     def _reload_tree(self) -> None:
         # the selection is read before the clear, which takes it with it
@@ -250,12 +452,40 @@ class MainWindow(QMainWindow):
         """
         return self._selected_directory() or self.current_directory
 
+    def select_destination(self, category: str) -> None:
+        """Selects a category in the tree, making it the creation target.
+
+        A category heading carries the folder it stands for, so clicking one
+        does what clicking that folder in the tree does: the tree keeps the
+        selection, the label names it and the next task lands in it. The base
+        folder heading carries the directory itself, and clicking it clears
+        the tree through the same handler as the label's `x`, because no
+        selection is what stands for the base folder.
+
+        Args:
+            category: the path the heading carries.
+        """
+        path = Path(category)
+        if path == self.current_directory:
+            self.directory_tree.clear_subdirectory()
+            return
+
+        self.directory_tree.select_subdirectory(path)
+
     def _sync_creation_target(self) -> None:
         """Points the target line at the directory a new task would land in."""
         target = self.creation_directory()
+        selected = self._selected_directory()
+
+        # the marker that stands for the destination is carried by the listings
+        # themselves, so every one of them follows the selection
+        for index in range(self.tabs.count()):
+            panel = cast(TaskPanel, self.tabs.widget(index))
+            panel.listing.set_destination(selected)
 
         if target == self.current_directory:
             self.target_label.hide()
+            self.clear_target_button.hide()
             return
 
         # the path label beside it already names the base directory, so the name
@@ -263,6 +493,38 @@ class MainWindow(QMainWindow):
         self.target_label.setText(f"New tasks in {target.name}")
         self.target_label.setToolTip(str(target))
         self.target_label.show()
+        # the clear button is part of the line: it shows and hides with it
+        self.clear_target_button.show()
+
+    def _sync_preview(self) -> None:
+        """Shows the preview of the selected task, or hides it with the selection.
+
+        The preview follows the selection of the current tab through the same
+        path the action bar takes, so a task row shows it and a heading, `Esc`
+        or another tab hides it with no special case. Every rendering reads
+        the folder again, so a reload re-renders the task that is still
+        selected, or hides the preview when it is gone. A closed task shows an
+        empty preview: its folder is gone into the archive, which is never
+        opened, so there is no text to read and no attachments to list.
+        """
+        panel = self.tabs.currentWidget()
+        entry = (
+            cast(TaskPanel, panel).listing.selected_entry()
+            if panel is not None
+            else None
+        )
+
+        if entry is None:
+            self.preview_area.hide()
+            return
+
+        closed = standards.is_task_archive(entry.file.name)
+        self.preview_text.setPlainText("" if closed else _task_text(entry.file))
+        attachments = [] if closed else listing.list_attachments(entry.file.parent)
+        self.preview_list.clear()
+        self.preview_list.addItems(attachments)
+        self.preview_list.setVisible(bool(attachments))
+        self.preview_area.show()
 
     def _reload_tasks(self) -> None:
         # one day for the whole listing, so a refresh that runs as the date turns
@@ -282,7 +544,11 @@ class MainWindow(QMainWindow):
             archived = [entry for entry in group.entries if entry.state == "closed"]
 
             if standing:
-                self._add_heading(every, title)
+                # the heading of the base folder carries the directory itself,
+                # so a click on it clears the destination instead of picking one
+                self._add_heading(
+                    every, title, group.category or self.current_directory
+                )
                 for entry in standing:
                     self._add_task(every, entry, today)
 
@@ -340,6 +606,16 @@ class MainWindow(QMainWindow):
                 name, column, descending
             )
         )
+        tab.destination_requested.connect(self.select_destination)
+        # the preview follows the selection through the same path the action
+        # bar takes, so nothing of it needs a special case for `Esc` or a click
+        # on a category heading
+        tab.itemSelectionChanged.connect(self._sync_preview)
+        # escape in the table drops the task and, with it, the destination: it
+        # clears the tree through the same handler the label's 'x' calls
+        tab.escape_shortcut.activated.connect(
+            self.directory_tree.clear_subdirectory
+        )
         return tab
 
     def _remember_sort(self, title: str, column: int, descending: bool) -> None:
@@ -360,12 +636,19 @@ class MainWindow(QMainWindow):
 
         self.tabs.setCurrentIndex(0)
 
-    def _add_heading(self, tab: QListWidget, text: str) -> None:
+    def _add_heading(
+        self, tab: QListWidget, text: str, category: Path | None = None
+    ) -> None:
         item = QListWidgetItem(text)
         font = item.font()
         font.setBold(True)
         item.setFont(font)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
+        # only a heading that stands for a live category is worth storing: an
+        # archive heading names no folder a new task could land in, so clicking
+        # one cannot pick a destination
+        if category is not None:
+            item.setData(_CATEGORY_ROLE, str(category))
         tab.addItem(item)
 
     def _add_task(

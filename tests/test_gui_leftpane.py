@@ -93,11 +93,11 @@ def test_the_path_label_lines_up_with_the_header_text(window):
     )
 
 
-def test_the_header_lines_up_with_the_tab_bar(window):
+def test_the_header_lines_up_with_the_creation_bar(window):
     header = directory_header(window)
     tab_bar = window.tabs.tabBar()
 
-    assert _top(header, window) == _top(tab_bar, window)
+    assert _top(header, window) == _top(window.bottom_bar, window)
     assert header.height() == tab_bar.height()
 
 
@@ -170,7 +170,7 @@ def test_the_outer_margins_and_the_gap_are_unchanged(window):
 
     assert _left(header, window.left_panel) == _MARGIN
     assert window.right_panel.width() - _right(window.tabs, window.right_panel) == _MARGIN
-    gap = _left(window.tabs, window) - _right(window.directory_tree, window)
+    gap = _left(window.rail, window) - _right(window.directory_tree, window)
     assert gap == window.splitter.handleWidth()
 
 

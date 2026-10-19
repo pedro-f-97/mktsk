@@ -68,9 +68,9 @@ def test_categories_follow_the_column_being_sorted(window, tmp_path, make_task):
     ascending = {
         0: ["Alpha", base, "Zeta"],
         1: ["Zeta", base, "Alpha"],
-        2: ["Alpha", "Zeta", base],
-        3: ["Alpha", base, "Zeta"],
-        4: [base, "Alpha", "Zeta"],
+        3: ["Alpha", "Zeta", base],
+        4: ["Alpha", base, "Zeta"],
+        5: [base, "Alpha", "Zeta"],
     }
 
     for column, order in ascending.items():
