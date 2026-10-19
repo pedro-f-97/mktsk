@@ -180,17 +180,51 @@ def _ignored(entry: os.DirEntry[str]) -> bool:
     return _has_hidden_attribute(entry)
 
 
-def attachment_count(folder: Path) -> int:
-    """Counts what a task folder carries besides its own .md.
+def list_attachments(folder: Path) -> list[str]:
+    """Lists what a task folder carries besides its own .md.
 
     Everything directly inside the folder is one attachment, a subfolder
     included, whatever it holds: the folder is read one level deep and never
-    walked into. The .md named after the task is the task itself rather than
-    something attached to it, and hidden entries, the shell's own files and
-    Office lock files are left out, the same way `list_subdirectories` leaves
-    a hidden directory out of the tree. A folder that is missing or cannot be
-    read counts nothing and never raises, like a directory that cannot be read
+    walked into. A subfolder is named with a trailing `/` so it reads apart
+    from a file of the same stem, and the names are sorted ignoring the case.
+    The .md named after the task is the task itself rather than something
+    attached to it, and hidden entries, the shell's own files and Office lock
+    files are left out, the same way `list_subdirectories` leaves a hidden
+    directory out of the tree. A folder that is missing or cannot be read
+    carries nothing and never raises, like a directory that cannot be read
     anywhere else.
+
+    `attachment_count` is the length of this list, so the two can never
+    disagree about what counts.
+
+    Args:
+        folder: the task folder to read.
+
+    Returns:
+        The attachment names, subfolders with a trailing `/`, sorted
+        case-insensitively, or nothing when the folder cannot be read.
+    """
+    title = standards.task_folder_title(folder.name)
+    own_md = None if title is None else f"{title}.md"
+
+    try:
+        with os.scandir(folder) as entries:
+            names = [
+                entry.name + ("/" if entry.is_dir() else "")
+                for entry in entries
+                if entry.name != own_md and not _ignored(entry)
+            ]
+    except OSError:
+        return []
+
+    return sorted(names, key=str.casefold)
+
+
+def attachment_count(folder: Path) -> int:
+    """Counts what a task folder carries besides its own .md.
+
+    It is the length of `list_attachments`, so the count on a row and the
+    names the preview lists are read from one place and can never disagree.
 
     Args:
         folder: the task folder to read.
@@ -198,18 +232,7 @@ def attachment_count(folder: Path) -> int:
     Returns:
         How many attachments the folder carries.
     """
-    title = standards.task_folder_title(folder.name)
-    own_md = None if title is None else f"{title}.md"
-
-    try:
-        with os.scandir(folder) as entries:
-            return sum(
-                1
-                for entry in entries
-                if entry.name != own_md and not _ignored(entry)
-            )
-    except OSError:
-        return 0
+    return len(list_attachments(folder))
 
 
 def _activity(file: Path, date: datetime.date) -> tuple[datetime.date, int, str]:
