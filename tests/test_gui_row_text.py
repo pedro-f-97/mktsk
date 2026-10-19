@@ -180,6 +180,11 @@ _UNSELECTED = QStyle.StateFlag.State_Enabled
 # the contrast WCAG AA asks of body text
 _MINIMUM_CONTRAST = 4.5
 
+# the room the ink of the first glyph may keep past the padding the date
+# text is drawn from: its left bearing, which the platform's smoothing of
+# the glyphs may push a pixel or two further
+_MAX_GLYPH_BEARING = 4
+
 
 def _render_row(view, item, state, background):
     """Renders one task or folder row offscreen, over a given background.
@@ -234,6 +239,36 @@ def _contrast(view, item, state):
 def _readable(view, item, state):
     text, background, ratio = _contrast(view, item, state)
     assert ratio >= _MINIMUM_CONTRAST, f"{text.name()} on {background.name()}: {ratio}"
+
+
+def _ink_contrast(view, item, state):
+    """The ink colour of a row, the background colour and their contrast.
+
+    The ink is the pixel that stands furthest from the background among the
+    columns the cells are painted in, leaving the rail at the left edge out.
+    The cells are drawn in a single colour, but a platform that smooths its
+    glyphs blends them with the background, so the furthest shade still
+    carries the text where the most painted colours would name the rail.
+    """
+    base = view.viewport().palette().color(QPalette.ColorRole.Base)
+    image = _render_row(view, item, state, base)
+    painted = _painted_colours(image)
+    background = QColor(painted[0][0])
+    ink = max(
+        (
+            image.pixelColor(x, y)
+            for x in range(tasklist._SELECTION_INDICATOR_WIDTH, image.width())
+            for y in range(image.height())
+        ),
+        key=lambda colour: _contrast_ratio(colour, background),
+    )
+    return ink, background, _contrast_ratio(ink, background)
+
+
+def _readable_ink(view, item, state):
+    """Asserts the ink of a row reads against its background, smoothed or not."""
+    ink, background, ratio = _ink_contrast(view, item, state)
+    assert ratio >= _MINIMUM_CONTRAST, f"{ink.name()} on {background.name()}: {ratio}"
 
 
 # the styles the environment offers, so a row is rendered under each of them
@@ -545,7 +580,7 @@ def test_a_selected_task_row_paints_readable_text(window, tmp_path, make_task):
     item = find_task(window, file)
 
     for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
-        _readable(listing, item, state)
+        _readable_ink(listing, item, state)
 
 
 def test_an_unselected_task_row_paints_readable_text(window, tmp_path, make_task):
@@ -554,7 +589,7 @@ def test_an_unselected_task_row_paints_readable_text(window, tmp_path, make_task
     listing = task_listing(window)
     item = find_task(window, file)
 
-    _readable(listing, item, _UNSELECTED)
+    _readable_ink(listing, item, _UNSELECTED)
 
 
 def test_an_unselected_folder_row_paints_readable_text(window, tmp_path):
@@ -739,6 +774,24 @@ def _first_glyph_x(image, pen, start=0):
     raise AssertionError("no glyph was painted on the row")
 
 
+def _first_ink_x(image, background):
+    """The x of the leftmost pixel that stands at a text contrast to a background.
+
+    The cells are drawn in a single colour, but a platform that smooths its
+    glyphs blends them with the background, so the ink is read as the first
+    column holding a pixel at the body-text contrast rather than a pixel of
+    the exact pen colour.
+    """
+    for x in range(image.width()):
+        if any(
+            _contrast_ratio(image.pixelColor(x, y), background) >= _MINIMUM_CONTRAST
+            for y in range(image.height())
+        ):
+            return x
+
+    raise AssertionError("no glyph was painted on the row")
+
+
 def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
     styled, window, tmp_path, make_task
 ):
@@ -749,7 +802,6 @@ def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
     palette = listing.viewport().palette()
     base = palette.color(QPalette.ColorRole.Base)
     highlight = palette.color(QPalette.ColorRole.Highlight)
-    option = _row_option(listing, item, _SELECTED_ACTIVE)
     padding = listing.header.style().pixelMetric(
         QStyle.PixelMetric.PM_HeaderMargin
     )
@@ -758,8 +810,11 @@ def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
     indicator = _columns_of_colour(image, highlight)
 
     assert indicator == list(range(tasklist._SELECTION_INDICATOR_WIDTH))
-    first_glyph = _first_glyph_x(image, _cell_pen(option), 0)
-    assert first_glyph == max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+    expected = max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+    first_ink = _first_ink_x(image, _background_pixel(image))
+    # the text starts on the padding the date is drawn from, give or take
+    # the left bearing of its first glyph, which the smoothing may extend
+    assert expected <= first_ink <= expected + _MAX_GLYPH_BEARING
 
 
 def test_a_selected_row_keeps_the_indicator_clear_of_the_action_bar(
