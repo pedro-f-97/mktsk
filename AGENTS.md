@@ -37,6 +37,7 @@ workflow interactively.
 - Stop investigating once the available evidence is sufficient to identify the cause and choose a fix. Gather additional evidence only when it could change the diagnosis or implementation.
 - Read large files with `grep` plus offset/limit; do not read them whole or re-read unchanged regions.
 - Do not guess framework or library semantics when they affect the implementation. Consult the official documentation or existing tests first; if uncertainty remains, run the smallest probe that verifies the relevant behaviour. Use the result to justify the implementation.
+- **Hard cap: two diagnostic runs per failing test.** If a test fails, you get at most two runs whose purpose is to observe behaviour (pytest invocations, or scripts whose only job is to print/measure — not to fix). After the second run, stop and report. Do not start a third.
 
 ## Docs
 
