@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
 from mktsk.gui import tasklist
 from mktsk.gui.tasklist import (
     _AGE_ROLE,
-    _PEN_CACHE,
     _SELECTION_INDICATOR_GAP,
     TaskPanel,
     _cell_pen,
@@ -180,17 +179,6 @@ _UNSELECTED = QStyle.StateFlag.State_Enabled
 
 # the contrast WCAG AA asks of body text
 _MINIMUM_CONTRAST = 4.5
-
-
-@pytest.fixture(autouse=True)
-def _discard_cached_pens():
-    """Forgets the pens of a selection a previous test may have asked for.
-
-    The pen of a selected cell is remembered for the life of the process, so a
-    palette one test changes would linger in it for the next one. Every test
-    here starts from an empty recollection.
-    """
-    _PEN_CACHE.clear()
 
 
 def _render_row(view, item, state, background):
@@ -486,7 +474,7 @@ def test_a_selection_the_style_paints_itself_stays_readable(
         _rendered_readable(listing, item, state)
 
 
-def test_a_selected_row_paints_no_fill_of_its_own(
+def test_a_selected_row_is_tinted_even_when_the_style_paints_no_selection(
     no_selection_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
@@ -495,8 +483,11 @@ def test_a_selected_row_paints_no_fill_of_its_own(
     item = find_task(window, file)
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
 
+    # the selection is the delegate's, so it reaches the pixels whether the
+    # style paints one of its own or paints nothing at all
     for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
-        assert _background_pixel(_render_row(listing, item, state, base)) == base
+        tint = tasklist._selection_tint(_row_option(listing, item, state))
+        assert _background_pixel(_render_row(listing, item, state, base)) == tint
 
 
 def test_the_option_handled_to_the_style_keeps_the_selection(
@@ -518,7 +509,7 @@ def test_the_option_handled_to_the_style_keeps_the_selection(
         assert state & QStyle.StateFlag.State_Selected
 
 
-def test_the_auxiliary_band_of_a_selected_row_is_painted_with_the_selection(
+def test_the_auxiliary_band_of_a_selected_row_carries_the_selection(
     filled_selection_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
@@ -527,38 +518,24 @@ def test_the_auxiliary_band_of_a_selected_row_is_painted_with_the_selection(
     item = find_task(window, file)
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
     selected = _render_row(listing, item, _SELECTED_ACTIVE, base)
-    fill = filled_selection_style.colour.rgb()
+    option = _row_option(listing, item, _SELECTED_ACTIVE)
+    tint = tasklist._selection_tint(option)
+    highlight = option.palette.color(QPalette.ColorRole.Highlight)
 
-    # the whole selected row is handed to the style, band included, so the
-    # auxiliary row carries the selection fill under the action bar and no
-    # cell of the row is painted past the room it keeps above the band
+    # the delegate paints its own selection over the style's, so the band
+    # carries the tint from the rail to the right edge on every row of it,
+    # the rail itself rounding off at its bottom end, and no cell of the row
+    # is painted past the room it keeps above the band
     band_top = listing.delegate.min_height
     assert selected.height() > band_top
-    filled = sum(
-        1
+    for y in range(band_top, selected.height()):
+        assert {selected.pixelColor(x, y).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH, selected.width())} == {tint.rgb()}
+    assert {selected.pixelColor(x, band_top + 2).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH)} == {highlight.rgb()}
+    assert all(
+        selected.pixelColor(x, y) != filled_selection_style.colour
         for y in range(band_top, selected.height())
         for x in range(selected.width())
-        if selected.pixelColor(x, y).rgb() == fill
     )
-    assert filled == selected.width() * (selected.height() - band_top)
-
-
-def test_the_pen_of_a_selected_row_is_read_once(monkeypatch, filled_selection_style):
-    calls: list[QStyleOptionViewItem] = []
-
-    def record(option):
-        calls.append(option)
-        return QColor("#999999")
-
-    monkeypatch.setattr(tasklist, "_painted_background", record)
-    option = QStyleOptionViewItem()
-    option.state = _SELECTED_ACTIVE
-
-    first = _cell_pen(option)
-    second = _cell_pen(option)
-
-    assert first == second
-    assert [call.state for call in calls] == [option.state]
 
 
 def test_a_selected_task_row_paints_readable_text(window, tmp_path, make_task):
@@ -589,9 +566,7 @@ def test_an_unselected_folder_row_paints_readable_text(window, tmp_path):
     _readable(tree, item, _UNSELECTED)
 
 
-def test_a_disabled_cell_reads_its_pen_from_the_disabled_group(
-    filled_selection_style,
-):
+def test_a_disabled_cell_reads_its_pen_from_the_disabled_group():
     palette = QPalette()
     palette.setColor(
         QPalette.ColorGroup.Disabled, QPalette.ColorRole.Base, QColor("#ffffff")
@@ -611,10 +586,10 @@ def test_a_disabled_cell_reads_its_pen_from_the_disabled_group(
 
     highlighted = QColor("#000000")
     plain = QColor("#fefefe")
+    tint = tasklist._selection_tint(option)
     expected = (
         plain
-        if _contrast_ratio(plain, filled_selection_style.colour)
-        > _contrast_ratio(highlighted, filled_selection_style.colour)
+        if _contrast_ratio(plain, tint) > _contrast_ratio(highlighted, tint)
         else highlighted
     )
     assert _cell_pen(option) == expected
@@ -733,47 +708,6 @@ def test_a_selected_row_elides_at_the_cut_edge(
         assert row.left() <= rect.left() + rect.width() <= row.right() + 1
 
 
-# the width and the colour of the indicator the proxy below paints, so the gap
-# left before the text can be measured from the pixels rather than trusted
-_INDICATOR_WIDTH = 3
-_INDICATOR_COLOUR = QColor("#ff00ff")
-
-
-class _IndicatorStyle(QProxyStyle):
-    """A style that paints a narrow indicator at the left edge of a selected row.
-
-    A platform style such as windows11 paints its selection indicator at the
-    very left of the rect the delegate hands it, which is the room the bar sits
-    in, just before the date text. The proxy draws one of a known width and
-    colour there, over whatever the base style paints, so the gap before the
-    first glyph can be read back from the pixels.
-    """
-
-    def drawControl(self, element, option, painter, widget=None):
-        super().drawControl(element, option, painter, widget)
-        if element == QStyle.ControlElement.CE_ItemViewItem and (
-            option.state & QStyle.StateFlag.State_Selected
-        ):
-            painter.fillRect(
-                QRect(
-                    option.rect.left(),
-                    option.rect.top(),
-                    _INDICATOR_WIDTH,
-                    option.rect.height(),
-                ),
-                _INDICATOR_COLOUR,
-            )
-
-
-@pytest.fixture
-def indicator_style(qapp):
-    """Puts a style that paints a known selection indicator on the application."""
-    style_name = qapp.style().objectName()
-    qapp.setStyle(_IndicatorStyle(QStyleFactory.create(style_name)))
-    yield
-    _restore_style(qapp, style_name)
-
-
 def _row_option(view, item, state):
     """The option a row is rendered from, built the way `_render_row` builds it."""
     rect = QRect(view.visualItemRect(item))
@@ -806,43 +740,45 @@ def _first_glyph_x(image, pen, start=0):
 
 
 def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
-    indicator_style, window, tmp_path, make_task
+    styled, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
     window.navigate_to(tmp_path)
     listing = select_task(window, file)
     item = listing.currentItem()
-    base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+    palette = listing.viewport().palette()
+    base = palette.color(QPalette.ColorRole.Base)
+    highlight = palette.color(QPalette.ColorRole.Highlight)
     option = _row_option(listing, item, _SELECTED_ACTIVE)
     padding = listing.header.style().pixelMetric(
         QStyle.PixelMetric.PM_HeaderMargin
     )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
-    indicator = _columns_of_colour(image, _INDICATOR_COLOUR)
+    indicator = _columns_of_colour(image, highlight)
 
-    assert indicator
-    assert min(indicator) == 0
-    assert max(indicator) - min(indicator) + 1 == _INDICATOR_WIDTH
+    assert indicator == list(range(tasklist._SELECTION_INDICATOR_WIDTH))
     first_glyph = _first_glyph_x(image, _cell_pen(option), 0)
     assert first_glyph == max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
 
 
 def test_a_selected_row_keeps_the_indicator_clear_of_the_action_bar(
-    indicator_style, window, tmp_path, make_task
+    styled, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
     window.navigate_to(tmp_path)
     listing = select_task(window, file)
     item = listing.currentItem()
-    base = listing.viewport().palette().color(QPalette.ColorRole.Base)
+    palette = listing.viewport().palette()
+    base = palette.color(QPalette.ColorRole.Base)
+    highlight = palette.color(QPalette.ColorRole.Highlight)
     option = _row_option(listing, item, _SELECTED_ACTIVE)
     padding = listing.header.style().pixelMetric(
         QStyle.PixelMetric.PM_HeaderMargin
     )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
-    indicator = _columns_of_colour(image, _INDICATOR_COLOUR)
+    indicator = _columns_of_colour(image, highlight)
     bar_left = listing.action_bar.geometry().left()
 
     assert indicator
@@ -850,3 +786,53 @@ def test_a_selected_row_keeps_the_indicator_clear_of_the_action_bar(
     assert bar_left >= _SELECTION_INDICATOR_GAP
     first_glyph = _first_glyph_x(image, _cell_pen(option), 0)
     assert first_glyph >= max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+
+
+def test_the_indicator_of_a_selected_row_is_rounded_at_both_ends(
+    window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    item = listing.currentItem()
+    palette = listing.viewport().palette()
+    base = palette.color(QPalette.ColorRole.Base)
+    highlight = palette.color(QPalette.ColorRole.Highlight)
+
+    image = _render_row(listing, item, _SELECTED_ACTIVE, base)
+
+    # the rail runs at full height between its ends, and a rounded corner
+    # keeps its two extremes off the rail: the tint fills them instead
+    assert image.pixelColor(0, image.height() // 2) == highlight
+    assert image.pixelColor(0, 0) != highlight
+    assert image.pixelColor(0, image.height() - 1) != highlight
+
+
+def test_the_selected_area_is_tinted_from_the_task_row_to_the_bottom_of_the_band(
+    window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    item = listing.currentItem()
+    palette = listing.viewport().palette()
+    base = palette.color(QPalette.ColorRole.Base)
+    highlight = palette.color(QPalette.ColorRole.Highlight)
+    tint = tasklist._blend(base, highlight, tasklist._SELECTION_TINT_WEIGHT)
+    band_top = listing.delegate.min_height
+
+    image = _render_row(listing, item, _SELECTED_ACTIVE, base)
+
+    # both lines carry the selection: the rail at the left of each of them,
+    # and the faint tint across the rest, under the action bar included
+    assert image.height() > band_top
+    for y in (band_top // 2, band_top + 2):
+        rail = {image.pixelColor(x, y).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH)}
+        assert rail == {highlight.rgb()}
+    # the tint crosses the task row just past the rail, and fills the band,
+    # where no cell is painted, from the rail to the right edge
+    assert image.pixelColor(tasklist._SELECTION_INDICATOR_WIDTH, band_top // 2) == tint
+    assert {image.pixelColor(x, band_top + 2).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH, image.width())} == {tint.rgb()}
+    # the tint reads apart from the plain background and from the full rail
+    assert tint != base
+    assert tint != highlight

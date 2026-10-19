@@ -19,7 +19,6 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
-    QImage,
     QKeySequence,
     QPainter,
     QPalette,
@@ -87,13 +86,21 @@ _COLUMN_PADDING = 6
 _ZEBRA_WEIGHT = 0.03
 _SEPARATOR_WEIGHT = 0.08
 
-# the windows11 style paints its selection indicator at the left edge of the
-# rect it is handed. The width of that indicator plus a small margin, which
-# indents the action bar of the auxiliary row, so the marker of the selection
-# stays visible at the left edge of the row and the bar never covers it
-_SELECTION_INDICATOR_WIDTH = 3
-_SELECTION_INDICATOR_GAP = _SELECTION_INDICATOR_WIDTH + 3
+# the selection of a task row is the delegate's own, because the platform
+# styles paint one in a shape of their own: a faint tint of the palette
+# covers the whole selected area, the task row and the band it opens, so the
+# two read as one, and a rail of the full Highlight sits at its left edge,
+# wide enough to read and rounded at both ends. The gap is the rail plus a
+# small margin, which indents the action bar of the auxiliary row, so the
+# rail stays visible at the left edge of the row and the bar never covers it
+_SELECTION_INDICATOR_WIDTH = 4
+_SELECTION_INDICATOR_RADIUS = 2.0
+_SELECTION_INDICATOR_GAP = _SELECTION_INDICATOR_WIDTH + 2
 _DATE_TEXT_LEFT_PADDING = _SELECTION_INDICATOR_GAP  # at least _INDICATOR_WIDTH + 2
+
+# how far the tint of a selection moves from the Base towards the Highlight,
+# subtle enough to keep the row close to the plain background it sits on
+_SELECTION_TINT_WEIGHT = 0.08
 
 # the marker a heading carries when it stands for the destination: a small dot
 # at the right end of the row, clear of the name the style draws from the left
@@ -476,58 +483,74 @@ def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
     return QPalette.ColorGroup.Inactive
 
 
-# the pen of a selected cell, per style, palette group and selection: a style
-# paints the same selection for as long as the application runs, so what it
-# paints is read back once rather than on every paint
-_PEN_CACHE: dict[tuple[str, QPalette.ColorGroup, bool], QColor] = {}
+def _selection_tint(option: QStyleOptionViewItem) -> QColor:
+    """Returns the colour the delegate fills a selected row with.
 
-
-def _painted_background(option: QStyleOptionViewItem) -> QColor:
-    """Reads back the colour the style fills a selected row with.
-
-    The fill of a selected row is not always a colour the palette holds: a
-    platform style may paint one of its own, so the only way to know what the
-    text is drawn on is to paint it. The style is asked for the item panel over
-    an image that starts as the base colour, and the centre of the row is read
-    back, clear of the indicator some styles draw at its left edge. A style
-    that paints nothing leaves the base colour, which is then what the text is
-    measured against.
+    The tint is the `Base` of the palette group the state belongs to, blended
+    a little towards its `Highlight`, so a selected area reads apart from the
+    rows around it with no colour written down: a light or dark mode and a
+    new accent are followed through the palette alone. It is what both lines
+    of a selected row are made of, the task row and the band it opens, and it
+    is also what the text is measured against, so the pen stays paired with
+    the background it is drawn on.
 
     Args:
         option: what the row is painted from, holding its palette and its state.
 
     Returns:
-        The colour the style fills the middle of the row with.
+        The faint selection tint of the palette group of the state.
     """
     group = _colour_group(option.state)
-    width = max(option.rect.width(), 1)
-    height = max(option.rect.height(), 1)
-    image = QImage(width, height, QImage.Format.Format_RGB32)
-    image.fill(option.palette.color(group, QPalette.ColorRole.Base))
-    sampled = QStyleOptionViewItem(option)
-    sampled.rect = QRect(0, 0, width, height)
-    style = (
-        option.widget.style() if option.widget is not None else QApplication.style()
+    palette = option.palette
+    return _blend(
+        palette.color(group, QPalette.ColorRole.Base),
+        palette.color(group, QPalette.ColorRole.Highlight),
+        _SELECTION_TINT_WEIGHT,
     )
-    painter = QPainter(image)
-    style.drawPrimitive(
-        QStyle.PrimitiveElement.PE_PanelItemViewItem, sampled, painter, option.widget
-    )
-    painter.end()
 
-    return image.pixelColor(width // 2, height // 2)
+
+def _paint_selection(painter: QPainter, option: QStyleOptionViewItem) -> None:
+    """Paints the selection of a task row over the one the style painted.
+
+    The style paints its own selection first and this covers it, so the look
+    is the delegate's and stays the same under every style: a faint tint
+    across the whole selected area, task row and band alike, and a rail of
+    the full `Highlight` at its left edge, wide enough to read and rounded at
+    both ends. Both colours come from the palette of the group the state
+    belongs to, so the selection follows the theme without a colour written
+    down here.
+
+    Args:
+        painter: the painter the row is being drawn with.
+        option: what the row is painted from, holding its rect and its state.
+    """
+    group = _colour_group(option.state)
+    painter.fillRect(option.rect, _selection_tint(option))
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(option.palette.color(group, QPalette.ColorRole.Highlight))
+    painter.drawRoundedRect(
+        QRectF(
+            option.rect.left(),
+            option.rect.top(),
+            _SELECTION_INDICATOR_WIDTH,
+            option.rect.height(),
+        ),
+        _SELECTION_INDICATOR_RADIUS,
+        _SELECTION_INDICATOR_RADIUS,
+    )
+    painter.restore()
 
 
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     """Returns the colour of the text of a cell, paired with its background.
 
     An unselected row keeps the Text of the group its state belongs to. A
-    selected one is drawn on whatever the style filled it with, so the text is
-    the HighlightedText or the Text of that group, whichever holds better
-    against the colour read back from the style: both come from the palette and
-    the better contrast wins, so no colour is written down here. The choice is
-    remembered per style, group and selection, because the style does not
-    change what it paints while the application runs.
+    selected one is drawn on the tint the delegate fills it with, so the text
+    is the HighlightedText or the Text of that group, whichever holds better
+    against that tint: both come from the palette and the better contrast
+    wins, so no colour is written down here.
 
     Args:
         option: what the row is painted from, holding its palette and its state.
@@ -541,25 +564,14 @@ def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     if not (option.state & QStyle.StateFlag.State_Selected):
         return palette.color(group, QPalette.ColorRole.Text)
 
-    style = (
-        option.widget.style() if option.widget is not None else QApplication.style()
-    )
-    key = (style.objectName(), group, True)
-    pen = _PEN_CACHE.get(key)
-    if pen is not None:
-        return pen
-
-    background = _painted_background(option)
+    background = _selection_tint(option)
     highlighted = palette.color(group, QPalette.ColorRole.HighlightedText)
     plain = palette.color(group, QPalette.ColorRole.Text)
-    pen = (
+    return (
         plain
         if _contrast_ratio(plain, background) > _contrast_ratio(highlighted, background)
         else highlighted
     )
-    _PEN_CACHE[key] = pen
-
-    return pen
 
 
 class _TaskDelegate(QStyledItemDelegate):
@@ -578,12 +590,13 @@ class _TaskDelegate(QStyledItemDelegate):
     selecting a row moves none of its cells. The action bar lives in an
     auxiliary row the selected row opens below its own, and only that row grows
     by the height of the band, its cells keeping the room a plain row has. The
-    style paints the whole row of a selection, indicator included, from its left
-    edge, and the bar is indented past that indicator rather than the cells
-    being pushed right. The date is drawn after the same margin the header
-    draws its own text with, so a heading and its value line up. Every row keeps
-    the height the bar needs, which stops the list from shifting as the
-    selection moves.
+    selection of a row is the delegate's own, painted over the style's: a faint
+    tint across the task row and the band alike, so the two read as one, and a
+    rounded rail of the Highlight at the left edge. The bar is indented past
+    that rail rather than the cells being pushed right. The date is drawn after
+    the same margin the header draws its own text with, so a heading and its
+    value line up. Every row keeps the height the bar needs, which stops the
+    list from shifting as the selection moves.
 
     Args:
         min_height: the height a plain row has, which is also the room the
@@ -730,10 +743,10 @@ class _TaskDelegate(QStyledItemDelegate):
                 painter.restore()
             return
 
-        # the row background and the selection are the style's, as they are for
-        # any view. A stripe fills the whole row before the style paints, so
-        # hover and the native look still draw on top; a selected row gets no
-        # stripe of its own, because the style paints its selection. The stripes
+        # the row background is the style's, as it is for any view. A stripe
+        # fills the whole row before the style paints, so hover and the native
+        # look still draw on top; a selected row gets no stripe of its own,
+        # because the selection tint the delegate paints covers it. The stripes
         # restart at every separator, so the first task under one is always the
         # plain base colour: the parity is counted from the rows above, back to
         # the row that carries no count, and nothing is remembered between
@@ -756,8 +769,12 @@ class _TaskDelegate(QStyledItemDelegate):
                 )
 
         selected = index.row() == self.inset_row
-        # the style paints the whole row, indicator included, from its left edge
+        # the style paints the row first, and over it the selection this
+        # delegate owns: the tint across the whole area, task row and band
+        # alike, and the rounded rail of the Highlight at its left edge
         super().paint(painter, option, index)
+        if option.state & QStyle.StateFlag.State_Selected:
+            _paint_selection(painter, option)
 
         padding = self.header.style().pixelMetric(
             QStyle.PixelMetric.PM_HeaderMargin

@@ -170,34 +170,32 @@
 - A task row empties `option.text` in `initStyleOption`, not in `paint`, because the base
   class refills it from the display role on every paint; the style then draws only the row
   background, and the six cells are the whole text of the row, each inside its own column.
-  The date is the first text after the room the bar reserves on every row, so the date never
-  moves when a row is selected; only the selected row hands the style a rect narrowed from the
-  left, so the space for the buttons appears when the row is clicked and is given back when the
-  selection goes. Every row keeps the height the bar needs, or the list would shift as the
-  selection moves. The date section is held at least as wide as the bar, so a separator cannot
-  drag it under the bar and over the start of the task
-- The pen of a cell is always paired with the background it is drawn on, and never a colour
-  written down. The style paints the selection of a row, because the selection of a view is
-  the style's, and the delegate only picks the text colour: a selected row asks the style
-  to paint the panel item over an image of the row, reads back the fill, and takes the
-  `HighlightedText` or the `Text` of the palette group its state belongs to, whichever
-  holds better against exactly that fill. The fill of a real platform style is not always
-  in the palette, so the pen comes from what the style paints rather than from a palette
-  the row is not made of, and a style that paints no selection leaves the base colour,
-  which is then what the text is measured against. The pen is remembered per style, group
-  and selection, because the style does not change what it paints while the application
-  runs. Only the selected row is handed to the style with its rect narrowed from the left
-  by the width of the bar, so the fill and the indicator start between the bar and the date
-  text and the bar sits over the plain room in front of the date. An unselected row reads
-  `Text` of the group, which is what keeps tasks and folders apart as they were
+  The date is the first text after the room the indicator rail reserves on every row, so
+  the date never moves when a row is selected; the bar of the selected row is indented
+  past the rail rather than the cells being pushed right, and every row keeps the height
+  the bar needs, or the list would shift as the selection moves. The date section is held
+  at least as wide as the bar, so a separator cannot drag it under the bar and over the
+  start of the task
+- The selection of a task row is the delegate's own, painted over the one the style
+  paints, so it looks the same under every style: a faint tint of the palette covers the
+  whole selected area, the task row and the band it opens, so the two read as one and the
+  band reads apart from the plain background, and a rail of the full `Highlight` sits at
+  its left edge, wide enough to read and rounded at both ends. Both colours come from the
+  palette group the state belongs to, the tint blending `Base` a little towards
+  `Highlight`, so a light or dark mode and a new accent follow with no colour written
+  down. The pen of a cell stays paired with the background it is drawn on: a selected row
+  takes the `HighlightedText` or the `Text` of its group, whichever holds better against
+  that same tint, and an unselected row reads `Text` of the group, which is what keeps
+  tasks and folders apart as they were
 - The list is striped to keep the eye on a row, and the colours are derived from the
   palette through one blend function rather than written down, so a dark mode needs no
   change. Every second task row under a separator is filled with the `Base` of its palette
   group blended a little towards the `Text`, a separator is filled the same way a touch
   stronger, and the stripe restarts at every separator, so the first task under one is
   always the plain `Base`. The delegate fills an unselected task row alone, before the
-  style paints, so hover and the native look stay on top; it never fills a selected row,
-  whose selection is the style's. A separator is painted as an enabled row, so its text
+  style paints, so hover and the native look stay on top; a selected row gets no stripe
+  of its own, because the selection tint the delegate paints over the style's covers it.
+  A separator is painted as an enabled row, so its text
   keeps the `Text` of a task row rather than the grey a non-selectable row would be drawn
   in; the enabled state alone does not carry a style that reads the disabled group the view
   hands a non-selectable row, so the separator's palette is pointed at the group a task row
