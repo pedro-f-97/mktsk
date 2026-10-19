@@ -141,8 +141,8 @@
   an `OSError` from `mkdir` is `[WinError 267]` on Windows and nothing on Linux
 - Reserved names are checked on the stem, so `con.txt` and `com1.log` are as reserved as
   `con`
-- `standardize_string` and `create_category` share `_without_accents` for the NFKD folding,
-  so the accent removal is only implemented once
+- `standardize_string`, `create_category` and the search fold share `_without_accents` for
+  the NFKD folding, so the accent removal is only implemented once
 - Open files and folders with the OS default application: `os.startfile` on Windows,
   `xdg-open` on Linux when it is there, `gio open` otherwise
 - Folder and file names are ASCII only
@@ -171,3 +171,11 @@
 - Reading a title back for display (`readable_title`): every uppercase letter starts a
   word and a digit starts one too, so `FSocietyEverbind` reads as `F Society Everbind`
   and `Task2` as `Task 2`; consecutive digits stay together, so `2026` survives
+- `search_tasks(entries, query)` filters the entries whose title holds every word of the
+  query, matched against the text the `Task` column shows (`readable_title`), so a search
+  reaches a task the way a reader of the table spells it: the query is split on whitespace
+  and every word must be a substring of that text, in any order. Case and accents are folded
+  on both sides through `_without_accents` and `casefold`, so `SOCIETY` finds `F Society` and
+  `björk` finds `Bjork Naive`. An empty or whitespace-only query matches nothing, no title
+  holding every word gives an empty list, the input order is kept, closed entries are matched
+  like open ones, and the function is pure: no Qt

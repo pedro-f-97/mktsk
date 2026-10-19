@@ -970,6 +970,73 @@ class TaskListing(QListWidget):
         item = selected_items[0]
         return item.data(_ENTRY_ROLE) if item else None
 
+    def select_task(self, path: Path) -> bool:
+        """Selects the task row of a folder path and scrolls it into view.
+
+        The row may sit in another tab of the same window, which is switched
+        to before the row is selected, so the selection, the action bar and
+        the preview all follow the task as they would after a click. Selecting
+        a task never moves the destination a new task would land in: that only
+        changes when a category is picked, and nothing here picks one.
+
+        Args:
+            path: the .md of the task, or the archive that holds it, which is
+                what the entry of the row carries.
+
+        Returns:
+            True when a row held the path and was selected, False when no row
+            of this listing or of another tab holds it, leaving the selection
+            and the current tab unchanged.
+        """
+        item = self._item_for(path)
+        if item is not None:
+            self.setCurrentItem(item)
+            self.scrollToItem(item)
+            return True
+
+        window = self.window()
+        tabs = getattr(window, "tabs", None)
+        select_tab = getattr(window, "_select_tab", None)
+        if tabs is None or select_tab is None:
+            # a listing standing on its own, as a test builds one, has no
+            # window to switch tabs in, so only its own rows can be selected
+            return False
+
+        for index in range(tabs.count()):
+            other = tabs.widget(index).listing
+            if other is self:
+                continue
+            item = other._item_for(path)
+            if item is None:
+                continue
+            # switch first, then select: the preview follows the selection of
+            # the current tab, so it must already be the tab holding the row
+            select_tab(tabs.tabText(index))
+            other.setCurrentItem(item)
+            other.scrollToItem(item)
+            return True
+
+        return False
+
+    def _item_for(self, path: Path) -> QListWidgetItem | None:
+        """Returns the task row carrying a folder path, or None when none does.
+
+        A row that carries no entry, a heading say, is skipped, so only a task
+        or an archive can be the row a path reaches.
+
+        Args:
+            path: the .md of the task, or the archive that holds it.
+
+        Returns:
+            The row whose entry carries the path, or None.
+        """
+        for index in range(self.count()):
+            item = self.item(index)
+            entry = item.data(_ENTRY_ROLE)
+            if entry is not None and entry.file == path:
+                return item
+        return None
+
     def set_destination(self, directory: Path | None) -> None:
         """Points the marker at the category a new task would land in.
 

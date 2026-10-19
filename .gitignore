@@ -8,3 +8,4 @@ coverage.xml
 build/
 dist/
 *.spec
+todo.txt
