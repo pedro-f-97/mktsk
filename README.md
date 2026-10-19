@@ -377,6 +377,11 @@ Opens a window where you can:
   `Closed` tab offers a reopen button, with an icon and a hover text of its own, since
   reopening is the one action that reaches an archive.
 
+* select a task to preview it under the list: the raw text of its Markdown file on the
+  left, and the names of the other files and folders the task carries on the right,
+  subfolders with a trailing `/`. The preview is read-only, hides again when nothing is
+  selected (`Esc` drops it too), and its two halves can be resized between them.
+
 The last visited folder is remembered between sessions.
 
 ## Standalone executable

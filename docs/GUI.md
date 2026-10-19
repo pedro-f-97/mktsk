@@ -205,6 +205,19 @@
   the selection and disappears with it
 - `Esc` in the task table deselects the current task, so the bar goes with the
   selection, and clears the destination through the same handler the label's `x` calls
+- Below the task table a read-only preview of the selected task shares the pane through
+  a vertical `QSplitter`, the table over the preview and the two resizable between
+  them, the table keeping the larger share. On the left the raw text of the `.md`,
+  shown as it stands with no Markdown rendering and read again on every selection, so a
+  reload re-renders the task that is still selected, or hides the preview when it is
+  gone; on the right the names of the other attachments the folder carries
+  (`list_attachments`), subfolders with a trailing `/` and the list hidden when there
+  are none, so the text takes the full width. The preview follows the selection through
+  the same path the action bar takes, so no selection, a heading selected or `Esc`
+  hides it and the table keeps the full height; a `.md` that cannot be read previews as
+  empty and never raises, and a closed task previews empty as well, because its archive
+  is never opened. Neither panel takes focus, and the attachment list takes no
+  selection, no click and no context menu
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
   `Open`, a plus for `Resume`, a pencil for `Rename`, a ring with a dot for the state and
   an archive box for `Close`, all drawn with `QPainter` in `gui/icons.py`, so no image

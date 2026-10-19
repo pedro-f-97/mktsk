@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSizePolicy,
     QSplitter,
@@ -79,6 +80,27 @@ _RAIL_PADDING = 2
 # the bar, and of the chevron it is interrupted by, in logical pixels
 _TOGGLE_LINE_MARGIN = 6.0
 _TOGGLE_LINE_GAP = 4.0
+
+
+def _task_text(file: Path) -> str:
+    """Reads the raw text of a task .md for the preview.
+
+    The text is shown as it stands, with no Markdown rendering, and a file
+    that cannot be read previews as empty rather than raising: one unreadable
+    file never brings the listing down, and it does not bring the preview down
+    either. A byte that is not valid utf-8 is replaced rather than failing the
+    read, so a file with one still shows everything around it.
+
+    Args:
+        file: the .md of the task.
+
+    Returns:
+        The text of the file, or nothing when it cannot be read.
+    """
+    try:
+        return file.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 class _PaneToggle(QToolButton):
@@ -162,6 +184,30 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
         self.tabs = QTabWidget()
+        # the preview of the selected task: the raw text of the .md beside the
+        # names of the other attachments, both read-only and neither in the
+        # tab order, so the tabs keep the order they had
+        self.preview_text = QPlainTextEdit()
+        self.preview_text.setReadOnly(True)
+        self.preview_text.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.preview_list = QListWidget()
+        self.preview_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.preview_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.preview_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+        self.preview_area = QSplitter(Qt.Orientation.Horizontal)
+        self.preview_area.addWidget(self.preview_text)
+        self.preview_area.addWidget(self.preview_list)
+        self.preview_area.setStretchFactor(0, 3)
+        self.preview_area.setStretchFactor(1, 1)
+        # hidden until a task is selected, so the table keeps the full height
+        self.preview_area.hide()
+        # the table over the preview, resizable between them, the table taking
+        # the larger share
+        self.table_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.table_splitter.addWidget(self.tabs)
+        self.table_splitter.addWidget(self.preview_area)
+        self.table_splitter.setStretchFactor(0, 3)
+        self.table_splitter.setStretchFactor(1, 2)
         self.rail = QWidget()
         self.choose_button = _icon_button(
             self.directory_tree.header_view, "Choose...", _draw_choose, "Choose"
@@ -244,14 +290,15 @@ class MainWindow(QMainWindow):
         rail_layout.addWidget(self.toggle_button, 1)
 
         # the rail spans the full height of the pane, so it takes the first
-        # column of a grid while the bar and the tabs share the second
+        # column of a grid while the bar and the table share the second; the
+        # table and the preview below it share that cell through a splitter
         self.right_panel = QWidget()
         right_layout = QGridLayout(self.right_panel)
         right_layout.setContentsMargins(0, _MARGIN, _MARGIN, _MARGIN)
         right_layout.setSpacing(0)
         right_layout.addWidget(self.rail, 0, 0, 2, 1)
         right_layout.addWidget(self.bottom_bar, 0, 1)
-        right_layout.addWidget(self.tabs, 1, 1)
+        right_layout.addWidget(self.table_splitter, 1, 1)
         right_layout.setColumnStretch(1, 1)
         right_layout.setRowStretch(1, 1)
 
@@ -275,6 +322,9 @@ class MainWindow(QMainWindow):
         self.toggle_button.clicked.connect(self.toggle_left_pane)
         self.splitter.splitterMoved.connect(self._update_path_label)
         self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
+        # the preview follows the selection of the current tab, so a new tab
+        # or a rebuilt one hides it until a task of it is selected
+        self.tabs.currentChanged.connect(self._sync_preview)
 
         # the old bar's focus order, kept by hand because the panels now hold
         # the same widgets in a different tree
@@ -445,6 +495,36 @@ class MainWindow(QMainWindow):
         # the clear button is part of the line: it shows and hides with it
         self.clear_target_button.show()
 
+    def _sync_preview(self) -> None:
+        """Shows the preview of the selected task, or hides it with the selection.
+
+        The preview follows the selection of the current tab through the same
+        path the action bar takes, so a task row shows it and a heading, `Esc`
+        or another tab hides it with no special case. Every rendering reads
+        the folder again, so a reload re-renders the task that is still
+        selected, or hides the preview when it is gone. A closed task shows an
+        empty preview: its folder is gone into the archive, which is never
+        opened, so there is no text to read and no attachments to list.
+        """
+        panel = self.tabs.currentWidget()
+        entry = (
+            cast(TaskPanel, panel).listing.selected_entry()
+            if panel is not None
+            else None
+        )
+
+        if entry is None:
+            self.preview_area.hide()
+            return
+
+        closed = standards.is_task_archive(entry.file.name)
+        self.preview_text.setPlainText("" if closed else _task_text(entry.file))
+        attachments = [] if closed else listing.list_attachments(entry.file.parent)
+        self.preview_list.clear()
+        self.preview_list.addItems(attachments)
+        self.preview_list.setVisible(bool(attachments))
+        self.preview_area.show()
+
     def _reload_tasks(self) -> None:
         # one day for the whole listing, so a refresh that runs as the date turns
         # does not date half of the tasks to yesterday
@@ -526,6 +606,10 @@ class MainWindow(QMainWindow):
             )
         )
         tab.destination_requested.connect(self.select_destination)
+        # the preview follows the selection through the same path the action
+        # bar takes, so nothing of it needs a special case for `Esc` or a click
+        # on a category heading
+        tab.itemSelectionChanged.connect(self._sync_preview)
         # escape in the table drops the task and, with it, the destination: it
         # clears the tree through the same handler the label's 'x' calls
         tab.escape_shortcut.activated.connect(
