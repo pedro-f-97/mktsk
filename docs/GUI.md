@@ -217,7 +217,9 @@
   hides it and the table keeps the full height; a `.md` that cannot be read previews as
   empty and never raises, and a closed task previews empty as well, because its archive
   is never opened. Neither panel takes focus, and the attachment list takes no
-  selection, no click and no context menu
+  selection, no click and no context menu. The attachment list stripes its rows through
+  `setAlternatingRowColors`, so the colour comes from the palette and a light or dark
+  mode follows with nothing written down
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
   `Open`, a plus for `Resume`, a pencil for `Rename`, a ring with a dot for the state and
   an archive box for `Close`, all drawn with `QPainter` in `gui/icons.py`, so no image

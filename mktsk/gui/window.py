@@ -194,6 +194,7 @@ class MainWindow(QMainWindow):
         self.preview_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
         self.preview_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.preview_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+        self.preview_list.setAlternatingRowColors(True)
         self.preview_area = QSplitter(Qt.Orientation.Horizontal)
         self.preview_area.addWidget(self.preview_text)
         self.preview_area.addWidget(self.preview_list)

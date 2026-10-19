@@ -68,6 +68,17 @@ def test_the_attachment_list_is_not_interactive(window, tmp_path, make_task):
     )
 
 
+def test_the_attachment_list_is_striped(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    (file.parent / "one.pdf").write_text("x", encoding="utf-8")
+    window.navigate_to(tmp_path)
+    select_task(window, file)
+
+    assert window.preview_list.alternatingRowColors() is True
+    assert window.preview_list.selectionMode() == QListWidget.SelectionMode.NoSelection
+    assert window.preview_list.focusPolicy() == Qt.FocusPolicy.NoFocus
+
+
 def test_a_task_without_attachments_hides_the_attachment_list(
     window, tmp_path, make_task
 ):
