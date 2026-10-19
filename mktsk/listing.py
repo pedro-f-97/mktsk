@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from typing import NamedTuple
 
-from . import parsing, standards, state
+from . import helpers, parsing, standards, state
 
 
 class TaskEntry(NamedTuple):
@@ -439,3 +439,50 @@ def find_task_groups(location: Path) -> list[TaskGroup]:
             groups.append(TaskGroup(subdirectory, entries))
 
     return groups
+
+
+def _folded(text: str) -> str:
+    """Folds the case and the accents of a string for a comparison.
+
+    Args:
+        text: the string to fold.
+
+    Returns:
+        The string with its accents removed and its letters lowercased.
+    """
+    return standards._without_accents(text).casefold()
+
+
+def search_tasks(entries: list[TaskEntry], query: str) -> list[TaskEntry]:
+    """Filters the entries whose title holds every word of a query.
+
+    The words are matched against the same text the Task column shows, so a
+    search reaches a task the way a reader of the table spells it. Case and
+    accents are folded on both sides, so `SOCIETY` finds `F Society` and
+    `björk` finds `Bjork Naive`. The query is split on whitespace and a task
+    matches when every word is a substring of its title, in any order, so
+    `everbind society` and `society everbind` both reach `F Society Everbind`.
+    An empty or whitespace-only query matches nothing, the input order is
+    kept, and closed entries are matched the same way as open ones, exactly as
+    the table lists them.
+
+    Args:
+        entries: the tasks to filter, in the order they are listed.
+        query: the words to look for in the titles.
+
+    Returns:
+        The entries whose title holds every word of the query, or an empty
+        list when the query carries no word or no title holds them all.
+    """
+    words = [_folded(word) for word in query.split()]
+
+    if not words:
+        return []
+
+    found = []
+    for entry in entries:
+        title = _folded(helpers.readable_title(entry.title))
+        if all(word in title for word in words):
+            found.append(entry)
+
+    return found
