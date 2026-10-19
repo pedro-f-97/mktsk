@@ -88,10 +88,12 @@ _ZEBRA_WEIGHT = 0.03
 _SEPARATOR_WEIGHT = 0.08
 
 # the windows11 style paints its selection indicator at the left edge of the
-# rect it is handed, just after the action bar. The width of that indicator plus
-# a small margin, kept clear between the bar and the text of a selected row, so
-# the indicator never touches a glyph
-_SELECTION_INDICATOR_GAP = 6
+# rect it is handed. The width of that indicator plus a small margin, which
+# indents the action bar of the auxiliary row, so the marker of the selection
+# stays visible at the left edge of the row and the bar never covers it
+_SELECTION_INDICATOR_WIDTH = 3
+_SELECTION_INDICATOR_GAP = _SELECTION_INDICATOR_WIDTH + 3
+_DATE_TEXT_LEFT_PADDING = _SELECTION_INDICATOR_GAP  # at least _INDICATOR_WIDTH + 2
 
 # the marker a heading carries when it stands for the destination: a small dot
 # at the right end of the row, clear of the name the style draws from the left
@@ -259,8 +261,8 @@ class _ColumnHeader(QHeaderView):
     nothing a person would want to make room for. The date and the three right
     columns start from the widths of their contents, and the task takes the rest
     of the room a row has. No section is held wider than its contents: the
-    action bar is taken by the selected row alone, which shifts its cells, so
-    the date is a column like any other.
+    action bar is taken by the auxiliary row the selected row opens below its
+    own, so the date is a column like any other.
     """
 
     def __init__(self, height: int, parent: QWidget | None = None) -> None:
@@ -560,8 +562,8 @@ def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     return pen
 
 
-class _InsetDelegate(QStyledItemDelegate):
-    """Paints a row as the columns of the header, keeping the bar clear.
+class _TaskDelegate(QStyledItemDelegate):
+    """Paints a row as the columns of the header, above the band it opens.
 
     Every column comes from the header, which owns the geometry: the delegate
     asks it for the position and the size of each section, so a heading never
@@ -572,27 +574,31 @@ class _InsetDelegate(QStyledItemDelegate):
     the task, so painting reads no file and holds no date of its own. A row
     without them is a heading, painted across the whole item.
 
-    With no selection every cell starts at the left edge of the row, laid out
-    from the header. The action bar sits on the selected row alone, so that one
-    row shifts its whole content right by the room the bar takes and nothing is
-    drawn under it; the other rows stay where they were and the columns are left
-    unaligned while the selection lasts. Only the selected row hands the style a
-    rect narrowed from the left, so the fill and the indicator start after the
-    bar and before the shifted content. The date is drawn after the same margin
-    the header draws its own text with, so a heading and its value line up.
-    Every row keeps the height the bar needs, which stops the list from shifting
-    as the selection moves.
+    Every cell starts at the left edge of the row, laid out from the header, so
+    selecting a row moves none of its cells. The action bar lives in an
+    auxiliary row the selected row opens below its own, and only that row grows
+    by the height of the band, its cells keeping the room a plain row has. The
+    style paints the whole row of a selection, indicator included, from its left
+    edge, and the bar is indented past that indicator rather than the cells
+    being pushed right. The date is drawn after the same margin the header
+    draws its own text with, so a heading and its value line up. Every row keeps
+    the height the bar needs, which stops the list from shifting as the
+    selection moves.
 
     Args:
-        inset: the width of the action bar, taken only by the selected row.
-        min_height: height a row needs to hold the action bar.
+        min_height: the height a plain row has, which is also the room the
+            cells keep on the selected row, above the band it opens.
+        accordion_height: the height of the band the action bar takes below the
+            cells of the selected row.
         header: the header the geometry of every column is read from.
     """
 
-    def __init__(self, inset: int, min_height: int, header: _ColumnHeader) -> None:
+    def __init__(
+        self, min_height: int, accordion_height: int, header: _ColumnHeader
+    ) -> None:
         super().__init__()
-        self.inset = inset
         self.min_height = min_height
+        self.accordion_height = accordion_height
         self.header = header
         self.inset_row = -1
         # the category a heading stands for when it is the destination, held as
@@ -621,32 +627,34 @@ class _InsetDelegate(QStyledItemDelegate):
             row.height(),
         )
 
-    def content_rect(self, row: QRect, column: int, selected: bool) -> QRect:
-        """Returns the rectangle a cell is painted in, clear of the bar.
+    def content_rect(self, row: QRect, column: int) -> QRect:
+        """Returns the rectangle a cell is painted in, cut back to the row.
 
-        A cell is its column of the row, and the selected row alone carries the
-        bar at its left, so the cells of that row are shifted right by the width
-        of the bar and the gap left for the selection indicator. A cell the
-        shift pushes past the right edge of the row is cut back to what the row
-        still holds, so nothing of a row is ever painted outside it; the left
-        edge is kept whatever the cut, so a cell that falls entirely past the
-        edge keeps the position the shift gave it.
+        A cell is its column of the row, cut back to what the row still holds
+        past its right edge, so nothing of a row is ever painted outside it; the
+        left edge is kept whatever the cut, so a cell that falls entirely past
+        the edge keeps the position its column gave it.
 
         Args:
             row: the row the column belongs to.
             column: the index of the column, from the date on the left.
-            selected: whether the cell belongs to the selected row.
 
         Returns:
             The rectangle the cell is painted in.
         """
         cell = self.column_rect(row, column)
-        if selected:
-            cell.translate(self.inset + _SELECTION_INDICATOR_GAP, 0)
         available = row.right() - cell.left() + 1
         if available < cell.width():
             cell.setWidth(max(available, 0))
         return cell
+
+    def content_band(self, row: QRect) -> QRect:
+        """Returns the part of a row that holds its cells.
+
+        The selected row opens the accordion band below, and its cells keep the
+        room a plain row has, so they stay where every other row paints them.
+        """
+        return QRect(row.left(), row.top(), row.width(), min(row.height(), self.min_height))
 
     def initStyleOption(
         self,
@@ -747,19 +755,9 @@ class _InsetDelegate(QStyledItemDelegate):
                     ),
                 )
 
-        # the bar sits on the selected row alone, so that row has its whole
-        # content shifted right by the bar and the indicator gap; only that row
-        # hands the style a rect narrowed from the left, so the fill and the
-        # indicator start after the bar and before the shifted cells. The other
-        # rows stay as they were, so their columns are not aligned across rows
-        # while a selection lasts.
-        style_option = option
         selected = index.row() == self.inset_row
-        if selected:
-            style_option = QStyleOptionViewItem(option)
-            style_option.rect = QRect(option.rect)
-            style_option.rect.setLeft(option.rect.left() + self.inset)
-        super().paint(painter, style_option, index)
+        # the style paints the whole row, indicator included, from its left edge
+        super().paint(painter, option, index)
 
         padding = self.header.style().pixelMetric(
             QStyle.PixelMetric.PM_HeaderMargin
@@ -770,8 +768,11 @@ class _InsetDelegate(QStyledItemDelegate):
         pen_colour = _cell_pen(option)
         painter.setPen(pen_colour)
 
-        date_cell = self.content_rect(option.rect, 0, selected)
-        date_cell.setLeft(date_cell.left() + padding)
+        cells = self.content_band(option.rect) if selected else option.rect
+        date_cell = self.content_rect(cells, 0)
+        # give the first column's text a left padding so the selection indicator
+        # stays clear of the first glyph for all rows
+        date_cell.setLeft(date_cell.left() + max(padding, _DATE_TEXT_LEFT_PADDING))
         date_text = option.fontMetrics.elidedText(
             _date_cell(entry), Qt.TextElideMode.ElideRight, date_cell.width()
         )
@@ -781,7 +782,7 @@ class _InsetDelegate(QStyledItemDelegate):
             date_text,
         )
 
-        task_cell = self.content_rect(option.rect, 1, selected)
+        task_cell = self.content_rect(cells, 1)
         task_text = option.fontMetrics.elidedText(
             helpers.readable_title(entry.title),
             Qt.TextElideMode.ElideRight,
@@ -796,7 +797,7 @@ class _InsetDelegate(QStyledItemDelegate):
         # the clip column is blank until the task carries an attachment, and
         # then it shows the paperclip and the number of them, the number read
         # from the entry the row already holds
-        clip_cell = self.content_rect(option.rect, 2, selected)
+        clip_cell = self.content_rect(cells, 2)
         attachments = entry.attachments
         if attachments:
             icon = QRect(
@@ -826,7 +827,7 @@ class _InsetDelegate(QStyledItemDelegate):
             ),
         )
 
-        state_cell = self.content_rect(option.rect, 3, selected)
+        state_cell = self.content_rect(cells, 3)
         state_text = option.fontMetrics.elidedText(
             index.data(_STATE_ROLE) or "",
             Qt.TextElideMode.ElideRight,
@@ -837,7 +838,7 @@ class _InsetDelegate(QStyledItemDelegate):
             _CELL_ALIGNMENT,
             state_text,
         )
-        count_cell = self.content_rect(option.rect, 4, selected)
+        count_cell = self.content_rect(cells, 4)
         count_text = option.fontMetrics.elidedText(
             index.data(_COUNT_ROLE) or "",
             Qt.TextElideMode.ElideRight,
@@ -848,7 +849,7 @@ class _InsetDelegate(QStyledItemDelegate):
             _COUNT_ALIGNMENT,
             count_text,
         )
-        age_cell = self.content_rect(option.rect, 5, selected)
+        age_cell = self.content_rect(cells, 5)
         age_text = option.fontMetrics.elidedText(
             index.data(_AGE_ROLE) or "",
             Qt.TextElideMode.ElideRight,
@@ -866,18 +867,21 @@ class _InsetDelegate(QStyledItemDelegate):
     ) -> QSize:
         size = super().sizeHint(option, index)
         size.setWidth(self.header.length())
-        size.setHeight(max(size.height(), self.min_height))
+        height = max(size.height(), self.min_height)
+        if index.isValid() and index.row() == self.inset_row and index.data(_ENTRY_ROLE) is not None:
+            height += self.accordion_height
+        size.setHeight(height)
         return size
 
 
 class TaskListing(QListWidget):
-    """A list of tasks with an action bar over the selected row.
+    """A list of tasks with an action bar below the selected row.
 
-    The bar follows the selected row, and shows only when a task is selected.
-    Headings are not selectable, so they never get one, and a closed task gets
-    a single button, the reopen action, which still reports resume: the other
-    actions all speak to a folder. The listing only reports which action was
-    asked for, leaving the task logic to the window.
+    The bar follows the selected row in its own auxiliary row, and shows only
+    when a task is selected. Headings are not selectable, so they never get
+    one, and a closed task gets a single button, the reopen action, which still
+    reports resume: the other actions all speak to a folder. The listing only
+    reports which action was asked for, leaving the task logic to the window.
     """
 
     open_requested = Signal(object)
@@ -895,9 +899,10 @@ class TaskListing(QListWidget):
         self.header = _ColumnHeader(
             self.action_bar.minimumSizeHint().height()
         )
-        self.delegate = _InsetDelegate(
-            self.inset,
+        self.accordion_height = self.action_bar.sizeHint().height()
+        self.delegate = _TaskDelegate(
             self.action_bar.minimumSizeHint().height(),
+            self.accordion_height,
             self.header,
         )
         self.sort_column: int | None = None
@@ -1162,6 +1167,7 @@ class TaskListing(QListWidget):
         self.action_bar.set_reopening(entry is not None and entry.state == "closed")
 
         self.delegate.inset_row = self.currentRow()
+        self.doItemsLayout()
         self.viewport().update()
 
         # Qt lets a heading become the current item, and it still gets no bar
@@ -1180,7 +1186,14 @@ class TaskListing(QListWidget):
             return
 
         rect = self.visualItemRect(item)
-        self.action_bar.setGeometry(rect.left(), rect.top(), self.inset, rect.height())
+        band = self.delegate.content_band(rect)
+        top = band.bottom() + 1
+        self.action_bar.setGeometry(
+            rect.left() + _SELECTION_INDICATOR_GAP,
+            top,
+            self.inset,
+            rect.bottom() - top + 1,
+        )
 
 
 class TaskPanel(QWidget):

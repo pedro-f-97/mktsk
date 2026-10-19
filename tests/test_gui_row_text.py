@@ -518,7 +518,7 @@ def test_the_option_handled_to_the_style_keeps_the_selection(
         assert state & QStyle.StateFlag.State_Selected
 
 
-def test_the_button_area_of_a_selected_row_keeps_the_plain_background(
+def test_the_auxiliary_band_of_a_selected_row_is_painted_with_the_selection(
     filled_selection_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
@@ -527,21 +527,20 @@ def test_the_button_area_of_a_selected_row_keeps_the_plain_background(
     item = find_task(window, file)
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
     selected = _render_row(listing, item, _SELECTED_ACTIVE, base)
-
-    for x in range(listing.inset):
-        assert selected.pixelColor(x, selected.height() // 2) == base
-
-    region = selected.copy(
-        listing.inset, 0, selected.width() - listing.inset, selected.height()
-    )
     fill = filled_selection_style.colour.rgb()
+
+    # the whole selected row is handed to the style, band included, so the
+    # auxiliary row carries the selection fill under the action bar and no
+    # cell of the row is painted past the room it keeps above the band
+    band_top = listing.delegate.min_height
+    assert selected.height() > band_top
     filled = sum(
         1
-        for y in range(region.height())
-        for x in range(region.width())
-        if region.pixelColor(x, y).rgb() == fill
+        for y in range(band_top, selected.height())
+        for x in range(selected.width())
+        if selected.pixelColor(x, y).rgb() == fill
     )
-    assert filled > region.width() * region.height() // 2
+    assert filled == selected.width() * (selected.height() - band_top)
 
 
 def test_the_pen_of_a_selected_row_is_read_once(monkeypatch, filled_selection_style):
@@ -647,7 +646,6 @@ def test_a_selected_row_shifts_its_cells_and_leaves_the_others(
     other_file = make_task(tmp_path, "260919", LONG_TITLE)
     window.navigate_to(tmp_path)
     listing = select_task(window, selected_file)
-    shift = listing.inset + _SELECTION_INDICATOR_GAP
     padding = listing.header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
 
     painted = painted_texts(monkeypatch, listing)
@@ -656,16 +654,18 @@ def test_a_selected_row_shifts_its_cells_and_leaves_the_others(
     selected = row_texts(painted, selected_row)
     other = row_texts(painted, other_row)
 
+    from mktsk.gui import tasklist
     assert (
         selected[0][0].left()
-        == listing.column_rect(selected_row, 0).left() + padding + shift
+        == listing.column_rect(selected_row, 0).left() + max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
     )
     for column in range(1, 6):
         assert (
             selected[column][0].left()
-            == listing.column_rect(selected_row, column).left() + shift
+            == listing.column_rect(selected_row, column).left()
         )
-    assert other[0][0].left() == listing.column_rect(other_row, 0).left() + padding
+    from mktsk.gui import tasklist
+    assert other[0][0].left() == listing.column_rect(other_row, 0).left() + max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
     for column in range(1, 6):
         assert (
             other[column][0].left() == listing.column_rect(other_row, column).left()
@@ -709,8 +709,9 @@ def test_a_selected_row_elides_at_the_cut_edge(
     full = QRect(0, 0, listing.header.length(), listing.delegate.min_height)
     activity = listing.column_rect(full, 5)
     advance = QFontMetrics(listing.font()).horizontalAdvance(item.data(_AGE_ROLE))
+    # paint at a width that really cuts the age cell
     visible = min(advance - 2, activity.width() - 1)
-    width = activity.left() + activity.width()
+    width = activity.left() + visible
 
     painted, row = _painted_row(monkeypatch, listing, item, width)
     texts = row_texts(painted, row)
@@ -804,7 +805,7 @@ def _first_glyph_x(image, pen, start=0):
     raise AssertionError("no glyph was painted on the row")
 
 
-def test_a_selected_row_leaves_the_indicator_clear_of_the_first_glyph(
+def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
     indicator_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
@@ -813,17 +814,21 @@ def test_a_selected_row_leaves_the_indicator_clear_of_the_first_glyph(
     item = listing.currentItem()
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
     option = _row_option(listing, item, _SELECTED_ACTIVE)
+    padding = listing.header.style().pixelMetric(
+        QStyle.PixelMetric.PM_HeaderMargin
+    )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
     indicator = _columns_of_colour(image, _INDICATOR_COLOUR)
 
     assert indicator
+    assert min(indicator) == 0
     assert max(indicator) - min(indicator) + 1 == _INDICATOR_WIDTH
-    first_glyph = _first_glyph_x(image, _cell_pen(option), max(indicator) + 1)
-    assert first_glyph - max(indicator) >= _INDICATOR_WIDTH
+    first_glyph = _first_glyph_x(image, _cell_pen(option), 0)
+    assert first_glyph == max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
 
 
-def test_a_selected_row_keeps_the_indicator_clear_of_its_text(
+def test_a_selected_row_keeps_the_indicator_clear_of_the_action_bar(
     indicator_style, window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "260918", SHORT_TITLE)
@@ -832,12 +837,16 @@ def test_a_selected_row_keeps_the_indicator_clear_of_its_text(
     item = listing.currentItem()
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
     option = _row_option(listing, item, _SELECTED_ACTIVE)
+    padding = listing.header.style().pixelMetric(
+        QStyle.PixelMetric.PM_HeaderMargin
+    )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
     indicator = _columns_of_colour(image, _INDICATOR_COLOUR)
-    bar_right = listing.inset
+    bar_left = listing.action_bar.geometry().left()
 
     assert indicator
-    assert min(indicator) >= bar_right
-    first_glyph = _first_glyph_x(image, _cell_pen(option), bar_right)
-    assert first_glyph >= bar_right + _SELECTION_INDICATOR_GAP
+    assert bar_left > max(indicator)
+    assert bar_left >= _SELECTION_INDICATOR_GAP
+    first_glyph = _first_glyph_x(image, _cell_pen(option), 0)
+    assert first_glyph >= max(padding, tasklist._DATE_TEXT_LEFT_PADDING)

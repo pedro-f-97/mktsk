@@ -12,7 +12,6 @@ from mktsk.gui.tasklist import (
     _COLUMN_PADDING,
     _COUNT_ROLE,
     _ENTRY_ROLE,
-    _SELECTION_INDICATOR_GAP,
     _TASK_MAX_WIDTH,
     TaskListing,
     _column_widths,
@@ -153,6 +152,6 @@ def test_the_selected_row_still_keeps_the_selection_indicator_gap(qtbot):
     rows.setCurrentItem(item)
     row = QRect(rows.visualItemRect(item))
 
-    selected = rows.delegate.content_rect(row, 1, True)
+    selected = rows.delegate.content_rect(row, 1)
     plain = rows.column_rect(row, 1)
-    assert selected.left() == plain.left() + rows.inset + _SELECTION_INDICATOR_GAP
+    assert selected.left() == plain.left()

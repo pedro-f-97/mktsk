@@ -1,6 +1,7 @@
 from freezegun import freeze_time
 from PySide6.QtCore import QRect, Qt
 
+from mktsk.gui.tasklist import _SELECTION_INDICATOR_GAP
 from tests.gui_helpers import (
     action_bar,
     find_task,
@@ -35,8 +36,12 @@ def test_action_bar_sits_over_the_selected_row(window, tmp_path, make_task):
     listing = select_task(window, file)
     row = listing.visualItemRect(listing.currentItem())
 
+    band_top = row.top() + listing.delegate.min_height
     assert listing.action_bar.geometry() == QRect(
-        row.left(), row.top(), listing.inset, row.height()
+        row.left() + _SELECTION_INDICATOR_GAP,
+        band_top,
+        listing.inset,
+        row.height() - listing.delegate.min_height,
     )
 
 
@@ -83,7 +88,7 @@ def test_action_bar_is_left_aligned(window, tmp_path, make_task):
     lefts = [button.geometry().left() for button in bar.buttons()]
 
     assert lefts == sorted(lefts)
-    assert bar.geometry().left() == row.left()
+    assert bar.geometry().left() == row.left() + _SELECTION_INDICATOR_GAP
     assert bar.width() < row.width() / 2
     assert bar.buttons()[-1].geometry().right() <= bar.width()
 
