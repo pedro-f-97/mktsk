@@ -5,7 +5,7 @@
   `tests/test_gui_actions.py`, `tests/test_gui_create.py`,
   `tests/test_gui_destination.py`, `tests/test_gui_icons.py`,
   `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_attachments.py`,
-  `tests/test_gui_row_text.py`,
+  `tests/test_gui_row_text.py`, `tests/test_gui_row_highlight.py`,
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
   `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
   `tests/test_gui_search_panel.py`
@@ -213,7 +213,14 @@
   down. The pen of a cell stays paired with the background it is drawn on: a selected row
   takes the `HighlightedText` or the `Text` of its group, whichever holds better against
   that same tint, and an unselected row reads `Text` of the group, which is what keeps
-  tasks and folders apart as they were
+  tasks and folders apart as they were. Two lines of the same colour and thickness run
+  along the top and the bottom edge of the selected row, from its left edge a short arm
+  of the rail's thickness plus `_ROW_LINE_REACH`, so tuning how far they reach is one
+  edit and the arm stays inside the first cell. The top line starts at the rail's first
+  pixel row and the bottom line ends at its last, whatever the row height or the band the
+  action bar opens, so the rail and the two lines read as a bracket around the whole
+  row. They are filled on integer rectangles with no antialiasing, and only a selected
+  task row gets them: an unselected row and a category separator are left as they were
 - The list is striped to keep the eye on a row, and the colours are derived from the
   palette through one blend function rather than written down, so a dark mode needs no
   change. Every second task row under a separator is filled with the `Base` of its palette

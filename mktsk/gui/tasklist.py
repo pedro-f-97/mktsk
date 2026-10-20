@@ -98,6 +98,12 @@ _SELECTION_INDICATOR_RADIUS = 2.0
 _SELECTION_INDICATOR_GAP = _SELECTION_INDICATOR_WIDTH + 2
 _DATE_TEXT_LEFT_PADDING = _SELECTION_INDICATOR_GAP  # at least _INDICATOR_WIDTH + 2
 
+# how far the top and bottom lines of a selected row reach past the rail, in
+# logical pixels like the rail's own metrics: the rail's thickness plus this
+# is the whole arm of a line, a short bracket that stays inside the first
+# cell, so tuning how far the lines reach is one edit
+_ROW_LINE_REACH = 8
+
 # how far the tint of a selection moves from the Base towards the Highlight,
 # subtle enough to keep the row close to the plain background it sits on
 _SELECTION_TINT_WEIGHT = 0.08
@@ -591,12 +597,14 @@ class _TaskDelegate(QStyledItemDelegate):
     auxiliary row the selected row opens below its own, and only that row grows
     by the height of the band, its cells keeping the room a plain row has. The
     selection of a row is the delegate's own, painted over the style's: a faint
-    tint across the task row and the band alike, so the two read as one, and a
-    rounded rail of the Highlight at the left edge. The bar is indented past
-    that rail rather than the cells being pushed right. The date is drawn after
-    the same margin the header draws its own text with, so a heading and its
-    value line up. Every row keeps the height the bar needs, which stops the
-    list from shifting as the selection moves.
+    tint across the task row and the band alike, so the two read as one, a
+    rounded rail of the Highlight at the left edge, and a short line along the
+    top and bottom edges of the whole selected row, from its left edge a little
+    past the rail, so the rail and the lines bracket the row. The bar is
+    indented past that rail rather than the cells being pushed right. The date
+    is drawn after the same margin the header draws its own text with, so a
+    heading and its value line up. Every row keeps the height the bar needs,
+    which stops the list from shifting as the selection moves.
 
     Args:
         min_height: the height a plain row has, which is also the room the
@@ -668,6 +676,34 @@ class _TaskDelegate(QStyledItemDelegate):
         room a plain row has, so they stay where every other row paints them.
         """
         return QRect(row.left(), row.top(), row.width(), min(row.height(), self.min_height))
+
+    def _paint_row_lines(
+        self, painter: QPainter, option: QStyleOptionViewItem
+    ) -> None:
+        """Paints the short lines that bracket a selected row with its rail.
+
+        Both lines start at the left edge of the row and reach an arm of the
+        rail's thickness plus `_ROW_LINE_REACH`, so the arm stays inside the
+        first cell and its length is tuned in one place. The top line starts
+        at the rail's first pixel row and the bottom one ends at its last,
+        whatever the row height or the band the action bar opens, so the rail
+        and the two lines read as a bracket around the whole selected row.
+        They are filled on integer rectangles in the colour and the thickness
+        of the rail, with no antialiasing, and only a selected task row gets
+        them.
+
+        Args:
+            painter: the painter the row is being drawn with.
+            option: what the row is painted from, holding its rect, state
+                and palette.
+        """
+        rect = option.rect
+        thickness = _SELECTION_INDICATOR_WIDTH
+        reach = thickness + _ROW_LINE_REACH
+        group = _colour_group(option.state)
+        colour = option.palette.color(group, QPalette.ColorRole.Highlight)
+        for top in (rect.top(), rect.bottom() + 1 - thickness):
+            painter.fillRect(QRect(rect.left(), top, reach, thickness), colour)
 
     def initStyleOption(
         self,
@@ -769,12 +805,15 @@ class _TaskDelegate(QStyledItemDelegate):
                 )
 
         selected = index.row() == self.inset_row
+        cells = self.content_band(option.rect) if selected else option.rect
         # the style paints the row first, and over it the selection this
         # delegate owns: the tint across the whole area, task row and band
-        # alike, and the rounded rail of the Highlight at its left edge
+        # alike, the rounded rail of the Highlight at its left edge, and the
+        # short bracket lines at the rail's two ends
         super().paint(painter, option, index)
         if option.state & QStyle.StateFlag.State_Selected:
             _paint_selection(painter, option)
+            self._paint_row_lines(painter, option)
 
         padding = self.header.style().pixelMetric(
             QStyle.PixelMetric.PM_HeaderMargin
@@ -785,7 +824,6 @@ class _TaskDelegate(QStyledItemDelegate):
         pen_colour = _cell_pen(option)
         painter.setPen(pen_colour)
 
-        cells = self.content_band(option.rect) if selected else option.rect
         date_cell = self.content_rect(cells, 0)
         # give the first column's text a left padding so the selection indicator
         # stays clear of the first glyph for all rows
