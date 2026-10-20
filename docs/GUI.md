@@ -7,7 +7,8 @@
   `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_attachments.py`,
   `tests/test_gui_row_text.py`,
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
-  `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`
+  `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
+  `tests/test_gui_search_panel.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
@@ -21,7 +22,8 @@
   and its immediate subdirectories, so it shows where new tasks are created; a
   `QTabWidget` on the right holding one `QListWidget` per task category
 - The left pane is a unit of its own, top to bottom: the `Directory` header, the path
-  label, then the tree. The header is a standalone `QHeaderView` above the path, so it
+  label, then the tree and, below it, the search panel. The header is a standalone
+  `QHeaderView` above the path, so it
   keeps the native header look rather than a hand-painted row, and the tree's own header
   is hidden. It shares the tree's single section, so it carries the same `Directory`
   title and stays in step with `set_header_label`
@@ -36,6 +38,31 @@
 - The header title starts at the left padding the path is indented by, and the tree drops
   the title when the header is too narrow to hold it before the buttons, restoring it as
   soon as there is room again, so the buttons never sit over it
+- A vertical splitter inside the left pane holds the Directory block (header, path row,
+  and tree) in one container and the Search panel in the other, with stretch factors 3
+  and 2 keeping the initial split and window-resize behaviour 3:2; `setChildrenCollapsible`
+  is false, each child has a sane minimum height so neither can be dragged to nothing,
+  and the search panel keeps at least its header and the field. Persistence follows the
+  same mechanism as the other splitters when present. Under the tree the left pane holds
+  a `Search` panel: its own header titled `Search`, a line edit with the `Search tasks`
+  placeholder and a clear button, and a results list below. The header is a standalone
+  `QHeaderView` over the results' model, the way the `Directory` header sits over the
+  tree's, with the other two sections hidden; both headers take the height of the tab
+  bar, so they read as one set. The panel sits inside the pane and it collapses with the pane
+- The results hold the tasks the listings hold, closed ones included, and the query runs
+  again over them on every reload, so a task created or closed since is reached the way
+  the table now lists it; the result that was highlighted is highlighted again when it
+  still matches. The query comes from `search_tasks`, so it matches the text the `Task`
+  column shows, and an empty or whitespace-only query shows no results and no hint
+- A result row carries the date in the `Date` column format, the title as the `Task`
+  column spells it, and the category in the palette's `PlaceholderText`, so it is dimmed
+  with no colour written down; the full path is its tooltip
+- Only a click on a result or an activation on it (double click or `Enter` on a
+  highlighted row) reaches the table, through `select_task`, so typing and a refill of
+  the results never move the selection; `Return` in the field activates the first
+  result, and `Esc` in the field clears it, which empties the results with it. Selecting
+  a result never picks a category, so the destination a new task lands in stays where it
+  was
 - The right pane is a side rail beside the creation bar and the tabs: the rail is the
   first column, spans the full height of the pane and is as wide as the `Refresh` button
   it carries at its top, so the button no longer sits in the tab bar corner, which is

@@ -6,12 +6,15 @@ from typing import cast
 
 from PySide6.QtCore import QPointF, QRectF, QSettings, QSize, Qt
 from PySide6.QtGui import (
+    QBrush,
     QCloseEvent,
+    QKeySequence,
     QPainter,
     QPaintEvent,
     QPalette,
     QPen,
     QResizeEvent,
+    QShortcut,
     QShowEvent,
 )
 from PySide6.QtWidgets import (
@@ -19,6 +22,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -32,6 +36,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTabWidget,
     QToolButton,
+    QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -57,6 +62,7 @@ from .tasklist import (
     _STATE_ROLE,
     TaskListing,
     TaskPanel,
+    _date_cell,
     _relative_age,
 )
 from .tree import _PATH_ROLE, _CategoryTree
@@ -153,6 +159,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings or QSettings("mktsk", "mktsk")
         self._sorts: dict[str, tuple[int, bool]] = {}
+        # the tasks the search panel filters over, each with the title of its
+        # category, kept until the next reload hands in new ones
+        self._search_entries: list[tuple[listing.TaskEntry, str]] = []
         # the width the left pane had before the toggle bar collapsed it, and
         # the split the splitter opened with, to fall back on when a collapse
         # came from dragging the handle rather than from the bar
@@ -247,12 +256,45 @@ class MainWindow(QMainWindow):
         self.target_label.hide()
         self.create_button = QPushButton("Create")
 
+        # the search panel under the tree: its header shares the single model
+        # of the results, so it carries the `Search` title the way the tree's
+        # own header carries `Directory`, with the other two sections hidden
+        self.search_results = QTreeWidget()
+        self.search_results.setColumnCount(3)
+        self.search_results.setHeaderLabels(["Search", "", ""])
+        self.search_results.setHeaderHidden(True)
+        self.search_results.setRootIsDecorated(False)
+        self.search_results.setFrameShape(QFrame.Shape.NoFrame)
+        results_header = self.search_results.header()
+        results_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        results_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        results_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.search_header = QHeaderView(Qt.Orientation.Horizontal)
+        self.search_header.setModel(self.search_results.model())
+        self.search_header.setSectionHidden(1, True)
+        self.search_header.setSectionHidden(2, True)
+        self.search_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.search_header.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search tasks")
+        self.search_input.setClearButtonEnabled(True)
+
         self.directory_tree.set_navigation_buttons(self.choose_button, self.up_button)
 
         self.path_row = QWidget()
         path_layout = QHBoxLayout(self.path_row)
         path_layout.setContentsMargins(0, 0, 0, 0)
         path_layout.addWidget(self.path_label, 1)
+
+        self.search_panel = QWidget()
+        search_layout = QVBoxLayout(self.search_panel)
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.setSpacing(0)
+        search_layout.addWidget(self.search_header)
+        search_layout.addWidget(self.search_input)
+        search_layout.addWidget(self.search_results, 1)
 
         self.left_panel = QWidget()
         left_layout = QVBoxLayout(self.left_panel)
@@ -263,6 +305,23 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.directory_tree.header_view)
         left_layout.addWidget(self.path_row)
         left_layout.addWidget(self.directory_tree)
+
+        self.directory_panel = self.left_panel
+
+        self.left_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.left_splitter.setChildrenCollapsible(False)
+        self.left_splitter.addWidget(self.left_panel)
+        self.left_splitter.addWidget(self.search_panel)
+        self.left_splitter.setStretchFactor(0, 3)
+        self.left_splitter.setStretchFactor(1, 2)
+        self.left_panel.setMinimumHeight(80)
+        self.search_panel.setMinimumHeight(60)
+
+        self.left_container = QWidget()
+        left_container_layout = QVBoxLayout(self.left_container)
+        left_container_layout.setContentsMargins(0, 0, 0, 0)
+        left_container_layout.setSpacing(0)
+        left_container_layout.addWidget(self.left_splitter)
 
         self.bottom_bar = QWidget()
         self.clear_target_button = _icon_button(
@@ -304,7 +363,7 @@ class MainWindow(QMainWindow):
         right_layout.setRowStretch(1, 1)
 
         self.splitter = QSplitter()
-        self.splitter.addWidget(self.left_panel)
+        self.splitter.addWidget(self.left_container)
         self.splitter.addWidget(self.right_panel)
         self.splitter.setStretchFactor(1, 2)
         self.setCentralWidget(self.splitter)
@@ -320,6 +379,19 @@ class MainWindow(QMainWindow):
         self.directory_tree.category_requested.connect(self.new_category)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
+        self.search_input.textChanged.connect(self._filter_search)
+        self.search_input.returnPressed.connect(self._activate_first_search_result)
+        # only a click or an activation on a result reaches the table, so
+        # typing and a refill of the results never move the selection
+        self.search_results.itemClicked.connect(self._activate_search_result)
+        self.search_results.itemActivated.connect(self._activate_search_result)
+        self.search_escape = QShortcut(
+            QKeySequence(Qt.Key.Key_Escape), self.search_input
+        )
+        self.search_escape.setContext(
+            Qt.ShortcutContext.WidgetWithChildrenShortcut
+        )
+        self.search_escape.activated.connect(self.search_input.clear)
         self.toggle_button.clicked.connect(self.toggle_left_pane)
         self.splitter.splitterMoved.connect(self._update_path_label)
         self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
@@ -328,19 +400,26 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(self._sync_preview)
 
         # the old bar's focus order, kept by hand because the panels now hold
-        # the same widgets in a different tree
+        # the same widgets in a different tree; the search panel sits between
+        # the tree and the table, where it lives in the pane
         self.setTabOrder(self.choose_button, self.up_button)
         self.setTabOrder(self.up_button, self.refresh_button)
         self.setTabOrder(self.refresh_button, self.directory_tree)
-        self.setTabOrder(self.directory_tree, self.tabs)
+        self.setTabOrder(self.directory_tree, self.search_input)
+        self.setTabOrder(self.search_input, self.search_results)
+        self.setTabOrder(self.search_results, self.tabs)
         self.setTabOrder(self.tabs, self.title_input)
         self.setTabOrder(self.title_input, self.create_button)
 
     def _align_header(self) -> None:
-        """Squares the Directory header off to the height of the tab bar it lines up with."""
-        self.directory_tree.header_view.setFixedHeight(
-            self.tabs.tabBar().sizeHint().height()
-        )
+        """Squares the two headers of the left pane off to the tab bar height.
+
+        The Directory and the Search header read as one set over the pane, so
+        both take the height the tab bar lines the Directory one up with.
+        """
+        height = self.tabs.tabBar().sizeHint().height()
+        self.directory_tree.header_view.setFixedHeight(height)
+        self.search_header.setFixedHeight(height)
 
     def _update_path_label(self) -> None:
         """Shows the current directory, elided to the room the row has."""
@@ -406,6 +485,8 @@ class MainWindow(QMainWindow):
             self.target_label.hide()
             self.clear_target_button.hide()
             self.tabs.clear()
+            # the listings hold nothing, so the search panel holds nothing
+            self._reload_search([])
             return
 
         self._reload_tree()
@@ -574,6 +655,85 @@ class MainWindow(QMainWindow):
             self._add_tab(_CLOSED_TAB, shut)
 
         self._select_tab(active)
+        self._reload_search(
+            [(entry, title) for title, group in sections for entry in group.entries]
+        )
+
+    def _reload_search(self, entries: list[tuple[listing.TaskEntry, str]]) -> None:
+        """Points the search panel at the tasks the listings hold.
+
+        The results are rebuilt from the entries of one reload, closed tasks
+        among them, and the query runs again over them, so a task created or
+        closed since is reached the way the table now lists it.
+
+        Args:
+            entries: each listed task with the title of its category.
+        """
+        self._search_entries = entries
+        self._filter_search()
+
+    def _filter_search(self) -> None:
+        """Refills the results with the tasks the query reaches.
+
+        The query runs over the entries the last reload handed in, in the
+        order the table lists them, and an empty query reaches nothing, so no
+        hint is ever shown. The result that was highlighted is highlighted
+        again when it still matches; nothing here follows a result to the
+        table, so typing and a refill leave the selected task alone.
+        """
+        entries = [entry for entry, _ in self._search_entries]
+        found = {
+            entry.file
+            for entry in listing.search_tasks(entries, self.search_input.text())
+        }
+        current = self.search_results.currentItem()
+        kept = str(current.data(0, _PATH_ROLE)) if current is not None else None
+        dim = self.search_results.palette().color(QPalette.ColorRole.PlaceholderText)
+
+        self.search_results.clear()
+        restored: QTreeWidgetItem | None = None
+
+        for entry, category in self._search_entries:
+            if entry.file not in found:
+                continue
+
+            row = QTreeWidgetItem(
+                [_date_cell(entry), helpers.readable_title(entry.title), category]
+            )
+            row.setData(0, _PATH_ROLE, str(entry.file))
+            row.setForeground(2, QBrush(dim))
+            for column in range(3):
+                row.setToolTip(column, str(entry.file))
+            self.search_results.addTopLevelItem(row)
+            if str(entry.file) == kept:
+                restored = row
+
+        if restored is not None:
+            self.search_results.setCurrentItem(restored)
+
+    def _activate_search_result(self, item: QTreeWidgetItem, _column: int) -> None:
+        """Selects the task a search result points at, in the task table.
+
+        The result carries the path of its task, and the table reaches the
+        row from it, switching to the tab that holds the row when it sits in
+        another one. Nothing here picks a category, so the destination a new
+        task lands in is left where it was. A result is only on the panel
+        while the listings hold the task, so the panel that holds the table
+        is always there to be asked.
+
+        Args:
+            item: the result row that was clicked or activated.
+            _column: the column of the row, which is never read.
+        """
+        path = Path(str(item.data(0, _PATH_ROLE)))
+        panel = cast(TaskPanel, self.tabs.currentWidget())
+        panel.listing.select_task(path)
+
+    def _activate_first_search_result(self) -> None:
+        """Selects the first result of the search, as Return in the field asks."""
+        item = self.search_results.topLevelItem(0)
+        if item is not None:
+            self._activate_search_result(item, 0)
 
     def _sections(self) -> list[tuple[str, listing.TaskGroup]]:
         """Pairs every task group with the title of its tab.
