@@ -279,6 +279,9 @@
   is the one action that reaches an archive; `set_reopening` takes the other four buttons
   out until the folder stands again, and gives the resume button the reopen icon and
   tooltip while it stands for one, putting them back afterwards
+- The buttons pack to the bar's left edge, a stretch at the bar's end keeping the
+  surplus away from them, so the reopen button of a closed row starts where the first
+  button of the bar starts on a selected active row rather than centered in it
 - The date cell is drawn after the room the bar reserves on every row, so the date never
   moves when a row is selected; only the selected row hands the style a rect narrowed from
   the left, so the space for the buttons appears when the row is clicked and is given back
