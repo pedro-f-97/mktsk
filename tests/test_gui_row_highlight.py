@@ -8,6 +8,7 @@ from mktsk.gui.tasklist import _COUNT_ROLE
 from tests.gui_helpers import find_task, render_row, select_task, task_listing
 
 SHORT_TITLE = "Fix"
+OTHER_TITLE = "Check"
 
 _SELECTED = (
     QStyle.StateFlag.State_Enabled
@@ -15,13 +16,6 @@ _SELECTED = (
     | QStyle.StateFlag.State_Active
 )
 _UNSELECTED = QStyle.StateFlag.State_Enabled
-
-
-def _half_width(listing):
-    """Half the total width of all the columns of a row, from the header."""
-    header = listing.header
-    total = sum(header.sectionSize(column) for column in range(header.count()))
-    return total // 2
 
 
 def _selected_row(window, tmp_path, make_task):
@@ -48,6 +42,37 @@ def _tint(listing):
     )
 
 
+def _arm(listing):
+    """The whole width a line paints: the rail's thickness plus its reach."""
+    return tasklist._SELECTION_INDICATOR_WIDTH + tasklist._ROW_LINE_REACH
+
+
+def _assert_bracket(listing, image):
+    """Asserts the lines bracket the row at the rail's two extremes.
+
+    The top line starts at the rail's first pixel row and the bottom one ends
+    at its last, both run from the left edge to the end of the arm and no
+    further, in the colour and the thickness of the rail.
+    """
+    highlight = _highlight(listing)
+    tint = _tint(listing)
+    thickness = tasklist._SELECTION_INDICATOR_WIDTH
+    reach = _arm(listing)
+    rows = range(thickness)
+    bottom = range(image.height() - thickness, image.height())
+
+    for x in range(reach):
+        assert all(image.pixelColor(x, y) == highlight for y in rows)
+        assert all(image.pixelColor(x, y) == highlight for y in bottom)
+    assert image.pixelColor(reach, 0) == tint
+    assert image.pixelColor(reach, image.height() - 1) == tint
+    assert not any(
+        image.pixelColor(x, y) == highlight
+        for y in range(image.height())
+        for x in range(reach, image.width())
+    )
+
+
 def test_the_lines_of_a_selected_row_carry_the_indicator_colour_and_thickness(
     window, tmp_path, make_task
 ):
@@ -55,93 +80,63 @@ def test_the_lines_of_a_selected_row_carry_the_indicator_colour_and_thickness(
     highlight = _highlight(listing)
     tint = _tint(listing)
     thickness = tasklist._SELECTION_INDICATOR_WIDTH
-    half = _half_width(listing)
-    band_top = listing.delegate.min_height
+    probe = _arm(listing) - 1
 
     # the indicator keeps its colour at the middle of the left edge
     assert image.pixelColor(0, image.height() // 2) == highlight
-    # the top line is painted in that colour, as thick as the indicator
+    # the top line starts at the rail's first pixel row, as thick as the rail
     for y in range(thickness):
-        assert image.pixelColor(half - 1, y) == highlight
-    assert image.pixelColor(half - 1, thickness) == tint
-    # and so is the bottom line, at the bottom edge of the task row
-    for y in range(band_top - thickness, band_top):
-        assert image.pixelColor(half - 1, y) == highlight
-    assert image.pixelColor(half - 1, band_top - thickness - 1) == tint
+        assert image.pixelColor(probe, y) == highlight
+    assert image.pixelColor(probe, thickness) == tint
+    # and the bottom line ends at the rail's last pixel row
+    for y in range(image.height() - thickness, image.height()):
+        assert image.pixelColor(probe, y) == highlight
+    assert image.pixelColor(probe, image.height() - thickness - 1) == tint
 
 
-def test_the_lines_of_a_selected_row_start_at_the_left_edge(
+def test_the_lines_of_a_selected_row_bracket_it_at_the_rails_extremes(
     window, tmp_path, make_task
 ):
     listing, image = _selected_row(window, tmp_path, make_task)
-    highlight = _highlight(listing)
-    half = _half_width(listing)
-    band_top = listing.delegate.min_height
 
-    # the rail rounds off at its top end, so only the line can ink that corner
-    assert image.pixelColor(0, 0) == highlight
-    # the bottom line runs the whole way from the left edge to the cut
-    for x in range(half):
-        assert image.pixelColor(x, band_top - 1) == highlight
+    _assert_bracket(listing, image)
 
 
-def test_the_lines_of_a_selected_row_stop_at_half_the_row_width(
+def test_the_arm_of_the_lines_is_the_rail_thickness_plus_the_reach(
     window, tmp_path, make_task
 ):
     listing, image = _selected_row(window, tmp_path, make_task)
     highlight = _highlight(listing)
     tint = _tint(listing)
-    half = _half_width(listing)
-    band_top = listing.delegate.min_height
+    reach = _arm(listing)
 
-    assert half < image.width()
-    # the pixel just before the half is painted, the one at the half is not
-    assert image.pixelColor(half - 1, 0) == highlight
-    assert image.pixelColor(half, 0) == tint
-    assert image.pixelColor(half - 1, band_top - 1) == highlight
-    assert image.pixelColor(half, band_top - 1) == tint
+    assert reach < image.width()
+    # the last pixel of the arm is inked on both lines...
+    assert image.pixelColor(reach - 1, 0) == highlight
+    assert image.pixelColor(reach - 1, image.height() - 1) == highlight
+    # ...and the pixel past it is not
+    assert image.pixelColor(reach, 0) == tint
+    assert image.pixelColor(reach, image.height() - 1) == tint
 
 
-def test_the_lines_of_a_selected_row_run_without_a_gap_across_the_cells(
+def test_the_lines_bracket_a_row_with_and_without_the_action_bar_line(
     window, tmp_path, make_task
 ):
-    listing, image = _selected_row(window, tmp_path, make_task)
-    highlight = _highlight(listing)
-    header = listing.header
-    half = _half_width(listing)
-    band_top = listing.delegate.min_height
-    borders = [
-        header.sectionPosition(column) for column in range(1, header.count())
-    ]
+    file = make_task(tmp_path, "260918", SHORT_TITLE)
+    other = make_task(tmp_path, "260919", OTHER_TITLE)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    with_band = render_row(listing, listing.currentItem(), _SELECTED)
+    without_band = render_row(listing, find_task(window, other), _SELECTED)
 
-    # a cell border really sits inside the lines, before their cut
-    assert any(0 < border < half for border in borders)
-    for x in range(half):
-        assert image.pixelColor(x, 0) == highlight
-        assert image.pixelColor(x, band_top - 1) == highlight
-
-
-def test_the_cut_of_the_lines_follows_a_resized_column(
-    qtbot, window, tmp_path, make_task
-):
-    listing, _ = _selected_row(window, tmp_path, make_task)
-    highlight = _highlight(listing)
-    tint = _tint(listing)
-    header = listing.header
-    old_half = _half_width(listing)
-
-    header.resizeSection(1, header.sectionSize(1) + 200)
-    qtbot.wait(1)
-    new_half = _half_width(listing)
-    band_top = listing.delegate.min_height
-    image = render_row(listing, listing.currentItem(), _SELECTED)
-
-    # the cut moved with the column: the old cut is inside the lines now
-    assert new_half == old_half + 100
-    assert new_half < image.width()
-    assert image.pixelColor(old_half, band_top - 1) == highlight
-    assert image.pixelColor(new_half - 1, band_top - 1) == highlight
-    assert image.pixelColor(new_half, band_top - 1) == tint
+    # one row carries the band the action bar opens, the other has no line
+    # for it, and the two bracket the same way at the rail's two ends
+    assert (
+        with_band.height() - without_band.height()
+        == listing.delegate.accordion_height
+    )
+    _assert_bracket(listing, with_band)
+    _assert_bracket(listing, without_band)
 
 
 def test_an_unselected_row_carries_no_lines(window, tmp_path, make_task):
@@ -185,11 +180,10 @@ def test_the_indicator_of_a_selected_row_keeps_its_colour_and_its_width(
     tint = _tint(listing)
     thickness = tasklist._SELECTION_INDICATOR_WIDTH
 
-    # the rail still fills the left edge down the row, past the top line...
-    for y in range(image.height() - thickness):
+    # the rail fills the left edge down the whole row, the lines inking the
+    # corners its rounding leaves open...
+    for y in range(image.height()):
         assert image.pixelColor(0, y) == highlight
-    # ...is exactly as wide as it was, with the tint right beside it...
+    # ...is exactly as wide as it was, with the tint right beside it
     assert image.pixelColor(thickness - 1, image.height() // 2) == highlight
     assert image.pixelColor(thickness, image.height() // 2) == tint
-    # ...and still rounds off at its bottom end
-    assert image.pixelColor(0, image.height() - 1) != highlight

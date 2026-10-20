@@ -560,12 +560,19 @@ def test_the_auxiliary_band_of_a_selected_row_carries_the_selection(
     # the delegate paints its own selection over the style's, so the band
     # carries the tint from the rail to the right edge on every row of it,
     # the rail itself rounding off at its bottom end, and no cell of the row
-    # is painted past the room it keeps above the band
+    # is painted past the room it keeps above the band. The last rows of the
+    # row hold the bottom line instead: the accent over the arm of the line
+    # and the tint past it
     band_top = listing.delegate.min_height
+    line_height = tasklist._SELECTION_INDICATOR_WIDTH
+    arm = line_height + tasklist._ROW_LINE_REACH
     assert selected.height() > band_top
-    for y in range(band_top, selected.height()):
-        assert {selected.pixelColor(x, y).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH, selected.width())} == {tint.rgb()}
-    assert {selected.pixelColor(x, band_top + 2).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH)} == {highlight.rgb()}
+    for y in range(band_top, selected.height() - line_height):
+        assert {selected.pixelColor(x, y).rgb() for x in range(line_height, selected.width())} == {tint.rgb()}
+    for y in range(selected.height() - line_height, selected.height()):
+        assert {selected.pixelColor(x, y).rgb() for x in range(line_height, arm)} == {highlight.rgb()}
+        assert {selected.pixelColor(x, y).rgb() for x in range(arm, selected.width())} == {tint.rgb()}
+    assert {selected.pixelColor(x, band_top + 2).rgb() for x in range(line_height)} == {highlight.rgb()}
     assert all(
         selected.pixelColor(x, y) != filled_selection_style.colour
         for y in range(band_top, selected.height())
@@ -766,14 +773,15 @@ def _columns_of_colour(image, colour, rows=None):
     ]
 
 
-def _rail_columns(listing, image, colour):
+def _rail_columns(image, colour):
     """The x positions the indicator rail of a selected row holds a colour at.
 
     The rows the top and bottom lines paint are left out of the scan: those
-    rows hold the colour across the row rather than only at its left edge.
+    rows hold the colour across the arm of the lines rather than only at the
+    rail.
     """
     thickness = tasklist._SELECTION_INDICATOR_WIDTH
-    rows = range(thickness, listing.delegate.min_height - thickness)
+    rows = range(thickness, image.height() - thickness)
     return _columns_of_colour(image, colour, rows)
 
 
@@ -819,7 +827,7 @@ def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
     )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
-    indicator = _rail_columns(listing, image, highlight)
+    indicator = _rail_columns(image, highlight)
 
     assert indicator == list(range(tasklist._SELECTION_INDICATOR_WIDTH))
     expected = max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
@@ -845,7 +853,7 @@ def test_a_selected_row_keeps_the_indicator_clear_of_the_action_bar(
     )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
-    indicator = _rail_columns(listing, image, highlight)
+    indicator = _rail_columns(image, highlight)
     bar_left = listing.action_bar.geometry().left()
 
     assert indicator
@@ -866,8 +874,8 @@ def test_the_indicator_of_a_selected_row_is_rounded_at_both_ends(
     base = palette.color(QPalette.ColorRole.Base)
     highlight = palette.color(QPalette.ColorRole.Highlight)
 
-    # the lines meet the rail at its two ends, so the selection is painted
-    # on its own here: the whole row would hold the colour at both extremes
+    # the lines meet the rail at its two ends, so the rail is painted on its
+    # own here: a whole row would hold the colour at both of its extremes
     option = _row_option(listing, item, _SELECTED_ACTIVE)
     image = QImage(option.rect.size(), QImage.Format.Format_RGB32)
     image.fill(base)

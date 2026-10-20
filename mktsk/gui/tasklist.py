@@ -98,6 +98,12 @@ _SELECTION_INDICATOR_RADIUS = 2.0
 _SELECTION_INDICATOR_GAP = _SELECTION_INDICATOR_WIDTH + 2
 _DATE_TEXT_LEFT_PADDING = _SELECTION_INDICATOR_GAP  # at least _INDICATOR_WIDTH + 2
 
+# how far the top and bottom lines of a selected row reach past the rail, in
+# logical pixels like the rail's own metrics: the rail's thickness plus this
+# is the whole arm of a line, a short bracket that stays inside the first
+# cell, so tuning how far the lines reach is one edit
+_ROW_LINE_REACH = 8
+
 # how far the tint of a selection moves from the Base towards the Highlight,
 # subtle enough to keep the row close to the plain background it sits on
 _SELECTION_TINT_WEIGHT = 0.08
@@ -592,13 +598,13 @@ class _TaskDelegate(QStyledItemDelegate):
     by the height of the band, its cells keeping the room a plain row has. The
     selection of a row is the delegate's own, painted over the style's: a faint
     tint across the task row and the band alike, so the two read as one, a
-    rounded rail of the Highlight at the left edge, and a line along the top
-    and bottom edges of the task row out to half its width, so the rail and
-    the lines bracket the row. The bar is indented past
-    that rail rather than the cells being pushed right. The date is drawn after
-    the same margin the header draws its own text with, so a heading and its
-    value line up. Every row keeps the height the bar needs, which stops the
-    list from shifting as the selection moves.
+    rounded rail of the Highlight at the left edge, and a short line along the
+    top and bottom edges of the whole selected row, from its left edge a little
+    past the rail, so the rail and the lines bracket the row. The bar is
+    indented past that rail rather than the cells being pushed right. The date
+    is drawn after the same margin the header draws its own text with, so a
+    heading and its value line up. Every row keeps the height the bar needs,
+    which stops the list from shifting as the selection moves.
 
     Args:
         min_height: the height a plain row has, which is also the room the
@@ -672,49 +678,32 @@ class _TaskDelegate(QStyledItemDelegate):
         return QRect(row.left(), row.top(), row.width(), min(row.height(), self.min_height))
 
     def _paint_row_lines(
-        self, painter: QPainter, option: QStyleOptionViewItem, cells: QRect
+        self, painter: QPainter, option: QStyleOptionViewItem
     ) -> None:
-        """Paints the lines along the top and bottom edges of a selected row.
+        """Paints the short lines that bracket a selected row with its rail.
 
-        Both lines start at the left edge of the row and stop at half the
-        total width of its columns, painted in the colour and the thickness of
-        the indicator rail, so the rail and the lines read as a bracket around
-        the row. The cut is straight, with the tint filling everything past
-        it, and the lines run along the edges of the task row, above the band
-        the action bar takes. The geometry is measured once, from the row's
-        left edge and from the real width every column has, so a column the
-        person resized moves the cut with it; each column then paints only the
-        slice of the two lines that falls inside it, which keeps the lines
-        continuous across the cells, puts the cut in whichever cell holds the
-        half, and never paints past the row.
+        Both lines start at the left edge of the row and reach an arm of the
+        rail's thickness plus `_ROW_LINE_REACH`, so the arm stays inside the
+        first cell and its length is tuned in one place. The top line starts
+        at the rail's first pixel row and the bottom one ends at its last,
+        whatever the row height or the band the action bar opens, so the rail
+        and the two lines read as a bracket around the whole selected row.
+        They are filled on integer rectangles in the colour and the thickness
+        of the rail, with no antialiasing, and only a selected task row gets
+        them.
 
         Args:
             painter: the painter the row is being drawn with.
-            option: what the row is painted from, holding its state and palette.
-            cells: the part of the row that holds its cells, whose edges the
-                lines run along.
+            option: what the row is painted from, holding its rect, state
+                and palette.
         """
-        header = self.header
-        total = sum(header.sectionSize(column) for column in range(header.count()))
+        rect = option.rect
         thickness = _SELECTION_INDICATOR_WIDTH
-        stop = cells.left() + total // 2
+        reach = thickness + _ROW_LINE_REACH
         group = _colour_group(option.state)
         colour = option.palette.color(group, QPalette.ColorRole.Highlight)
-        lines = (
-            QRect(cells.left(), cells.top(), stop - cells.left(), thickness),
-            QRect(
-                cells.left(),
-                cells.bottom() + 1 - thickness,
-                stop - cells.left(),
-                thickness,
-            ),
-        )
-        for column in range(header.count()):
-            cell = self.content_rect(cells, column)
-            for line in lines:
-                part = line.intersected(cell)
-                if not part.isEmpty():
-                    painter.fillRect(part, colour)
+        for top in (rect.top(), rect.bottom() + 1 - thickness):
+            painter.fillRect(QRect(rect.left(), top, reach, thickness), colour)
 
     def initStyleOption(
         self,
@@ -820,11 +809,11 @@ class _TaskDelegate(QStyledItemDelegate):
         # the style paints the row first, and over it the selection this
         # delegate owns: the tint across the whole area, task row and band
         # alike, the rounded rail of the Highlight at its left edge, and the
-        # lines along the top and bottom edges of the task row
+        # short bracket lines at the rail's two ends
         super().paint(painter, option, index)
         if option.state & QStyle.StateFlag.State_Selected:
             _paint_selection(painter, option)
-            self._paint_row_lines(painter, option, cells)
+            self._paint_row_lines(painter, option)
 
         padding = self.header.style().pixelMetric(
             QStyle.PixelMetric.PM_HeaderMargin
