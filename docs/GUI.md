@@ -253,6 +253,13 @@
   selection, no click and no context menu. The attachment list stripes its rows through
   `setAlternatingRowColors`, so the colour comes from the palette and a light or dark
   mode follows with nothing written down
+- Each panel of the preview opens with a title at its top, inside it: `Details` over
+  the raw text and `Attachments` over the list. Both are standalone `QHeaderView`s
+  carrying their title the way the `Directory` and `Search` headers do, so they take
+  the tab bar height and the palette with nothing written down, and neither takes a
+  click, a sort or the focus. The titles show and hide with the preview itself, so
+  they appear only while a task is selected, and the `Attachments` title hides with
+  its panel when the folder carries none, leaving `Details` the full width
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
   `Open`, a plus for `Resume`, a pencil for `Rename`, a ring with a dot for the state and
   an archive box for `Close`, all drawn with `QPainter` in `gui/icons.py`, so no image
