@@ -16,6 +16,7 @@ from PySide6.QtGui import (
     QResizeEvent,
     QShortcut,
     QShowEvent,
+    QStandardItemModel,
 )
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -107,6 +108,34 @@ def _task_text(file: Path) -> str:
         return file.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
+
+
+def _panel_title(text: str) -> QHeaderView:
+    """Builds the title of one panel of the preview.
+
+    The `Directory` and `Search` headers are standalone `QHeaderView`s over a
+    model that carries their title, so a panel title is built the same way: a
+    one-section model holding just the title gives the header the native
+    header look, its font and its colours from the palette, with nothing
+    written down. The header takes no click, no sort and no focus, so a title
+    is only ever read.
+
+    Args:
+        text: the title of the panel.
+
+    Returns:
+        The header showing the title, ready to sit above the panel content.
+    """
+    model = QStandardItemModel()
+    model.setColumnCount(1)
+    model.setHorizontalHeaderLabels([text])
+    header = QHeaderView(Qt.Orientation.Horizontal)
+    header.setModel(model)
+    header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+    header.setDefaultAlignment(
+        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+    )
+    return header
 
 
 class _PaneToggle(QToolButton):
@@ -204,9 +233,26 @@ class MainWindow(QMainWindow):
         self.preview_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.preview_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self.preview_list.setAlternatingRowColors(True)
+        # each panel opens with its title over the content, carried by the
+        # same standalone header as `Directory` and `Search`, so it reads as
+        # one set with them and adds nothing of its own
+        self.preview_text_header = _panel_title("Details")
+        self.preview_list_header = _panel_title("Attachments")
+        self.preview_text_panel = QWidget()
+        text_layout = QVBoxLayout(self.preview_text_panel)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(0)
+        text_layout.addWidget(self.preview_text_header)
+        text_layout.addWidget(self.preview_text, 1)
+        self.preview_list_panel = QWidget()
+        list_layout = QVBoxLayout(self.preview_list_panel)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(0)
+        list_layout.addWidget(self.preview_list_header)
+        list_layout.addWidget(self.preview_list, 1)
         self.preview_area = QSplitter(Qt.Orientation.Horizontal)
-        self.preview_area.addWidget(self.preview_text)
-        self.preview_area.addWidget(self.preview_list)
+        self.preview_area.addWidget(self.preview_text_panel)
+        self.preview_area.addWidget(self.preview_list_panel)
         self.preview_area.setStretchFactor(0, 3)
         self.preview_area.setStretchFactor(1, 1)
         # hidden until a task is selected, so the table keeps the full height
@@ -412,14 +458,17 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.title_input, self.create_button)
 
     def _align_header(self) -> None:
-        """Squares the two headers of the left pane off to the tab bar height.
+        """Squares the headers of the window off to the tab bar height.
 
-        The Directory and the Search header read as one set over the pane, so
-        both take the height the tab bar lines the Directory one up with.
+        The Directory and the Search header read as one set over the left
+        pane, and the two titles of the preview take the same height, so
+        every title the window carries reads as one set.
         """
         height = self.tabs.tabBar().sizeHint().height()
         self.directory_tree.header_view.setFixedHeight(height)
         self.search_header.setFixedHeight(height)
+        self.preview_text_header.setFixedHeight(height)
+        self.preview_list_header.setFixedHeight(height)
 
     def _update_path_label(self) -> None:
         """Shows the current directory, elided to the room the row has."""
@@ -604,7 +653,10 @@ class MainWindow(QMainWindow):
         attachments = [] if closed else listing.list_attachments(entry.file.parent)
         self.preview_list.clear()
         self.preview_list.addItems(attachments)
+        # without attachments the list hides with the panel and its title, so
+        # the text takes the full width
         self.preview_list.setVisible(bool(attachments))
+        self.preview_list_panel.setVisible(bool(attachments))
         self.preview_area.show()
 
     def _reload_tasks(self) -> None:
