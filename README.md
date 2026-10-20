@@ -15,6 +15,8 @@ CLI tool and desktop GUI for quickly setting up task folders.
   from the tasks still standing.
 * Can be run from any directory.
 * Optional desktop GUI (`mktsk-gui`) for the same workflow.
+* The GUI search panel filters tasks by title as you type and jumps to a result in the
+  task table.
 
 ## Installation
 
