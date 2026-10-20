@@ -214,14 +214,13 @@
   takes the `HighlightedText` or the `Text` of its group, whichever holds better against
   that same tint, and an unselected row reads `Text` of the group, which is what keeps
   tasks and folders apart as they were. Two lines of the same colour and thickness run
-  along the top and the bottom edge of the task row, starting at its left edge and
-  stopping at half the total width of the columns, so the rail and the two lines read
-  as a bracket around the row. The cut is straight, with no fade, and it is measured
-  from the real width every column has, so resizing a column moves it; the geometry is
-  worked out once for the whole row and each column paints only the slice of the two
-  lines that falls inside it. The lines sit on the task row and never on the band it
-  opens, so the action bar keeps its room, and only a selected task row gets them: an
-  unselected row and a category separator are left as they were
+  along the top and the bottom edge of the selected row, from its left edge a short arm
+  of the rail's thickness plus `_ROW_LINE_REACH`, so tuning how far they reach is one
+  edit and the arm stays inside the first cell. The top line starts at the rail's first
+  pixel row and the bottom line ends at its last, whatever the row height or the band the
+  action bar opens, so the rail and the two lines read as a bracket around the whole
+  row. They are filled on integer rectangles with no antialiasing, and only a selected
+  task row gets them: an unselected row and a category separator are left as they were
 - The list is striped to keep the eye on a row, and the colours are derived from the
   palette through one blend function rather than written down, so a dark mode needs no
   change. Every second task row under a separator is filled with the `Base` of its palette
