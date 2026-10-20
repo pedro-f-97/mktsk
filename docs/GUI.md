@@ -255,8 +255,9 @@
   are none, so the text takes the full width. The preview follows the selection through
   the same path the action bar takes, so no selection, a heading selected or `Esc`
   hides it and the table keeps the full height; a `.md` that cannot be read previews as
-  empty and never raises, and a closed task previews empty as well, because its archive
-  is never opened. Neither panel takes focus, and the attachment list takes no
+  empty and never raises, and a closed task hides the preview instead, because its
+  archive is never opened, so no content is read and the next active selection brings
+  the preview back. Neither panel takes focus, and the attachment list takes no
   selection, no click and no context menu. The attachment list stripes its rows through
   `setAlternatingRowColors`, so the colour comes from the palette and a light or dark
   mode follows with nothing written down

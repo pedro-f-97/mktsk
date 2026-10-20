@@ -633,9 +633,9 @@ class MainWindow(QMainWindow):
         path the action bar takes, so a task row shows it and a heading, `Esc`
         or another tab hides it with no special case. Every rendering reads
         the folder again, so a reload re-renders the task that is still
-        selected, or hides the preview when it is gone. A closed task shows an
-        empty preview: its folder is gone into the archive, which is never
-        opened, so there is no text to read and no attachments to list.
+        selected, or hides the preview when it is gone. A closed task hides
+        the preview as well: its folder is gone into the archive, which is
+        never opened, so there is no text to read and no attachments to list.
         """
         panel = self.tabs.currentWidget()
         entry = (
@@ -644,13 +644,12 @@ class MainWindow(QMainWindow):
             else None
         )
 
-        if entry is None:
+        if entry is None or standards.is_task_archive(entry.file.name):
             self.preview_area.hide()
             return
 
-        closed = standards.is_task_archive(entry.file.name)
-        self.preview_text.setPlainText("" if closed else _task_text(entry.file))
-        attachments = [] if closed else listing.list_attachments(entry.file.parent)
+        self.preview_text.setPlainText(_task_text(entry.file))
+        attachments = listing.list_attachments(entry.file.parent)
         self.preview_list.clear()
         self.preview_list.addItems(attachments)
         # without attachments the list hides with the panel and its title, so
