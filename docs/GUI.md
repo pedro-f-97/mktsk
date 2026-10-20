@@ -38,12 +38,17 @@
 - The header title starts at the left padding the path is indented by, and the tree drops
   the title when the header is too narrow to hold it before the buttons, restoring it as
   soon as there is room again, so the buttons never sit over it
-- Under the tree the left pane holds a `Search` panel: its own header titled `Search`, a
-  line edit with the `Search tasks` placeholder and a clear button, and a results list
-  below. The header is a standalone `QHeaderView` over the results' model, the way the
-  `Directory` header sits over the tree's, with the other two sections hidden; both
-  headers take the height of the tab bar, so they read as one set. The tree takes stretch
-  3 and the panel 2, the panel sits inside the pane, and it collapses with the pane
+- A vertical splitter inside the left pane holds the Directory block (header, path row,
+  and tree) in one container and the Search panel in the other, with stretch factors 3
+  and 2 keeping the initial split and window-resize behaviour 3:2; `setChildrenCollapsible`
+  is false, each child has a sane minimum height so neither can be dragged to nothing,
+  and the search panel keeps at least its header and the field. Persistence follows the
+  same mechanism as the other splitters when present. Under the tree the left pane holds
+  a `Search` panel: its own header titled `Search`, a line edit with the `Search tasks`
+  placeholder and a clear button, and a results list below. The header is a standalone
+  `QHeaderView` over the results' model, the way the `Directory` header sits over the
+  tree's, with the other two sections hidden; both headers take the height of the tab
+  bar, so they read as one set. The panel sits inside the pane and it collapses with the pane
 - The results hold the tasks the listings hold, closed ones included, and the query runs
   again over them on every reload, so a task created or closed since is reached the way
   the table now lists it; the result that was highlighted is highlighted again when it

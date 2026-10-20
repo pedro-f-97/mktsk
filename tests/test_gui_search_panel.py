@@ -2,6 +2,7 @@
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import QApplication
 
 from mktsk.gui.tree import _PATH_ROLE
 from tests.gui_helpers import (
@@ -236,14 +237,77 @@ def test_a_highlight_goes_when_the_query_leaves_the_result_out(
 
 
 def test_the_search_panel_sits_below_the_tree_inside_the_left_panel(window):
-    layout = window.left_panel.layout()
+    container_layout = window.left_container.layout()
+    splitter = window.left_splitter
 
-    assert window.search_panel.parent() is window.left_panel
-    assert _top(window.directory_tree, window) < _top(window.search_panel, window)
-    assert _bottom(window.directory_tree, window) <= _top(window.search_panel, window)
-    assert _bottom(window.search_panel, window) <= _bottom(window.left_panel, window)
-    assert layout.stretch(layout.indexOf(window.directory_tree)) == 3
-    assert layout.stretch(layout.indexOf(window.search_panel)) == 2
+    assert splitter is not None
+    assert splitter.parent() is window.left_container
+    assert window.left_panel.parent() is splitter
+    assert window.search_panel.parent() is splitter
+    assert splitter.orientation() == Qt.Orientation.Vertical
+    assert _top(window.left_panel, window) < _top(window.search_panel, window)
+    assert _bottom(window.left_panel, window) <= _top(window.search_panel, window)
+    assert _bottom(window.search_panel, window) <= _bottom(window.left_container, window)
+    assert container_layout.indexOf(splitter) >= 0
+    sizes = splitter.sizes()
+    assert sizes[0] > sizes[1]
+
+
+def test_the_left_pane_has_a_vertical_splitter_holding_the_directory_block_and_search_panel(
+    window
+):
+    splitter = window.left_splitter
+    assert splitter is not None
+    assert splitter.orientation() == Qt.Orientation.Vertical
+    assert splitter.parent() is window.left_container
+    assert window.left_panel.parent() is splitter
+    assert window.search_panel.parent() is splitter
+
+
+def test_set_sizes_changes_the_search_panel_height_and_both_stay_inside_the_left_pane(
+    window
+):
+    splitter = window.left_splitter
+    total_height = window.left_container.height()
+    directory_height = total_height // 2
+    search_height = total_height - directory_height
+    splitter.setSizes([directory_height, search_height])
+
+    QApplication.processEvents()
+
+    sizes = splitter.sizes()
+    assert sum(sizes) > 0
+    assert all(s > 0 for s in sizes)
+    assert _top(window.left_panel, window) >= _top(window.left_container, window)
+    assert _bottom(window.search_panel, window) <= _bottom(window.left_container, window)
+
+
+def test_the_initial_split_keeps_the_directory_block_larger(window):
+    splitter = window.left_splitter
+    sizes = splitter.sizes()
+
+    assert len(sizes) == 2
+    assert sizes[0] > 0
+    assert sizes[1] > 0
+    assert sizes[0] > sizes[1]
+
+
+def test_neither_child_can_be_collapsed_to_zero_height(window):
+    splitter = window.left_splitter
+
+    splitter.setSizes([0, window.left_container.height()])
+    QApplication.processEvents()
+
+    sizes = splitter.sizes()
+    assert sizes[0] > 0
+    assert sizes[1] >= 0
+
+    splitter.setSizes([window.left_container.height(), 0])
+    QApplication.processEvents()
+
+    sizes = splitter.sizes()
+    assert sizes[0] >= 0
+    assert sizes[1] > 0
 
 
 def test_the_search_panel_holds_the_header_the_field_and_the_results(window):

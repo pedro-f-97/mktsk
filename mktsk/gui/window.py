@@ -304,10 +304,24 @@ class MainWindow(QMainWindow):
         left_layout.setSpacing(0)
         left_layout.addWidget(self.directory_tree.header_view)
         left_layout.addWidget(self.path_row)
-        # the tree keeps the larger share of the height, and the search panel
-        # below it takes the rest
-        left_layout.addWidget(self.directory_tree, 3)
-        left_layout.addWidget(self.search_panel, 2)
+        left_layout.addWidget(self.directory_tree)
+
+        self.directory_panel = self.left_panel
+
+        self.left_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.left_splitter.setChildrenCollapsible(False)
+        self.left_splitter.addWidget(self.left_panel)
+        self.left_splitter.addWidget(self.search_panel)
+        self.left_splitter.setStretchFactor(0, 3)
+        self.left_splitter.setStretchFactor(1, 2)
+        self.left_panel.setMinimumHeight(80)
+        self.search_panel.setMinimumHeight(60)
+
+        self.left_container = QWidget()
+        left_container_layout = QVBoxLayout(self.left_container)
+        left_container_layout.setContentsMargins(0, 0, 0, 0)
+        left_container_layout.setSpacing(0)
+        left_container_layout.addWidget(self.left_splitter)
 
         self.bottom_bar = QWidget()
         self.clear_target_button = _icon_button(
@@ -349,7 +363,7 @@ class MainWindow(QMainWindow):
         right_layout.setRowStretch(1, 1)
 
         self.splitter = QSplitter()
-        self.splitter.addWidget(self.left_panel)
+        self.splitter.addWidget(self.left_container)
         self.splitter.addWidget(self.right_panel)
         self.splitter.setStretchFactor(1, 2)
         self.setCentralWidget(self.splitter)
