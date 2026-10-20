@@ -756,13 +756,25 @@ def _row_option(view, item, state):
     return option
 
 
-def _columns_of_colour(image, colour):
+def _columns_of_colour(image, colour, rows=None):
     """The x positions of a row that hold at least one pixel of a colour."""
+    rows = rows if rows is not None else range(image.height())
     return [
         x
         for x in range(image.width())
-        if any(image.pixelColor(x, y) == colour for y in range(image.height()))
+        if any(image.pixelColor(x, y) == colour for y in rows)
     ]
+
+
+def _rail_columns(listing, image, colour):
+    """The x positions the indicator rail of a selected row holds a colour at.
+
+    The rows the top and bottom lines paint are left out of the scan: those
+    rows hold the colour across the row rather than only at its left edge.
+    """
+    thickness = tasklist._SELECTION_INDICATOR_WIDTH
+    rows = range(thickness, listing.delegate.min_height - thickness)
+    return _columns_of_colour(image, colour, rows)
 
 
 def _first_glyph_x(image, pen, start=0):
@@ -807,7 +819,7 @@ def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
     )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
-    indicator = _columns_of_colour(image, highlight)
+    indicator = _rail_columns(listing, image, highlight)
 
     assert indicator == list(range(tasklist._SELECTION_INDICATOR_WIDTH))
     expected = max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
@@ -833,7 +845,7 @@ def test_a_selected_row_keeps_the_indicator_clear_of_the_action_bar(
     )
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
-    indicator = _columns_of_colour(image, highlight)
+    indicator = _rail_columns(listing, image, highlight)
     bar_left = listing.action_bar.geometry().left()
 
     assert indicator
@@ -854,7 +866,14 @@ def test_the_indicator_of_a_selected_row_is_rounded_at_both_ends(
     base = palette.color(QPalette.ColorRole.Base)
     highlight = palette.color(QPalette.ColorRole.Highlight)
 
-    image = _render_row(listing, item, _SELECTED_ACTIVE, base)
+    # the lines meet the rail at its two ends, so the selection is painted
+    # on its own here: the whole row would hold the colour at both extremes
+    option = _row_option(listing, item, _SELECTED_ACTIVE)
+    image = QImage(option.rect.size(), QImage.Format.Format_RGB32)
+    image.fill(base)
+    painter = QPainter(image)
+    tasklist._paint_selection(painter, option)
+    painter.end()
 
     # the rail runs at full height between its ends, and a rounded corner
     # keeps its two extremes off the rail: the tint fills them instead
