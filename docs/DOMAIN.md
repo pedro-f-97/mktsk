@@ -142,7 +142,17 @@
   those would be missing from the listing; a name that is already there is not an error.
   It also refuses `_reserved_task_title`, which is what `is_task_folder` now rejects, so a
   category cannot take the name a task folder would have had; a folder like that is a plain
-  directory, visible in the tree, rather than a task and a category that neither open
+  directory, visible in the tree and a category of its own, rather than a task that could
+  be opened
+- A category is a direct subdirectory of the base directory that is not a task folder, so
+  the listing stops one level down and a task inside a subdirectory of a subdirectory is
+  not found. A subdirectory whose name starts with `.` is no category at all: it is left
+  out of the listing and of the tree
+- A subdirectory without tasks is a category all the same and comes with no task, so it
+  stands as a divider of its own in the `All` tab. A subdirectory whose name starts with
+  `_`, that Windows marks hidden or as a system file, or that cannot be read, is not such
+  a category: a working folder is left out, and a folder that cannot be read may well
+  hold tasks that are only out of reach
 - `validate_name` uses the Windows rules on every platform, because Windows is the
   strictest of the two and a name it takes is taken everywhere: a character from
   `<>:"/\|?*`, a control character, a name that is empty or only spaces, a name that is not

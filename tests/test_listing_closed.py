@@ -87,7 +87,12 @@ def test_listing_an_archive_whose_file_carries_no_intervention(tmp_path):
 def test_listing_ignores_a_directory_that_looks_like_an_archive(tmp_path):
     (tmp_path / "260918 - Foo.zip").mkdir()
 
-    assert find_task_groups(tmp_path) == []
+    groups = find_task_groups(tmp_path)
+
+    # the folder stands as a category of its own and holds no archive
+    assert len(groups) == 1
+    assert groups[0].category == tmp_path / "260918 - Foo.zip"
+    assert groups[0].entries == []
 
 
 def test_listing_finds_an_archive_in_a_category(tmp_path, make_task):

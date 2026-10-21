@@ -311,27 +311,29 @@ def _archive_activity(
     return parsed.last_activity, len(parsed.interventions)
 
 
-def _tasks_in(directory: Path) -> list[TaskEntry]:
+def _tasks_in(directory: Path) -> list[TaskEntry] | None:
     """Collects the task folders and archives of a directory, by last activity.
 
     A task folder is listed only when it holds the .md file that goes with it,
     so a folder left without one is never offered to open. An archive is
     listed with the state `closed`, read as the folder would be apart from
     its state, so the two sort into one list by the work they carry. A
-    directory that cannot be read holds no tasks, and is left out rather
-    than raising.
+    directory that cannot be read holds no task that is known, and says so
+    rather than raising, which is what tells a directory that is empty from
+    one that cannot be read.
 
     Args:
         directory: the directory to look in.
 
     Returns:
         One entry per task folder or archive, by last activity, newest first
-        and alphabetical for tasks of the same last activity.
+        and alphabetical for tasks of the same last activity, or None when the
+        directory cannot be read.
     """
     try:
         on_disk = list(directory.iterdir())
     except OSError:
-        return []
+        return None
 
     entries = []
 
@@ -375,6 +377,37 @@ def _tasks_in(directory: Path) -> list[TaskEntry]:
     )
 
 
+def _subdirectories(location: Path) -> list[os.DirEntry[str]]:
+    """Lists the immediate subdirectories that are not task folders.
+
+    The entries are read one level deep, so a subdirectory of a subdirectory is
+    never a category. The hidden ones are left out, so a listing does not walk
+    into `.git` and friends. A directory that cannot be read holds no
+    subdirectories, and is left out rather than raising, which is what
+    `_tasks_in` does with the same problem.
+
+    Args:
+        location: the directory to look in.
+
+    Returns:
+        The entries of the subdirectories, in alphabetical order, or nothing
+        when the directory cannot be read.
+    """
+    try:
+        with os.scandir(location) as entries:
+            found = [
+                entry
+                for entry in entries
+                if entry.is_dir()
+                and not entry.name.startswith(".")
+                and not standards.is_task_folder(entry.name)
+            ]
+    except OSError:
+        return []
+
+    return sorted(found, key=lambda entry: entry.name.lower())
+
+
 def list_subdirectories(location: Path) -> list[Path]:
     """Lists the immediate subdirectories that are not task folders.
 
@@ -391,21 +424,27 @@ def list_subdirectories(location: Path) -> list[Path]:
         The subdirectories, in alphabetical order, or nothing when the
         directory cannot be read.
     """
-    try:
-        entries = list(location.iterdir())
-    except OSError:
-        return []
+    return [Path(entry.path) for entry in _subdirectories(location)]
 
-    return sorted(
-        (
-            entry
-            for entry in entries
-            if entry.is_dir()
-            and not entry.name.startswith(".")
-            and not standards.is_task_folder(entry.name)
-        ),
-        key=lambda path: path.name.lower(),
-    )
+
+def _is_empty_category(entry: os.DirEntry[str]) -> bool:
+    """Tells whether a subdirectory without tasks can stand as a category.
+
+    A folder whose name starts with `_` is a working folder rather than a
+    category, and one Windows marks hidden or as a system file is left out the
+    same way the attachments of a task leave those out. A name starting with
+    `.` never reaches here: the subdirectories are read without those.
+
+    Args:
+        entry: the directory entry to check.
+
+    Returns:
+        True when the folder can stand as a category of its own.
+    """
+    if entry.name.startswith("_"):
+        return False
+
+    return not _has_hidden_attribute(entry)
 
 
 def find_task_groups(location: Path) -> list[TaskGroup]:
@@ -413,16 +452,19 @@ def find_task_groups(location: Path) -> list[TaskGroup]:
 
     Every subdirectory that is not a task folder becomes a category named after
     it, so tasks kept apart in a subdirectory are still told apart in the list.
-    The search stops one level down, so a task inside a subdirectory of a
-    subdirectory is not found.
+    A subdirectory without tasks is a category all the same and comes with no
+    task, so it can still be told apart from a folder that is not a category
+    at all. The search stops one level down, so a task inside a subdirectory of
+    a subdirectory is not found.
 
     Args:
         location: the directory to look in.
 
     Returns:
         The tasks of `location` first, with a category of None, then the tasks
-        of each subdirectory in alphabetical order. Groups without tasks are
-        left out.
+        of each subdirectory in alphabetical order. A category without tasks
+        comes with no entry, and a subdirectory that cannot be read is left
+        out.
     """
     if not location.is_dir():
         return []
@@ -433,10 +475,16 @@ def find_task_groups(location: Path) -> list[TaskGroup]:
     if root_entries:
         groups.append(TaskGroup(None, root_entries))
 
-    for subdirectory in list_subdirectories(location):
-        entries = _tasks_in(subdirectory)
-        if entries:
-            groups.append(TaskGroup(subdirectory, entries))
+    for entry in _subdirectories(location):
+        category = Path(entry.path)
+        entries = _tasks_in(category)
+        if entries is None:
+            # a folder that cannot be read is not an empty category: it may
+            # well hold tasks that are only out of reach
+            continue
+
+        if entries or _is_empty_category(entry):
+            groups.append(TaskGroup(category, entries))
 
     return groups
 

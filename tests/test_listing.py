@@ -1,6 +1,7 @@
 import datetime
 from pathlib import Path
 
+from mktsk import listing
 from mktsk.listing import (
     TaskEntry,
     find_task_groups,
@@ -74,6 +75,18 @@ def test_find_task_groups_categories_are_alphabetical(tmp_path, make_task):
     ] == ["Able", "monad", "Veritas"]
 
 
+def test_find_task_groups_keeps_an_empty_category_in_the_alphabetical_order(
+    tmp_path, make_task
+):
+    make_task(tmp_path / "Veritas", "260925", "Foo")
+    (tmp_path / "Able").mkdir()
+    make_task(tmp_path / "monad", "260925", "Baz")
+
+    groups = find_task_groups(tmp_path)
+
+    assert [group.category.name for group in groups] == ["Able", "monad", "Veritas"]
+
+
 def test_find_task_groups_sorts_newest_first(tmp_path, make_task):
     make_task(tmp_path, "260918", "Foo")
     make_task(tmp_path, "260930", "Bar")
@@ -97,7 +110,12 @@ def test_find_task_groups_same_date_is_alphabetical(tmp_path, make_task):
 def test_find_task_groups_stops_one_level_down(tmp_path, make_task):
     make_task(tmp_path / "SteelMountain" / "nested", "260924", "Everbind")
 
-    assert find_task_groups(tmp_path) == []
+    groups = find_task_groups(tmp_path)
+
+    # the category stands empty, and the task two levels down is not found
+    assert len(groups) == 1
+    assert groups[0].category == tmp_path / "SteelMountain"
+    assert groups[0].entries == []
 
 
 def test_find_task_groups_skips_task_folder_without_md(tmp_path):
@@ -106,8 +124,32 @@ def test_find_task_groups_skips_task_folder_without_md(tmp_path):
     assert find_task_groups(tmp_path) == []
 
 
-def test_find_task_groups_skips_subdirectory_without_tasks(tmp_path):
+def test_find_task_groups_lists_a_subdirectory_without_tasks(tmp_path):
     (tmp_path / "SteelMountain").mkdir()
+
+    groups = find_task_groups(tmp_path)
+
+    assert len(groups) == 1
+    assert groups[0].category == tmp_path / "SteelMountain"
+    assert groups[0].entries == []
+
+
+def test_find_task_groups_leaves_out_a_working_folder(tmp_path):
+    (tmp_path / "_scratch").mkdir()
+
+    assert find_task_groups(tmp_path) == []
+
+
+def test_find_task_groups_leaves_out_a_dot_folder(tmp_path):
+    (tmp_path / ".hidden").mkdir()
+
+    assert find_task_groups(tmp_path) == []
+
+
+def test_find_task_groups_leaves_out_a_hidden_folder(tmp_path, monkeypatch):
+    (tmp_path / "private").mkdir()
+    # only Windows carries the attribute, so it is faked here
+    monkeypatch.setattr(listing, "_has_hidden_attribute", lambda entry: True)
 
     assert find_task_groups(tmp_path) == []
 
@@ -218,9 +260,12 @@ def test_find_task_groups_lists_the_readable_categories(
 
 
 def test_a_task_folder_with_a_reserved_title_is_still_visible(tmp_path):
-    # not a task and not a category, so it is a plain folder the user can see,
-    # navigate to and clear out, rather than one that is nowhere to be found
+    # not a task, so it is a plain folder the user can see, navigate to and
+    # clear out, rather than one that is nowhere to be found
     (tmp_path / "261001 - CON").mkdir()
 
     assert list_subdirectories(tmp_path) == [tmp_path / "261001 - CON"]
-    assert find_task_groups(tmp_path) == []
+    groups = find_task_groups(tmp_path)
+    assert len(groups) == 1
+    assert groups[0].category == tmp_path / "261001 - CON"
+    assert groups[0].entries == []
