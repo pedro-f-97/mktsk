@@ -7,6 +7,7 @@ from mktsk.listing import (
     find_task_groups,
     list_subdirectories,
 )
+from mktsk.tasks import close_task
 
 
 def test_find_task_groups_empty_directory(tmp_path):
@@ -134,10 +135,48 @@ def test_find_task_groups_lists_a_subdirectory_without_tasks(tmp_path):
     assert groups[0].entries == []
 
 
+def test_find_task_groups_marks_a_category_of_only_closed_tasks_as_a_divider(
+    tmp_path, make_task
+):
+    file = make_task(tmp_path / "Veritas", "260925", "Foo")
+    close_task(file.parent, "Foo")
+
+    groups = find_task_groups(tmp_path)
+
+    # its tasks are gone into their archives, so what is left is the folder
+    assert len(groups) == 1
+    assert groups[0].category == tmp_path / "Veritas"
+    assert groups[0].divider is True
+
+
+def test_find_task_groups_keeps_a_category_with_an_open_task_off_the_divider(
+    tmp_path, make_task
+):
+    make_task(tmp_path / "Veritas", "260925", "Open")
+    closed = make_task(tmp_path / "Veritas", "260926", "Foo")
+    close_task(closed.parent, "Foo")
+
+    groups = find_task_groups(tmp_path)
+
+    # a task that still stands keeps the folder with it
+    assert groups[0].divider is False
+    assert {entry.title for entry in groups[0].entries} == {"Open", "Foo"}
+
+
 def test_find_task_groups_leaves_out_a_working_folder(tmp_path):
     (tmp_path / "_scratch").mkdir()
 
     assert find_task_groups(tmp_path) == []
+
+
+def test_find_task_groups_keeps_a_working_folder_off_the_divider(tmp_path, make_task):
+    file = make_task(tmp_path / "_scratch", "260925", "Foo")
+    close_task(file.parent, "Foo")
+
+    groups = find_task_groups(tmp_path)
+
+    # a working folder is no category of its own, so it stands nowhere
+    assert groups[0].divider is False
 
 
 def test_find_task_groups_leaves_out_a_dot_folder(tmp_path):
@@ -152,6 +191,19 @@ def test_find_task_groups_leaves_out_a_hidden_folder(tmp_path, monkeypatch):
     monkeypatch.setattr(listing, "_has_hidden_attribute", lambda entry: True)
 
     assert find_task_groups(tmp_path) == []
+
+
+def test_find_task_groups_keeps_a_hidden_folder_off_the_divider(
+    tmp_path, make_task, monkeypatch
+):
+    file = make_task(tmp_path / "private", "260925", "Foo")
+    close_task(file.parent, "Foo")
+    # only Windows carries the attribute, so it is faked here
+    monkeypatch.setattr(listing, "_has_hidden_attribute", lambda entry: True)
+
+    groups = find_task_groups(tmp_path)
+
+    assert groups[0].divider is False
 
 
 def test_find_task_groups_ignores_hidden_directories(tmp_path, make_task):

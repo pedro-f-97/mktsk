@@ -97,10 +97,10 @@ def test_a_category_of_only_closed_tasks_leaves_the_other_tabs_alone(
 
     action_bar(window, file, "Veritas").close_button.click()
 
-    # no heading for the category in All, no tab for it, and the selection
-    # falls back to All now that the tab it was on is gone
+    # the category stands as a divider in All, it gets no tab of its own, and
+    # the selection falls back to All now that the tab it was on is gone
     assert tab_titles(window) == ["All", tmp_path.name, "Closed"]
-    assert tab_labels(window) == [tmp_path.name, "17/09/2026  Root"]
+    assert tab_labels(window) == [tmp_path.name, "17/09/2026  Root", "Veritas"]
     assert tab_labels(window, "Closed") == ["Veritas", "18/09/2026  Foo"]
     assert window.tabs.tabText(window.tabs.currentIndex()) == "All"
 

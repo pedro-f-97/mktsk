@@ -36,10 +36,21 @@ class TaskEntry(NamedTuple):
 
 
 class TaskGroup(NamedTuple):
-    """Tasks found in the base directory or in one of its subdirectories."""
+    """Tasks found in the base directory or in one of its subdirectories.
+
+    Attributes:
+        category: the folder the tasks stand in, or None for the base
+            directory itself.
+        entries: the tasks of the folder, by last activity.
+        divider: whether the folder stands as a divider of its own in the
+            `All` tab, which is what a category that holds no task that
+            stands does: one without any task, or one that holds nothing but
+            closed tasks.
+    """
 
     category: Path | None
     entries: list[TaskEntry]
+    divider: bool = False
 
 
 def find_task_folder(
@@ -427,8 +438,8 @@ def list_subdirectories(location: Path) -> list[Path]:
     return [Path(entry.path) for entry in _subdirectories(location)]
 
 
-def _is_empty_category(entry: os.DirEntry[str]) -> bool:
-    """Tells whether a subdirectory without tasks can stand as a category.
+def _is_category(entry: os.DirEntry[str]) -> bool:
+    """Tells whether a subdirectory can stand as a category of its own.
 
     A folder whose name starts with `_` is a working folder rather than a
     category, and one Windows marks hidden or as a system file is left out the
@@ -447,6 +458,31 @@ def _is_empty_category(entry: os.DirEntry[str]) -> bool:
     return not _has_hidden_attribute(entry)
 
 
+def _stands_alone(entry: os.DirEntry[str], entries: list[TaskEntry]) -> bool:
+    """Tells whether a category holds no task that stands.
+
+    A folder that holds nothing stands on its own, and so does one that holds
+    only archives: its tasks are closed, so what is left of them is the
+    archive, and the folder is a category all the same. A task folder whose
+    .md says the task is closed is a task that still stands on disk, so it
+    keeps the folder with it and the folder does not stand alone.
+
+    A working folder, and one Windows marks hidden or as a system file, never
+    stands on its own: it is no category of its own.
+
+    Args:
+        entry: the directory entry of the category.
+        entries: the tasks the category holds.
+
+    Returns:
+        True when the category stands as a divider of its own.
+    """
+    if not _is_category(entry):
+        return False
+
+    return all(standards.is_task_archive(task.file.name) for task in entries)
+
+
 def find_task_groups(location: Path) -> list[TaskGroup]:
     """Finds the tasks in a directory and in its immediate subdirectories.
 
@@ -454,8 +490,10 @@ def find_task_groups(location: Path) -> list[TaskGroup]:
     it, so tasks kept apart in a subdirectory are still told apart in the list.
     A subdirectory without tasks is a category all the same and comes with no
     task, so it can still be told apart from a folder that is not a category
-    at all. The search stops one level down, so a task inside a subdirectory of
-    a subdirectory is not found.
+    at all. A subdirectory that holds nothing but closed tasks is a category as
+    well, and stands as a divider of its own: its tasks are gone into their
+    archives, so what is left of them is the folder. The search stops one level
+    down, so a task inside a subdirectory of a subdirectory is not found.
 
     Args:
         location: the directory to look in.
@@ -463,8 +501,8 @@ def find_task_groups(location: Path) -> list[TaskGroup]:
     Returns:
         The tasks of `location` first, with a category of None, then the tasks
         of each subdirectory in alphabetical order. A category without tasks
-        comes with no entry, and a subdirectory that cannot be read is left
-        out.
+        comes with no entry, a subdirectory that cannot be read is left out,
+        and each group says whether its category stands as a divider of its own.
     """
     if not location.is_dir():
         return []
@@ -483,8 +521,8 @@ def find_task_groups(location: Path) -> list[TaskGroup]:
             # well hold tasks that are only out of reach
             continue
 
-        if entries or _is_empty_category(entry):
-            groups.append(TaskGroup(category, entries))
+        if entries or _is_category(entry):
+            groups.append(TaskGroup(category, entries, _stands_alone(entry, entries)))
 
     return groups
 
