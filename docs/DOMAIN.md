@@ -72,6 +72,21 @@
 - A category inside the task folder is refused with `TaskError`, and a folder that
   cannot be moved is refused with `TaskError` naming the folder and the error of the
   system, never with the `OSError` itself
+- `move_into_task(paths, task_folder)` moves files and folders into the folder of a
+  task. Every file or folder moves as one item, whatever it holds, and it is `shutil.move`
+  that moves it, so a file that comes from another drive is copied and deleted rather than
+  renamed. The move never overwrites: a name the task folder already carries is left alone
+  and the file that would take it is skipped
+- Whether a name is taken is asked of the file system itself, with `os.path.lexists`, and
+  never worked out by hand, so the answer is the one the system gives on the platform the
+  files live on
+- A file that is not there is skipped as `missing`, the task folder itself and a folder
+  that holds it are skipped as `contains the task folder`, a file that already stands in
+  the task folder is skipped as `already in the task folder`, and a name that is taken is
+  skipped as `already exists`. The comparison of the folders is done on the resolved
+  paths, so a link or a `..` in the path does not slip a folder into itself
+- A move that fails is skipped with the error of the system, and the files after it are
+  still moved, so one file that cannot be moved never holds the rest
 - Closing compresses the task folder into an archive beside it: `close_task(folder, title)`
   writes `<folder name>.zip` under a temporary name next to the folder, with every file of
   the folder under the path `<folder name>/<relative path>` and the `.md` carried in with
