@@ -346,9 +346,17 @@ class MainWindow(QMainWindow):
         self.search_results.setRootIsDecorated(False)
         self.search_results.setFrameShape(QFrame.Shape.NoFrame)
         results_header = self.search_results.header()
-        results_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        results_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        results_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        results_header.setStretchLastSection(False)
+        results_header.setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        results_header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        results_header.setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Fixed
+        )
+        self.search_results.setColumnWidth(2, 65)
         self.search_header = QHeaderView(Qt.Orientation.Horizontal)
         self.search_header.setModel(self.search_results.model())
         self.search_header.setSectionHidden(1, True)
@@ -797,6 +805,10 @@ class MainWindow(QMainWindow):
             )
             row.setData(0, _PATH_ROLE, str(entry.file))
             row.setForeground(2, QBrush(dim))
+            row.setTextAlignment(
+                2,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
             for column in range(3):
                 row.setToolTip(column, str(entry.file))
             self.search_results.addTopLevelItem(row)
