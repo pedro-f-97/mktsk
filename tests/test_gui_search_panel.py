@@ -310,6 +310,14 @@ def test_neither_child_can_be_collapsed_to_zero_height(window):
     assert sizes[1] > 0
 
 
+def test_the_search_panel_keeps_the_left_pane_margin_on_its_left_and_bottom(window):
+    search_margins = window.search_panel.layout().getContentsMargins()
+    panel_margins = window.left_panel.layout().getContentsMargins()
+
+    assert search_margins[0] == panel_margins[0]
+    assert search_margins[3] == panel_margins[3]
+
+
 def test_the_search_panel_holds_the_header_the_field_and_the_results(window):
     panel = window.search_panel
 
