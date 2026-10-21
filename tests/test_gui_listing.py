@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 
+from mktsk.tasks import close_task
 from tests.gui_helpers import (
     find_directory,
     find_task,
@@ -130,6 +131,50 @@ def test_an_empty_category_stands_last_among_the_other_dividers(
         "24/09/2026  Bar",
         "Bravo",
     ]
+
+
+def test_a_category_of_only_closed_tasks_stands_as_a_divider_in_the_all_tab(
+    window, tmp_path, make_task
+):
+    file = make_task(tmp_path / "Veritas", "260925", "Foo")
+    close_task(file.parent, "Foo")
+
+    window.navigate_to(tmp_path)
+
+    # the category stands as a divider in the All tab, and gets no tab of its
+    # own; its archive is in the Closed tab
+    assert tab_labels(window) == ["Veritas"]
+    assert tab_titles(window) == ["All", "Closed"]
+    assert tab_labels(window, "Closed") == ["Veritas", "25/09/2026  Foo"]
+
+
+def test_a_category_with_an_open_task_and_a_closed_one_is_listed_once(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path / "Veritas", "260925", "Open")
+    closed = make_task(tmp_path / "Veritas", "260926", "Foo")
+    close_task(closed.parent, "Foo")
+
+    window.navigate_to(tmp_path)
+
+    # the category is listed once, under its heading with the task that still
+    # stands, and it keeps a tab of its own
+    assert tab_labels(window) == ["Veritas", "25/09/2026  Open"]
+    assert tab_titles(window) == ["All", "Veritas", "Closed"]
+
+
+def test_a_working_folder_of_only_closed_tasks_is_not_listed_in_the_all_tab(
+    window, tmp_path, make_task
+):
+    file = make_task(tmp_path / "_scratch", "260925", "Foo")
+    close_task(file.parent, "Foo")
+
+    window.navigate_to(tmp_path)
+
+    # a working folder is no category of its own, so it stands nowhere in the
+    # All tab; its archive is still in the Closed tab
+    assert tab_labels(window) == []
+    assert tab_labels(window, "Closed") == ["_scratch", "25/09/2026  Foo"]
 
 
 def test_navigate_to_sorts_tasks_newest_first(window, tmp_path, make_task):

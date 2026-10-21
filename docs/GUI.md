@@ -128,7 +128,8 @@
   land in, so clicking one does nothing. The heading of the current destination carries a
   small dot at its right end, drawn by the delegate in the colour the Directory header
   buttons carry, which follows the tree however the selection moves and goes with it; a
-  category with no heading to carry it, because its tasks are closed, shows no marker
+  category with no heading to carry it, because its task still stands on disk though it is
+  closed, shows no marker
 - Clicking the heading of the base folder clears the destination, like the `x` on the
   label: the tree selection drops, the line, the `x` and the marker go with it, and the
   next task lands in the base folder
@@ -137,15 +138,17 @@
   categories that hold tasks get a tab
 - `All` lists every task under a heading per category, headings bold and not
   selectable; a category tab lists just its own tasks, with no heading. Neither shows a
-  closed task: a category whose tasks are all closed gets no tab and no heading, and a
+  closed task: a category whose tasks are all closed gets no tab of its own, and a
   `Closed` tab last holds every archive under a heading per category, appearing only
   when there is at least one
 - A category without tasks stands as a heading of its own in `All`, with no task under
-  it: it gets no tab of its own and nothing in `Closed`. Clicking it picks it as the
-  destination and a task can be dropped on it, so a category can be filled without
-  entering it. It goes last among the headings, in alphabetical order with the other
-  empty ones, whether the tab is ordered by a column or not, because it carries no task
-  to order by
+  it: it gets no tab of its own and nothing in `Closed`. A category that holds nothing
+  but closed tasks stands as a heading of its own as well, for the same reason: its
+  tasks are gone into their archives, so what is left of them is the folder. Clicking
+  it picks it as the destination and a task can be dropped on it, so a category can be
+  filled without entering it. It goes last among the headings, in alphabetical order
+  with the other empty ones, whether the tab is ordered by a column or not, because it
+  carries no task to order by
 - The active tab survives a refresh or a new task; when its category is gone, `All`
   takes over again
 - Within a category, by last activity, newest first, alphabetical for tasks of the same
