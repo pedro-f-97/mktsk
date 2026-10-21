@@ -1,5 +1,9 @@
 import datetime
+import os
+import shutil
+from collections.abc import Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 from . import helpers, parsing, standards, state
 
@@ -173,3 +177,76 @@ def create_category(location: Path, raw_name: str) -> Path:
     category.mkdir(exist_ok=True)
 
     return category
+
+
+class MoveResult(NamedTuple):
+    """What a move of files into a task folder did.
+
+    Attributes:
+        moved: where each file or folder that was moved now stands.
+        skipped: each file that was not moved, with the reason why.
+    """
+
+    moved: list[Path]
+    skipped: list[tuple[Path, str]]
+
+
+def move_into_task(paths: Iterable[Path], task_folder: Path) -> MoveResult:
+    """Moves files and folders into the folder of a task.
+
+    Every file or folder moves as one item, whatever it holds, and nothing is
+    ever overwritten: a name the task folder already carries is left alone and
+    the file that would take it is reported as skipped. A file that is not
+    there, the task folder itself, a folder that holds the task folder and a
+    file that already stands in it are skipped as well, and a move that fails
+    is skipped with the error of the system, so the files after it are still
+    moved.
+
+    Whether a name is taken is asked of the file system itself, with
+    `os.path.lexists`, and never worked out by hand, so the answer is the one
+    the system gives on the platform the files live on.
+
+    Args:
+        paths: the files and folders to move.
+        task_folder: the folder of the task they are to stand in.
+
+    Returns:
+        Where the files that were moved now stand, and the ones that were not
+        moved with the reason why.
+    """
+    folder = task_folder.resolve()
+    moved: list[Path] = []
+    skipped: list[tuple[Path, str]] = []
+
+    for path in paths:
+        source = Path(path)
+
+        if not source.exists():
+            skipped.append((source, "missing"))
+            continue
+
+        # the task folder itself, or a folder that holds it, would take the
+        # task folder into itself, so it is refused
+        resolved = source.resolve()
+        if resolved == folder or folder.is_relative_to(resolved):
+            skipped.append((source, "contains the task folder"))
+            continue
+
+        if source.parent.resolve() == folder:
+            skipped.append((source, "already in the task folder"))
+            continue
+
+        destination = task_folder / source.name
+        if os.path.lexists(destination):
+            skipped.append((source, "already exists"))
+            continue
+
+        try:
+            shutil.move(str(source), str(destination))
+        except OSError as error:
+            skipped.append((source, str(error)))
+            continue
+
+        moved.append(destination)
+
+    return MoveResult(moved, skipped)

@@ -4,10 +4,12 @@ import datetime
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QPointF, QRectF, QSettings, QSize, Qt
+from PySide6.QtCore import QMimeData, QPointF, QRectF, QSettings, QSize, Qt
 from PySide6.QtGui import (
     QBrush,
     QCloseEvent,
+    QDragEnterEvent,
+    QDropEvent,
     QKeySequence,
     QPainter,
     QPaintEvent,
@@ -88,6 +90,10 @@ _RAIL_PADDING = 2
 _TOGGLE_LINE_MARGIN = 6.0
 _TOGGLE_LINE_GAP = 4.0
 
+# how many files a drop that left some out names in the warning about it; the
+# rest are counted in a line of their own, so a long list never fills it
+_MAX_SKIPPED_NAMED = 10
+
 
 def _task_text(file: Path) -> str:
     """Reads the raw text of a task .md for the preview.
@@ -136,6 +142,31 @@ def _panel_title(text: str) -> QHeaderView:
         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
     )
     return header
+
+
+def _skipped_message(skipped: list[tuple[Path, str]]) -> str:
+    """Builds the text of the warning about the files a drop did not move.
+
+    At most ten of them are named, each with the reason it was left out, and
+    the rest are counted in a line of their own, so a long list never fills
+    the warning.
+
+    Args:
+        skipped: each file that was not moved, with the reason why.
+
+    Returns:
+        The text of the warning.
+    """
+    lines = ["Some files were not moved into the task folder:"]
+
+    for path, reason in skipped[:_MAX_SKIPPED_NAMED]:
+        lines.append(f"{path}: {reason}")
+
+    remaining = len(skipped) - _MAX_SKIPPED_NAMED
+    if remaining > 0:
+        lines.append(f"and {remaining} more")
+
+    return "\n".join(lines)
 
 
 class _PaneToggle(QToolButton):
@@ -200,6 +231,9 @@ class MainWindow(QMainWindow):
         self.current_directory = Path(str(last_path))
         self.setWindowTitle("mktsk")
         self.setMinimumSize(640, 420)
+        # the window takes in a drag of files, which lands in the folder of
+        # the selected task
+        self.setAcceptDrops(True)
         self._build_ui()
         self.navigate_to(self.current_directory)
 
@@ -1086,6 +1120,96 @@ class MainWindow(QMainWindow):
         self.open_with_default_app(result.file)
         self.refresh()
         self.title_input.clear()
+
+    def _drop_entry(self) -> listing.TaskEntry | None:
+        """Returns the task a drop of files would land in.
+
+        The files land in the folder of the selected task, so there is only a
+        task when one is selected and stands as one: a closed task is an
+        archive, which is never opened, so it takes nothing.
+
+        Returns:
+            The selected task, or None when no task is selected or the
+            selected one is closed.
+        """
+        panel = self.tabs.currentWidget()
+        if panel is None:
+            return None
+
+        entry = cast(TaskPanel, panel).listing.selected_entry()
+        if entry is None or entry.state == "closed":
+            return None
+
+        return entry
+
+    def _drop_paths(self, mime: QMimeData) -> list[Path]:
+        """Returns the files a drag carries.
+
+        A URL that names nothing on this machine, a page on the web say, is
+        left out, so only files that can be moved are kept.
+
+        Args:
+            mime: the payload of the drag.
+
+        Returns:
+            The paths of the local files the drag carries.
+        """
+        if not mime.hasUrls():
+            return []
+
+        return [Path(url.toLocalFile()) for url in mime.urls() if url.toLocalFile()]
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Takes in a drag of files when an open task is selected.
+
+        The files land in the folder of the selected task, so the drag is only
+        taken in when there is one to land in. A drag of anything else, of a
+        task of our own for one, is left to the widget it belongs to.
+
+        Args:
+            event: the drag that entered.
+        """
+        if self._drop_entry() is None or not self._drop_paths(event.mimeData()):
+            event.ignore()
+            return
+
+        event.accept()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Moves the files of a drag into the folder of the selected task.
+
+        The task keeps its place in the list, and its attachments are read
+        again, so the row and the panel show what the drop brought. The
+        selection does not move: the files land in the task that was already
+        selected.
+
+        Args:
+            event: the drop.
+        """
+        entry = self._drop_entry()
+        paths = self._drop_paths(event.mimeData())
+
+        if entry is None or not paths:
+            event.ignore()
+            return
+
+        event.accept()
+
+        result = files.move_into_task(paths, entry.file.parent)
+
+        self.refresh()
+        self._select_task(entry.file)
+
+        if result.skipped:
+            self._warn_skipped(result.skipped)
+
+    def _warn_skipped(self, skipped: list[tuple[Path, str]]) -> None:
+        """Warns about the files a drop did not move.
+
+        Args:
+            skipped: each file that was not moved, with the reason why.
+        """
+        QMessageBox.warning(self, "mktsk", _skipped_message(skipped))
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.settings.setValue("last_path", str(self.current_directory))

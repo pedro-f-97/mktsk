@@ -1,4 +1,6 @@
 import datetime
+import shutil
+from pathlib import Path
 
 import pytest
 
@@ -6,6 +8,7 @@ from mktsk.files import (
     append_date_section,
     create_folder,
     create_md_file,
+    move_into_task,
 )
 from mktsk.helpers import TaskError
 
@@ -338,3 +341,140 @@ def test_append_date_section_keeps_a_bom_in_front_of_the_block(tmp_path):
         "\ufeff# 18/09/2026\n\nnotes\n\n# 30/09/2026\n\n\n"
         '[mktsk:2026-10-02T09:40]: # "open"\n'
     )
+
+
+def test_move_into_task_moves_a_file(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+    note = tmp_path / "note.txt"
+    note.write_text("a note", encoding="utf-8")
+
+    result = move_into_task([note], task)
+
+    assert result.moved == [task / "note.txt"]
+    assert result.skipped == []
+    assert (task / "note.txt").read_text(encoding="utf-8") == "a note"
+    assert not note.exists()
+
+
+def test_move_into_task_moves_several_files(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+    first = tmp_path / "first.txt"
+    first.write_text("one", encoding="utf-8")
+    second = tmp_path / "second.txt"
+    second.write_text("two", encoding="utf-8")
+
+    result = move_into_task([first, second], task)
+
+    assert result.moved == [task / "first.txt", task / "second.txt"]
+    assert result.skipped == []
+    assert (task / "first.txt").read_text(encoding="utf-8") == "one"
+    assert (task / "second.txt").read_text(encoding="utf-8") == "two"
+
+
+def test_move_into_task_moves_a_folder_as_one_item(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+    folder = tmp_path / "pictures"
+    (folder / "one").mkdir(parents=True)
+    (folder / "one" / "note.txt").write_text("inside", encoding="utf-8")
+    (folder / "note.txt").write_text("beside", encoding="utf-8")
+
+    result = move_into_task([folder], task)
+
+    assert result.moved == [task / "pictures"]
+    assert result.skipped == []
+    assert (task / "pictures" / "one" / "note.txt").read_text(encoding="utf-8") == (
+        "inside"
+    )
+    assert (task / "pictures" / "note.txt").read_text(encoding="utf-8") == "beside"
+    assert not folder.exists()
+
+
+def test_move_into_task_skips_a_name_that_is_taken(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+    (task / "note.txt").write_text("in the task", encoding="utf-8")
+    outside = tmp_path / "note.txt"
+    outside.write_text("outside", encoding="utf-8")
+
+    result = move_into_task([outside], task)
+
+    # nothing is overwritten, so both files are left as they were
+    assert result.moved == []
+    assert result.skipped == [(outside, "already exists")]
+    assert (task / "note.txt").read_text(encoding="utf-8") == "in the task"
+    assert outside.read_text(encoding="utf-8") == "outside"
+
+
+def test_move_into_task_skips_a_file_already_in_the_task_folder(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+    inside = task / "note.txt"
+    inside.write_text("inside", encoding="utf-8")
+
+    result = move_into_task([inside], task)
+
+    assert result.moved == []
+    assert result.skipped == [(inside, "already in the task folder")]
+    assert inside.read_text(encoding="utf-8") == "inside"
+
+
+def test_move_into_task_skips_the_task_folder_itself(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+
+    result = move_into_task([task], task)
+
+    assert result.moved == []
+    assert result.skipped == [(task, "contains the task folder")]
+    assert task.is_dir()
+
+
+def test_move_into_task_skips_a_folder_that_holds_the_task(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+
+    result = move_into_task([tmp_path], task)
+
+    assert result.moved == []
+    assert result.skipped == [(tmp_path, "contains the task folder")]
+    assert task.is_dir()
+
+
+def test_move_into_task_skips_a_file_that_is_not_there(tmp_path):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+    gone = tmp_path / "gone.txt"
+
+    result = move_into_task([gone], task)
+
+    assert result.moved == []
+    assert result.skipped == [(gone, "missing")]
+
+
+def test_move_into_task_records_a_failure_and_moves_the_rest(tmp_path, monkeypatch):
+    task = tmp_path / "260918 - Foo"
+    task.mkdir()
+    refused = tmp_path / "refused.txt"
+    refused.write_text("one", encoding="utf-8")
+    accepted = tmp_path / "accepted.txt"
+    accepted.write_text("two", encoding="utf-8")
+
+    original = shutil.move
+
+    def refuse_the_first(source, destination):
+        if Path(source) == refused:
+            raise OSError("no room left on the device")
+        return original(source, destination)
+
+    monkeypatch.setattr(shutil, "move", refuse_the_first)
+
+    result = move_into_task([refused, accepted], task)
+
+    # the failure of one file never stops the files after it
+    assert result.moved == [task / "accepted.txt"]
+    assert result.skipped == [(refused, "no room left on the device")]
+    assert refused.exists()
+    assert (task / "accepted.txt").read_text(encoding="utf-8") == "two"

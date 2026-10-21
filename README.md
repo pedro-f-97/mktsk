@@ -18,6 +18,8 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * The GUI search panel filters tasks by title as you type and jumps to a result in the
   task table.
 * The GUI moves a task from one category to another by dragging it onto the category.
+* The GUI takes files and folders dropped on the window into the folder of the selected
+  task.
 
 ## Installation
 
@@ -384,6 +386,11 @@ Opens a window where you can:
   left, and the names of the other files and folders the task carries on the right,
   subfolders with a trailing `/`. The preview is read-only, hides again when nothing is
   selected (`Esc` drops it too), and its two halves can be resized between them.
+
+* drop files and folders from the file manager on the window and they land in the folder
+  of the task that is selected, so the attachments of a task are gathered where they
+  belong. Nothing is overwritten: a file whose name the task folder already carries is
+  left where it is and named in a warning, with the reason why.
 
 The last visited folder is remembered between sessions.
 

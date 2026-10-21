@@ -8,7 +8,7 @@
   `tests/test_gui_row_text.py`, `tests/test_gui_row_highlight.py`,
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
   `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
-  `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`
+  `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`, `tests/test_gui_drop.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
@@ -342,6 +342,22 @@
   task selected in the category it now stands in. A failure is shown in a
   `QMessageBox.critical` like every other action, and the list is left as it was. The
   destination a new task lands in is not touched by a move
+- Files and folders dragged in from the file manager land in the folder of the selected
+  task. The window takes the drag in only when it carries files of this machine
+  (`hasUrls` and a local file for each) and an open task is selected; anything else is
+  left to the widget it belongs to
+- A closed task stands as an archive, which is never opened, so it takes nothing: the
+  drag is refused with a closed task selected, and so is one with no task selected at
+  all, or with the window showing no task
+- The files land in the task that was already selected, and the selection does not move:
+  a drop never changes it. The task is read again afterwards, so the row counts the
+  attachment the drop brought and the panel lists it
+- The tree and the search list take no drop of their own, so a file dropped on them
+  reaches the window. The tree folders and the category headings are not targets: the
+  destination is always the folder of the selected task
+- The files that were not moved are named in a `QMessageBox.warning`, at most ten of
+  them, each with the reason it was left out, and the rest are counted in a line of
+  their own
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
   what was created; the warning carries the error as it is, `helpers.open_file` already
