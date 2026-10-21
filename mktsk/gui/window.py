@@ -336,7 +336,7 @@ class MainWindow(QMainWindow):
 
         self.search_panel = QWidget()
         search_layout = QVBoxLayout(self.search_panel)
-        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.setContentsMargins(_MARGIN, 0, 0, _MARGIN)
         search_layout.setSpacing(0)
         search_layout.addWidget(self.search_header)
         search_layout.addWidget(self.search_input)
