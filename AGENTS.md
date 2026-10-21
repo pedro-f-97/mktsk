@@ -17,6 +17,10 @@ workflow interactively.
 - Prefer clear code over short code. Do not shorten a design to meet a line count; report production lines per file for information only.
 - Tests prove the behaviour with the least machinery that reproduces it. Do not build test infrastructure larger than the code it covers.
 
+## Skills
+
+Never invoke the `brainstorming` skill. The task prompt is already the approved design: start from it, do not ask design questions and do not write a spec or plan document. If something in the prompt is ambiguous or conflicts with the code, stop and report instead of brainstorming.
+
 ## Scratch files
 
 - Never create files outside the repository, except in a temporary directory made with `tempfile` or pytest's `tmp_path`, and remove it before finishing. Never write to the user's home, Desktop, Documents, a drive root, or another user's profile, and never run commands from an administrator account. Never use `mkdtemp()` without cleanup.
