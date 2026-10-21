@@ -143,8 +143,9 @@
 - A category without tasks stands as a heading of its own in `All`, with no task under
   it: it gets no tab of its own and nothing in `Closed`. Clicking it picks it as the
   destination and a task can be dropped on it, so a category can be filled without
-  entering it. It takes its place among the other headings, and it goes last when the
-  tab is ordered by a column, because it carries no task to order by
+  entering it. It goes last among the headings, in alphabetical order with the other
+  empty ones, whether the tab is ordered by a column or not, because it carries no task
+  to order by
 - The active tab survives a refresh or a new task; when its category is gone, `All`
   takes over again
 - Within a category, by last activity, newest first, alphabetical for tasks of the same

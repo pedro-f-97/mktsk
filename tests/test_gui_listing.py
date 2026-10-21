@@ -112,21 +112,23 @@ def test_an_empty_category_stands_as_a_divider_in_the_all_tab(
     assert tab_titles(window) == ["All", tmp_path.name]
 
 
-def test_an_empty_category_stands_among_the_other_dividers(
+def test_an_empty_category_stands_last_among_the_other_dividers(
     window, tmp_path, make_task
 ):
     make_task(tmp_path / "Able", "260925", "Foo")
-    (tmp_path / "Veritas").mkdir()
+    (tmp_path / "Bravo").mkdir()
     make_task(tmp_path / "monad", "260924", "Bar")
 
     window.navigate_to(tmp_path)
 
+    # the divider of the empty category goes last, although its name comes
+    # before the one of `monad`
     assert tab_labels(window) == [
         "Able",
         "25/09/2026  Foo",
         "monad",
         "24/09/2026  Bar",
-        "Veritas",
+        "Bravo",
     ]
 
 

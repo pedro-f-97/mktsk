@@ -52,6 +52,19 @@ def _three_categories(tmp_path, make_task):
     )
 
 
+def _categories_and_empty_ones(tmp_path, make_task):
+    """The three categories of `_three_categories` and two empty ones.
+
+    `Delta` and `Omega` hold no task at all, so they stand as dividers of
+    their own, and they come before the other categories in alphabetical
+    order, so a divider that goes last is told apart from one that keeps its
+    place among the others.
+    """
+    _three_categories(tmp_path, make_task)
+    (tmp_path / "Delta").mkdir()
+    (tmp_path / "Omega").mkdir()
+
+
 def test_categories_keep_their_place_until_a_heading_is_clicked(
     window, tmp_path, make_task
 ):
@@ -80,6 +93,36 @@ def test_categories_follow_the_column_being_sorted(window, tmp_path, make_task):
 
         click_heading(window, column)
         assert _headings(window) == list(reversed(order))
+
+
+def test_empty_categories_go_last_without_a_sort(window, tmp_path, make_task):
+    _categories_and_empty_ones(tmp_path, make_task)
+    window.navigate_to(tmp_path)
+
+    # the categories that hold tasks come first, and the empty ones follow,
+    # in alphabetical order between themselves
+    assert _headings(window) == [tmp_path.name, "Alpha", "Zeta", "Delta", "Omega"]
+
+
+def test_empty_categories_go_last_whatever_the_sort(window, tmp_path, make_task):
+    _categories_and_empty_ones(tmp_path, make_task)
+    window.navigate_to(tmp_path)
+    base = tmp_path.name
+    ascending = {
+        0: ["Alpha", base, "Zeta"],
+        1: ["Zeta", base, "Alpha"],
+        3: ["Alpha", "Zeta", base],
+        4: ["Alpha", base, "Zeta"],
+        5: [base, "Alpha", "Zeta"],
+    }
+
+    for column, order in ascending.items():
+        window.navigate_to(tmp_path)
+        click_heading(window, column)
+        assert _headings(window) == order + ["Delta", "Omega"]
+
+        click_heading(window, column)
+        assert _headings(window) == list(reversed(order)) + ["Delta", "Omega"]
 
 
 def test_the_tasks_inside_a_category_are_ordered_too(window, tmp_path, make_task):
