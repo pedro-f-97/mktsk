@@ -255,6 +255,57 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")
 
 
+def move_task(task_dir: Path, dest_category: Path) -> Path:
+    """Moves a task folder into a category and returns where it stands.
+
+    The folder moves whole, with the .md and every attachment it carries, and
+    the name it keeps is the one it had, so the task holds its place in the
+    history. The title of a task is unique in the directory it stands in, so a
+    category that already holds a task of that title is refused rather than
+    left with two of them. A task that already stands in the category stays
+    where it is: the move does nothing and the path it stands at is the one
+    returned.
+
+    Args:
+        task_dir: the task folder to move.
+        dest_category: the category the task is to stand in.
+
+    Returns:
+        The folder the task stands in after the move.
+
+    Raises:
+        TaskError: If the category stands inside the task, if the category
+            already holds a task of that title, or if the folder cannot be
+            moved.
+    """
+    source = task_dir.resolve()
+    destination = dest_category.resolve()
+
+    if source.parent == destination:
+        return task_dir
+
+    if source == destination or source in destination.parents:
+        raise helpers.TaskError("a task cannot be moved into a folder of its own")
+
+    title = standards.task_folder_title(task_dir.name) or task_dir.name
+
+    if listing.find_task_folder(dest_category, title) is not None:
+        raise helpers.TaskError(
+            f"'{title}' is already a task in '{dest_category.name}'"
+        )
+
+    moved = dest_category / task_dir.name
+
+    try:
+        task_dir.rename(moved)
+    except OSError as error:
+        raise helpers.TaskError(
+            f"'{task_dir.name}' could not be moved: {error}"
+        ) from error
+
+    return moved
+
+
 def _archive_members(folder: Path, md: Path) -> list[tuple[str, bytes]]:
     """Reads every file of a folder into the members of its archive.
 

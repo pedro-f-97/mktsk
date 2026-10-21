@@ -59,6 +59,19 @@
 - `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
   `.md` or a title another task of the same directory already has; it renames the `.md`
   before the folder, or the old file path stops resolving
+- `move_task(task_dir, dest_category)` moves a task folder into a category and returns
+  where it stands. The folder moves whole, with the `.md` and every attachment it
+  carries, and it keeps its name, so the task holds its place in the history. The move
+  is a rename of the folder, so nothing is read and nothing is written
+- The title of a task is unique in the directory it stands in, so a category that
+  already holds a task of that title refuses the move with `TaskError` naming the title
+  and the category. The lookup is `find_task_folder`, so it ignores the date and the
+  case: a task of another date in the category refuses the move just the same
+- A task that already stands in the category stays where it is: the move does nothing
+  and returns the path it already stood at
+- A category inside the task folder is refused with `TaskError`, and a folder that
+  cannot be moved is refused with `TaskError` naming the folder and the error of the
+  system, never with the `OSError` itself
 - Closing compresses the task folder into an archive beside it: `close_task(folder, title)`
   writes `<folder name>.zip` under a temporary name next to the folder, with every file of
   the folder under the path `<folder name>/<relative path>` and the `.md` carried in with

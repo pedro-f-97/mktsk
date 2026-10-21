@@ -8,7 +8,7 @@
   `tests/test_gui_row_text.py`, `tests/test_gui_row_highlight.py`,
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
   `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
-  `tests/test_gui_search_panel.py`
+  `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
@@ -309,6 +309,33 @@
   the folder the entry points at, showing a failure in a `QMessageBox.critical` like every
   other action and refreshing the list on success, so the task moves to the `Closed` tab.
   Nothing is opened either way, and with no selection nothing changes
+- A task is dragged onto a category to move it there. The drag carries the folder of the
+  task in a mime type of its own, `application/x-mktsk-task`, so a drag from elsewhere is
+  never taken for one of ours, and it carries no picture of its own
+- Only a task that stands as a folder is dragged. A heading is not a task, and a closed
+  task stands as an archive, which is not a folder to move, so its row carries no
+  `ItemIsDragEnabled` and a drag started on it carries nothing
+- A press on a row that carries no drag moves nothing: the mouse moving with the button
+  down leaves the selection and the action bar that belongs to it where the press put
+  them, so a closed task keeps the bar it was given
+- A category is the target of a drop in two ways: the heading of the category in `All`,
+  and any task row under it, which stands for the category it is in. A tab of a category
+  holds no heading, so a task row there stands for the category of the tab. The base
+  folder is a category of its own, with a heading in `All` like any other and a tab of
+  its own
+- The empty area below the rows and the category the task already stands in are not
+  targets, and a drop there is refused, so the cursor says the task cannot go there. The
+  drag is taken in wherever it enters, because a drag starts over the task it carries
+  and the category of that task is not a target
+- The heading of the category a drop would land in is marked while the drag is over it,
+  tinted towards the `Highlight` of the palette, and the mark goes when the drag leaves
+  or the task is dropped. A tab of a category holds no heading, so there is nothing to
+  mark in it
+- The listing reports the move with `move_requested`, carrying the folder and the
+  category, and the window calls `move_task` on them, refreshes the list and keeps the
+  task selected in the category it now stands in. A failure is shown in a
+  `QMessageBox.critical` like every other action, and the list is left as it was. The
+  destination a new task lands in is not touched by a move
 - Remember the last path with `QSettings`
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
   what was created; the warning carries the error as it is, `helpers.open_file` already

@@ -697,7 +697,7 @@ class MainWindow(QMainWindow):
             if not standing:
                 continue
 
-            tab = self._new_listing(title)
+            tab = self._new_listing(title, group.category or self.current_directory)
             for entry in standing:
                 self._add_task(tab, entry, today)
             self._add_tab(title, tab)
@@ -776,8 +776,23 @@ class MainWindow(QMainWindow):
             item: the result row that was clicked or activated.
             _column: the column of the row, which is never read.
         """
-        path = Path(str(item.data(0, _PATH_ROLE)))
+        self._select_task(Path(str(item.data(0, _PATH_ROLE))))
+
+    def _select_task(self, path: Path) -> None:
+        """Selects a task in the tab of the window that holds it.
+
+        The tab that holds the row is switched to when the task is not in
+        the one on show, so the selection, the action bar and the preview all
+        follow it. Nothing here picks a category, so the destination a new
+        task lands in is left where it was.
+
+        Args:
+            path: the .md of the task, or the archive that holds it.
+        """
         panel = cast(TaskPanel, self.tabs.currentWidget())
+        if panel is None:
+            return
+
         panel.listing.select_task(path)
 
     def _activate_first_search_result(self) -> None:
@@ -805,13 +820,15 @@ class MainWindow(QMainWindow):
         """Returns the title of the tab for the tasks of the current directory."""
         return self.current_directory.name or str(self.current_directory)
 
-    def _new_listing(self, title: str) -> TaskListing:
+    def _new_listing(self, title: str, category: Path | None = None) -> TaskListing:
         tab = TaskListing()
+        tab.set_category(category)
         tab.open_requested.connect(self.open_task)
         tab.resume_requested.connect(self.resume_task)
         tab.rename_requested.connect(self.rename_task)
         tab.state_requested.connect(self.change_state)
         tab.close_requested.connect(self.close_task)
+        tab.move_requested.connect(self.move_task)
         tab.order_changed.connect(
             lambda column, descending, name=title: self._remember_sort(
                 name, column, descending
@@ -872,6 +889,10 @@ class MainWindow(QMainWindow):
         item.setData(_COUNT_ROLE, str(entry.interventions))
         item.setData(_AGE_ROLE, _relative_age(entry.last_activity, today))
         item.setToolTip(str(entry.file))
+        if standards.is_task_archive(entry.file.name):
+            # a closed task stands as an archive, which is not a folder to
+            # move, so its row is not dragged anywhere
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
         tab.addItem(item)
 
     def choose_directory(self) -> None:
@@ -1007,6 +1028,30 @@ class MainWindow(QMainWindow):
             return
 
         self.refresh()
+
+    def move_task(self, folder: Path, category: Path) -> None:
+        """Moves a task folder into a category and keeps the task selected.
+
+        The folder moves whole, with the .md and every attachment it carries,
+        and the task keeps its place in the history. A category that already
+        holds a task of that title refuses the move, and a failure is shown in
+        a `QMessageBox` like every other action, leaving the list as it was.
+        Nothing is opened, and the destination a new task lands in is left
+        where it was.
+
+        Args:
+            folder: the folder of the task to move.
+            category: the category the task is to stand in.
+        """
+        try:
+            moved = tasks.move_task(folder, category)
+        except (OSError, helpers.TaskError) as error:
+            QMessageBox.critical(self, "mktsk", str(error))
+            return
+
+        self.refresh()
+        title = standards.task_folder_title(moved.name) or moved.name
+        self._select_task(moved / f"{title}.md")
 
     def open_with_default_app(self, path: Path) -> None:
         try:
