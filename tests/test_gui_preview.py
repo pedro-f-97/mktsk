@@ -131,7 +131,7 @@ def test_a_missing_md_shows_empty_text(window, tmp_path, make_task):
     assert window.preview_text.toPlainText() == ""
 
 
-def test_a_closed_task_shows_an_empty_preview(window, tmp_path, make_task):
+def test_a_closed_task_hides_the_preview(window, tmp_path, make_task):
     file = make_task(tmp_path, "260918", "Foo")
     close_task(file.parent, "Foo")
     window.navigate_to(tmp_path)
@@ -139,11 +139,9 @@ def test_a_closed_task_shows_an_empty_preview(window, tmp_path, make_task):
 
     select_task(window, tmp_path / "260918 - Foo.zip", "Closed")
 
-    # the folder is gone and the archive is never opened, so there is nothing
-    # to preview and nothing beside the task to list
-    assert window.preview_area.isHidden() is False
-    assert window.preview_text.toPlainText() == ""
-    assert window.preview_list.isHidden() is True
+    # the folder is gone and the archive is never opened, so the preview is
+    # never loaded for a closed task
+    assert window.preview_area.isHidden() is True
 
 
 def test_a_reload_re_renders_the_preview_of_the_selected_task(

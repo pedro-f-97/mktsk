@@ -255,8 +255,9 @@
   are none, so the text takes the full width. The preview follows the selection through
   the same path the action bar takes, so no selection, a heading selected or `Esc`
   hides it and the table keeps the full height; a `.md` that cannot be read previews as
-  empty and never raises, and a closed task previews empty as well, because its archive
-  is never opened. Neither panel takes focus, and the attachment list takes no
+  empty and never raises, and a closed task hides the preview instead, because its
+  archive is never opened, so no content is read and the next active selection brings
+  the preview back. Neither panel takes focus, and the attachment list takes no
   selection, no click and no context menu. The attachment list stripes its rows through
   `setAlternatingRowColors`, so the colour comes from the palette and a light or dark
   mode follows with nothing written down
@@ -279,6 +280,9 @@
   is the one action that reaches an archive; `set_reopening` takes the other four buttons
   out until the folder stands again, and gives the resume button the reopen icon and
   tooltip while it stands for one, putting them back afterwards
+- The buttons pack to the bar's left edge, a stretch at the bar's end keeping the
+  surplus away from them, so the reopen button of a closed row starts where the first
+  button of the bar starts on a selected active row rather than centered in it
 - The date cell is drawn after the room the bar reserves on every row, so the date never
   moves when a row is selected; only the selected row hands the style a rect narrowed from
   the left, so the space for the buttons appears when the row is clicked and is given back

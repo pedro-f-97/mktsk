@@ -352,6 +352,9 @@ class _ActionBar(QWidget):
         self.state_button.clicked.connect(self._open_state_menu)
         for button in self.buttons():
             layout.addWidget(button)
+        # the stretch keeps the surplus of the bar away from the buttons, so
+        # they pack to the left edge even when only the reopen one is shown
+        layout.addStretch()
 
     def _open_state_menu(self) -> None:
         """Opens the menu of states under the button that carries it."""
