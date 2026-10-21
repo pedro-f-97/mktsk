@@ -315,6 +315,9 @@
 - Only a task that stands as a folder is dragged. A heading is not a task, and a closed
   task stands as an archive, which is not a folder to move, so its row carries no
   `ItemIsDragEnabled` and a drag started on it carries nothing
+- A press on a row that carries no drag moves nothing: the mouse moving with the button
+  down leaves the selection and the action bar that belongs to it where the press put
+  them, so a closed task keeps the bar it was given
 - A category is the target of a drop in two ways: the heading of the category in `All`,
   and any task row under it, which stands for the category it is in. A tab of a category
   holds no heading, so a task row there stands for the category of the tab. The base

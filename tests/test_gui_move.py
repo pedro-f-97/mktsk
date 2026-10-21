@@ -3,13 +3,16 @@
 import shutil
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt
 from PySide6.QtGui import (
     QDragEnterEvent,
     QDragLeaveEvent,
     QDragMoveEvent,
     QDropEvent,
+    QMouseEvent,
 )
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
 from mktsk.gui.tasklist import _COUNT_ROLE, _MIME_TYPE
 from mktsk.tasks import close_task
@@ -98,6 +101,27 @@ def _drag_move(listing, item, folder):
     )
     listing.dragMoveEvent(event)
     return event
+
+
+def _press(listing, item):
+    """Presses a row, as a hand does."""
+    QTest.mousePress(
+        listing.viewport(), Qt.MouseButton.LeftButton, pos=_centre(listing, item)
+    )
+
+
+def _move(listing, item):
+    """Moves the mouse onto a row with the button down."""
+    pos = _centre(listing, item)
+    event = QMouseEvent(
+        QEvent.Type.MouseMove,
+        QPointF(pos),
+        QPointF(pos),
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(listing.viewport(), event)
 
 
 def test_dropping_a_task_on_a_category_moves_it(window, tmp_path, make_task):
@@ -438,3 +462,46 @@ def test_selecting_a_task_with_no_tab_does_nothing(window, tmp_path, make_task):
     assert window.tabs.count() == 0
 
     window._select_task(file)
+
+
+def test_pressing_a_closed_row_and_moving_keeps_the_selection(
+    window, tmp_path, make_task
+):
+    foo = make_task(tmp_path, "260918", "Foo")
+    bar = make_task(tmp_path, "260919", "Bar")
+    window.navigate_to(tmp_path)
+    close_task(foo.parent, "Foo")
+    close_task(bar.parent, "Bar")
+    window.refresh()
+
+    select_tab(window, "Closed")
+    listing = task_listing(window, "Closed")
+    first = find_task(window, tmp_path / "260918 - Foo.zip", "Closed")
+    second = find_task(window, tmp_path / "260919 - Bar.zip", "Closed")
+
+    _press(listing, first)
+    _move(listing, second)
+    listing.viewport().repaint()
+
+    assert listing.selected_entry().file == tmp_path / "260918 - Foo.zip"
+    assert listing.currentItem() is first
+    row = listing.visualItemRect(first)
+    assert listing.action_bar.geometry().top() == row.top() + listing.delegate.min_height
+
+
+def test_an_open_row_still_starts_the_drag(window, tmp_path, make_task, monkeypatch):
+    foo = make_task(tmp_path, "260918", "Foo")
+    make_task(tmp_path, "260919", "Bar")
+    window.navigate_to(tmp_path)
+    drags = _fake_drag(monkeypatch)
+
+    listing = task_listing(window, "All")
+    first = find_task(window, foo, "All")
+    second = find_task(window, tmp_path / "260919 - Bar" / "Bar.md", "All")
+
+    _press(listing, first)
+    _move(listing, second)
+
+    assert len(drags) == 1
+    mime = drags[0].mime
+    assert Path(bytes(mime.data(_MIME_TYPE).data()).decode()) == foo.parent

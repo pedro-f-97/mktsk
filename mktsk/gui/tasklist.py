@@ -27,6 +27,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetrics,
     QKeySequence,
+    QMouseEvent,
     QPainter,
     QPalette,
     QShortcut,
@@ -1196,6 +1197,34 @@ class TaskListing(QListWidget):
         drag = QDrag(self)
         drag.setMimeData(self._drag_mime(entry))
         drag.exec(Qt.DropAction.MoveAction)
+
+    def _can_drag(self) -> bool:
+        """Says whether a row of the selection can start a drag.
+
+        A task that stands as a folder can be dragged onto a category, and a
+        closed task stands as an archive, which is not a folder to move, so
+        its row carries no drag. The selection holds the row the mouse was
+        pressed on, so this says whether the move that follows the press has
+        anything to carry.
+        """
+        return any(
+            bool(item.flags() & Qt.ItemFlag.ItemIsDragEnabled)
+            for item in self.selectedItems()
+        )
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """Keeps the selection where the press put it.
+
+        A press on a row that cannot be dragged leaves Qt with nothing to
+        carry, so the move that follows it turns into a drag-selection, which
+        takes the selection to the row under the cursor, away from the row the
+        press chose. The move is ignored then, and the selection stays where
+        the press put it, with the action bar that belongs to it.
+        """
+        if event.buttons() and not self._can_drag():
+            return
+
+        super().mouseMoveEvent(event)
 
     def _drag_source(self, event: QDropEvent) -> Path | None:
         """Returns the folder a drag carries, or None when it carries none.
