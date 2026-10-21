@@ -85,7 +85,12 @@ def test_find_task_groups_keeps_an_empty_category_in_the_alphabetical_order(
 
     groups = find_task_groups(tmp_path)
 
-    assert [group.category.name for group in groups] == ["Able", "monad", "Veritas"]
+    names = []
+    for group in groups:
+        assert group.category is not None
+        names.append(group.category.name)
+
+    assert names == ["Able", "monad", "Veritas"]
 
 
 def test_find_task_groups_sorts_newest_first(tmp_path, make_task):
