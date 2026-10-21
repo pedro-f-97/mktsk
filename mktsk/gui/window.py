@@ -683,6 +683,10 @@ class MainWindow(QMainWindow):
                 )
                 for entry in standing:
                     self._add_task(every, entry, today)
+            elif not group.entries:
+                # an empty category stands as a heading of its own, so a task
+                # can be dropped on it and a new one can land there
+                self._add_heading(every, title, group.category)
 
             if archived:
                 self._add_heading(shut, title)
@@ -803,6 +807,9 @@ class MainWindow(QMainWindow):
 
     def _sections(self) -> list[tuple[str, listing.TaskGroup]]:
         """Pairs every task group with the title of its tab.
+
+        A category without tasks is a group all the same, so it stands in the
+        `All` tab as a heading of its own.
 
         Returns:
             The tasks of the current directory first, named after the directory

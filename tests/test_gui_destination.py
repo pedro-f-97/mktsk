@@ -217,21 +217,43 @@ def test_the_marker_follows_the_tree_selection(window, tmp_path, make_task):
 def test_the_marker_of_a_destination_without_a_row_is_nowhere(
     window, tmp_path, make_task
 ):
-    make_task(tmp_path, "260918", "Foo")
-    (tmp_path / "Empty").mkdir()
+    file = make_task(tmp_path / "Veritas", "260925", "Foo")
+    fill_task(file, datetime.date(2026, 9, 25), "closed", 0)
+    make_task(tmp_path, "260918", "Bar")
     window.navigate_to(tmp_path)
     listing = task_listing(window)
     base = _separator(listing, tmp_path.name)
 
-    select_directory(window, (tmp_path / "Empty").resolve())
+    select_directory(window, (tmp_path / "Veritas").resolve())
 
-    # the category is the destination, but no tab lists a row for it
+    # the category is the destination, but the All tab lists no row for it
     assert window.target_label.isVisible() is True
     assert [
         item.text()
-        for item in listing.findItems("Empty", Qt.MatchFlag.MatchExactly)
+        for item in listing.findItems("Veritas", Qt.MatchFlag.MatchExactly)
     ] == []
     assert _marker_pixels(listing, base) == 0
+
+
+def test_clicking_an_empty_category_picks_it_as_the_destination(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "Foo")
+    category = tmp_path / "Veritas"
+    category.mkdir()
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    separated = _separator(listing, "Veritas")
+
+    _click_row(qtbot, listing, separated)
+
+    assert window.directory_tree.currentItem() == find_directory(
+        window, category.resolve()
+    )
+    assert window.creation_directory() == category.resolve()
+    assert window.target_label.isVisible() is True
+    # the divider stands for the category, so it carries the marker
+    assert _marker_pixels(listing, separated) > 0
 
 
 def test_clicking_a_task_row_keeps_the_destination(

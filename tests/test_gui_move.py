@@ -136,6 +136,18 @@ def test_dropping_a_task_on_a_category_moves_it(window, tmp_path, make_task):
     assert not (tmp_path / "260918 - Foo").exists()
 
 
+def test_dropping_a_task_on_an_empty_category_moves_it(window, tmp_path, make_task):
+    foo = make_task(tmp_path, "260918", "Foo")
+    (tmp_path / "Work").mkdir()
+    window.navigate_to(tmp_path)
+
+    listing = task_listing(window, "All")
+    _drop(listing, _heading(listing, "Work"), foo.parent)
+
+    assert (tmp_path / "Work" / "260918 - Foo").is_dir()
+    assert not (tmp_path / "260918 - Foo").exists()
+
+
 def test_dropping_a_task_on_a_task_of_another_category_moves_it(
     window, tmp_path, make_task
 ):
