@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import NamedTuple
 
 from PySide6.QtCore import (
+    QMimeData,
     QModelIndex,
     QPersistentModelIndex,
+    QPoint,
     QPointF,
     QRect,
     QRectF,
@@ -17,6 +19,11 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QColor,
+    QDrag,
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDragMoveEvent,
+    QDropEvent,
     QFont,
     QFontMetrics,
     QKeySequence,
@@ -27,6 +34,7 @@ from PySide6.QtGui import (
     QStandardItemModel,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QHBoxLayout,
     QHeaderView,
@@ -66,6 +74,11 @@ _STATE_ROLE = Qt.ItemDataRole.UserRole + 4
 # archive heading lists no folder that a new task could land in, so it has none
 _CATEGORY_ROLE = Qt.ItemDataRole.UserRole + 5
 
+# the mime type a drag of a task carries: the folder of the task, so a drop
+# knows which task it moves without reading anything, and a drag from
+# elsewhere is never taken for one of ours
+_MIME_TYPE = "application/x-mktsk-task"
+
 _ACTION_BAR_PADDING = 4
 
 # the columns of a task row, from the left: the date of the folder, the task
@@ -85,6 +98,11 @@ _COLUMN_PADDING = 6
 # apart from the rows under it without a colour written down
 _ZEBRA_WEIGHT = 0.03
 _SEPARATOR_WEIGHT = 0.08
+
+# how far the tint of a drop target moves from the Base towards the Highlight:
+# clear enough to say the category would take the task, and as far from the
+# other tints as a category heading is from a task row
+_DROP_TINT_WEIGHT = 0.35
 
 # the selection of a task row is the delegate's own, because the platform
 # styles paint one in a shape of their own: a faint tint of the palette
@@ -628,6 +646,9 @@ class _TaskDelegate(QStyledItemDelegate):
         # the category a heading stands for when it is the destination, held as
         # the string the row carries, or None when no category is the target
         self.destination: str | None = None
+        # the row of the heading that stands for the category a drop would move
+        # a task into, or -1 while no category is marked
+        self.drop_row = -1
 
     def column_rect(self, row: QRect, column: int) -> QRect:
         """Returns the rectangle of a column within a row.
@@ -750,14 +771,26 @@ class _TaskDelegate(QStyledItemDelegate):
             # group; the state alone does not carry the style past that, so the
             # palette is pointed at the enabled group the fill comes from
             separator_option.palette.setCurrentColorGroup(group)
-            painter.fillRect(
-                option.rect,
-                _blend(
-                    option.palette.color(group, QPalette.ColorRole.Base),
-                    option.palette.color(group, QPalette.ColorRole.Text),
-                    _SEPARATOR_WEIGHT,
-                ),
-            )
+            if index.row() == self.drop_row:
+                # the category a drop would move a task into, marked for as
+                # long as the drag is over it
+                painter.fillRect(
+                    option.rect,
+                    _blend(
+                        option.palette.color(group, QPalette.ColorRole.Base),
+                        option.palette.color(group, QPalette.ColorRole.Highlight),
+                        _DROP_TINT_WEIGHT,
+                    ),
+                )
+            else:
+                painter.fillRect(
+                    option.rect,
+                    _blend(
+                        option.palette.color(group, QPalette.ColorRole.Base),
+                        option.palette.color(group, QPalette.ColorRole.Text),
+                        _SEPARATOR_WEIGHT,
+                    ),
+                )
             super().paint(painter, separator_option, index)
             if self.destination is not None and (
                 index.data(_CATEGORY_ROLE) == self.destination
@@ -940,6 +973,12 @@ class TaskListing(QListWidget):
     one, and a closed task gets a single button, the reopen action, which still
     reports resume: the other actions all speak to a folder. The listing only
     reports which action was asked for, leaving the task logic to the window.
+
+    A task that stands as a folder can be dragged onto a category, which moves
+    the folder into it. The listing carries the drag and the drop, and reports
+    the folder and the category it was dropped on, leaving the move itself to
+    the window. A heading is not dragged: it stands for a category, and a
+    closed task is not either, because its archive is not a folder to move.
     """
 
     open_requested = Signal(object)
@@ -949,6 +988,7 @@ class TaskListing(QListWidget):
     close_requested = Signal(object)
     order_changed = Signal(int, bool)
     destination_requested = Signal(str)
+    move_requested = Signal(object, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -967,10 +1007,16 @@ class TaskListing(QListWidget):
         self.sort_descending = False
         self._task_section_user_resized = False
         self._fitting_task_column = False
+        # the category the tasks of this listing stand in, for a tab of a
+        # category, which holds no heading to say it
+        self._category: Path | None = None
         self.setItemDelegate(self.delegate)
         self.header.sectionResized.connect(self._columns_changed)
         self.header.sectionClicked.connect(self._click_section)
         self.horizontalScrollBar().valueChanged.connect(self.header.setOffset)
+        # a task is dragged onto a category, and a category is where it is
+        # dropped, so the listing takes in a drag and hands one on
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
 
         self.action_bar.open_button.clicked.connect(
             lambda: self._request(self.open_requested)
@@ -1086,6 +1132,229 @@ class TaskListing(QListWidget):
         """
         self.delegate.destination = str(directory) if directory is not None else None
         self.viewport().update()
+
+    def set_category(self, category: Path | None) -> None:
+        """Points the listing at the category its tasks stand in.
+
+        A tab of a category holds no heading, so the folder its tasks live in
+        is told to the listing here, and a drop on one of its rows moves a
+        task into that category. The `All` tab holds a heading per category
+        and needs none of this.
+
+        Args:
+            category: the folder the tasks of this listing live in, or None
+                when the listing stands for no category of its own.
+        """
+        self._category = category
+
+    def _dragged_entry(self) -> listing.TaskEntry | None:
+        """Returns the task a drag would carry, or None when there is none.
+
+        A heading carries no task, and a closed task stands as an archive,
+        which is not a folder to move, so neither of them is dragged.
+
+        Returns:
+            The task of the row the drag starts from, or None.
+        """
+        item = self.currentItem()
+        if item is None:
+            return None
+
+        entry = item.data(_ENTRY_ROLE)
+        if entry is None or standards.is_task_archive(entry.file.name):
+            return None
+
+        return entry
+
+    def _drag_mime(self, entry: listing.TaskEntry) -> QMimeData:
+        """Builds the payload a drag of a task carries.
+
+        The payload holds the folder of the task, so a drop knows which task
+        it moves without reading anything.
+
+        Args:
+            entry: the task being dragged.
+
+        Returns:
+            The payload of the drag.
+        """
+        mime = QMimeData()
+        mime.setData(_MIME_TYPE, str(entry.file.parent).encode())
+        return mime
+
+    def startDrag(self, supportedActions: Qt.DropAction) -> None:
+        """Starts a drag carrying the folder of the task under the cursor.
+
+        Args:
+            supportedActions: the actions the view supports, unused: the drag
+                is a move, and only a move.
+        """
+        entry = self._dragged_entry()
+        if entry is None:
+            return
+
+        drag = QDrag(self)
+        drag.setMimeData(self._drag_mime(entry))
+        drag.exec(Qt.DropAction.MoveAction)
+
+    def _drag_source(self, event: QDropEvent) -> Path | None:
+        """Returns the folder a drag carries, or None when it carries none.
+
+        Args:
+            event: the drag or the drop.
+
+        Returns:
+            The folder of the task the drag carries, or None.
+        """
+        data = bytes(event.mimeData().data(_MIME_TYPE).data())
+        if not data:
+            return None
+
+        return Path(data.decode())
+
+    def _heading_row(self, row: int) -> int:
+        """Returns the row of the heading above a task row.
+
+        Args:
+            row: the row of the task.
+
+        Returns:
+            The row of the heading the task stands under, or -1 when there is
+            no heading above it.
+        """
+        for index in range(row - 1, -1, -1):
+            item = self.item(index)
+            if item is not None and item.data(_COUNT_ROLE) is None:
+                return index
+
+        return -1
+
+    def _category_of(self, row: int) -> tuple[Path | None, int]:
+        """Returns the category a task row stands in, and its heading.
+
+        A task row stands in the category of the heading above it, and a tab
+        of a category holds no heading, so there the category is the one the
+        listing was told about.
+
+        Args:
+            row: the row of the task.
+
+        Returns:
+            The category the task stands in, and the row of the heading that
+            stands for it, which is -1 when the listing holds no heading.
+        """
+        heading = self._heading_row(row)
+        if heading < 0:
+            return self._category, -1
+
+        item = self.item(heading)
+        category = item.data(_CATEGORY_ROLE) if item is not None else None
+        if category is None:
+            return self._category, heading
+
+        return Path(category), heading
+
+    def _drop_target(self, pos: QPoint) -> tuple[Path | None, int]:
+        """Returns the category a drop at a position would move a task into.
+
+        A heading stands for its own category, and a task row for the one it
+        stands under. The empty area below the rows stands for nothing.
+
+        Args:
+            pos: the position of the drop, in the viewport.
+
+        Returns:
+            The category the task would land in, and the row of the heading
+            that stands for it, which is -1 when there is none.
+        """
+        item = self.itemAt(pos)
+        if item is None:
+            return None, -1
+
+        row = self.row(item)
+        if item.data(_COUNT_ROLE) is None:
+            category = item.data(_CATEGORY_ROLE)
+            return (Path(category) if category is not None else None), row
+
+        return self._category_of(row)
+
+    def _set_drop_row(self, row: int) -> None:
+        """Marks the heading of the category a drop would move a task into.
+
+        Args:
+            row: the row of the heading, or -1 when no category is marked.
+        """
+        if self.delegate.drop_row == row:
+            return
+
+        self.delegate.drop_row = row
+        self.viewport().update()
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Takes in a drag that carries a task.
+
+        The drag is taken in wherever it enters, because a drag starts over
+        the task it carries, and the rule that keeps a task from landing in
+        the category it already stands in would refuse it there; the drag
+        would then never reach the category it is aimed at. What a drop lands
+        on is decided by the moves that follow.
+
+        Args:
+            event: the drag that entered.
+        """
+        if event.mimeData().hasFormat(_MIME_TYPE):
+            event.accept()
+            return
+
+        event.ignore()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        """Marks the category a drop would move a task into.
+
+        The heading of the category is marked, so the category the task would
+        land in reads as the one under the cursor. A drag over the category
+        the task already stands in, or over the empty area, is refused, so
+        the cursor says the task cannot go there.
+
+        Args:
+            event: the drag that moved over the listing.
+        """
+        folder = self._drag_source(event)
+        category, heading = self._drop_target(event.position().toPoint())
+
+        if folder is None or category is None or folder.parent == category:
+            self._set_drop_row(-1)
+            event.ignore()
+            return
+
+        self._set_drop_row(heading)
+        event.accept()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Reports the task of a drag and the category it was dropped on.
+
+        Args:
+            event: the drop.
+        """
+        folder = self._drag_source(event)
+        category, _heading = self._drop_target(event.position().toPoint())
+        self._set_drop_row(-1)
+
+        if folder is None or category is None or folder.parent == category:
+            event.ignore()
+            return
+
+        event.accept()
+        self.move_requested.emit(folder, category)
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        """Takes the mark off the category when the drag leaves.
+
+        Args:
+            event: the drag that left.
+        """
+        self._set_drop_row(-1)
+        event.accept()
 
     def set_sort(self, column: int, descending: bool) -> None:
         """Orders the rows by a column and shows the indicator on it.
