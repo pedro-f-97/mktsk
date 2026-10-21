@@ -128,8 +128,7 @@
   land in, so clicking one does nothing. The heading of the current destination carries a
   small dot at its right end, drawn by the delegate in the colour the Directory header
   buttons carry, which follows the tree however the selection moves and goes with it; a
-  category with no heading to carry it, because it is empty or its tasks are closed, shows
-  no marker
+  category with no heading to carry it, because its tasks are closed, shows no marker
 - Clicking the heading of the base folder clears the destination, like the `x` on the
   label: the tree selection drops, the line, the `x` and the marker go with it, and the
   next task lands in the base folder
@@ -141,6 +140,12 @@
   closed task: a category whose tasks are all closed gets no tab and no heading, and a
   `Closed` tab last holds every archive under a heading per category, appearing only
   when there is at least one
+- A category without tasks stands as a heading of its own in `All`, with no task under
+  it: it gets no tab of its own and nothing in `Closed`. Clicking it picks it as the
+  destination and a task can be dropped on it, so a category can be filled without
+  entering it. It goes last among the headings, in alphabetical order with the other
+  empty ones, whether the tab is ordered by a column or not, because it carries no task
+  to order by
 - The active tab survives a refresh or a new task; when its category is gone, `All`
   takes over again
 - Within a category, by last activity, newest first, alphabetical for tasks of the same
@@ -322,7 +327,8 @@
   and any task row under it, which stands for the category it is in. A tab of a category
   holds no heading, so a task row there stands for the category of the tab. The base
   folder is a category of its own, with a heading in `All` like any other and a tab of
-  its own
+  its own. A category without tasks has no task row under its heading, so the heading
+  alone is the target
 - The empty area below the rows and the category the task already stands in are not
   targets, and a drop there is refused, so the cursor says the task cannot go there. The
   drag is taken in wherever it enters, because a drag starts over the task it carries

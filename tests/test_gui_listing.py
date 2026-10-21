@@ -17,14 +17,15 @@ def test_initial_directory_defaults_to_cwd(window):
     assert window.current_directory == Path.cwd().resolve()
 
 
-def test_navigate_to_without_tasks_leaves_one_empty_tab(window, tmp_path):
+def test_navigate_to_without_tasks_leaves_one_tab(window, tmp_path):
     (tmp_path / "Veritas").mkdir()
     (tmp_path / "a.md").touch()
 
     window.navigate_to(tmp_path)
 
     assert tab_titles(window) == ["All"]
-    assert tab_labels(window) == []
+    # the category without tasks stands as a divider of its own
+    assert tab_labels(window) == ["Veritas"]
     assert tree_child_labels(window) == ["Veritas"]
 
 
@@ -97,6 +98,40 @@ def test_subdirectory_without_tasks_gets_no_tab(window, tmp_path, make_task):
     assert tab_titles(window) == ["All", tmp_path.name]
 
 
+def test_an_empty_category_stands_as_a_divider_in_the_all_tab(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path, "260918", "Foo")
+    (tmp_path / "Veritas").mkdir()
+
+    window.navigate_to(tmp_path)
+
+    # the category stands as a divider in the All tab, and gets no tab of its
+    # own and nothing in the Closed tab
+    assert tab_labels(window) == [tmp_path.name, "18/09/2026  Foo", "Veritas"]
+    assert tab_titles(window) == ["All", tmp_path.name]
+
+
+def test_an_empty_category_stands_last_among_the_other_dividers(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path / "Able", "260925", "Foo")
+    (tmp_path / "Bravo").mkdir()
+    make_task(tmp_path / "monad", "260924", "Bar")
+
+    window.navigate_to(tmp_path)
+
+    # the divider of the empty category goes last, although its name comes
+    # before the one of `monad`
+    assert tab_labels(window) == [
+        "Able",
+        "25/09/2026  Foo",
+        "monad",
+        "24/09/2026  Bar",
+        "Bravo",
+    ]
+
+
 def test_navigate_to_sorts_tasks_newest_first(window, tmp_path, make_task):
     make_task(tmp_path, "260918", "Foo")
     make_task(tmp_path, "260930", "Bar")
@@ -111,7 +146,8 @@ def test_navigate_to_invalid_date_prefix_is_not_a_task(window, tmp_path):
 
     window.navigate_to(tmp_path)
 
-    assert tab_labels(window) == []
+    # it is not a task, so it stands as a category of its own
+    assert tab_labels(window) == ["999999 - ItsAlive"]
     assert tree_child_labels(window) == ["999999 - ItsAlive"]
 
 
@@ -137,7 +173,8 @@ def test_navigate_to_stops_one_level_down(window, tmp_path, make_task):
 
     window.navigate_to(tmp_path)
 
-    assert tab_labels(window) == []
+    # the category stands empty and the task two levels down is not found
+    assert tab_labels(window) == ["SteelMountain"]
 
 
 def test_navigate_to_skips_task_folder_without_md(window, tmp_path):

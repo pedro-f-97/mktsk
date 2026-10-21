@@ -670,6 +670,7 @@ class MainWindow(QMainWindow):
         every = self._new_listing(_ALL_TAB)
         shut = self._new_listing(_CLOSED_TAB)
         closed_here = False
+        empty_categories: list[tuple[str, Path | None]] = []
 
         for title, group in sections:
             standing = [entry for entry in group.entries if entry.state != "closed"]
@@ -683,12 +684,20 @@ class MainWindow(QMainWindow):
                 )
                 for entry in standing:
                     self._add_task(every, entry, today)
+            elif not group.entries:
+                # an empty category stands as a heading of its own, so a task
+                # can be dropped on it and a new one can land there; it carries
+                # no task to order by, so it goes last among the headings
+                empty_categories.append((title, group.category))
 
             if archived:
                 self._add_heading(shut, title)
                 for entry in archived:
                     self._add_task(shut, entry, today)
                 closed_here = True
+
+        for title, category in empty_categories:
+            self._add_heading(every, title, category)
 
         self._add_tab(_ALL_TAB, every)
 
@@ -803,6 +812,9 @@ class MainWindow(QMainWindow):
 
     def _sections(self) -> list[tuple[str, listing.TaskGroup]]:
         """Pairs every task group with the title of its tab.
+
+        A category without tasks is a group all the same, so it stands in the
+        `All` tab as a heading of its own.
 
         Returns:
             The tasks of the current directory first, named after the directory
