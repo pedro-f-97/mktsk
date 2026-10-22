@@ -632,10 +632,20 @@ class _UnifiedSelectionDelegate(QStyledItemDelegate):
             text = index.data(Qt.ItemDataRole.DisplayRole) or ""
             option.text = ""
 
-        # Let the style paint the base (alternating rows, etc.)
+        # Suppress the native selection indicator by clearing State_Selected
+        # before the base class paints. The base class would otherwise paint
+        # its own indicator (a vertical bar) which we replace with our custom
+        # '[' outline (rounded rail + bracket lines).
+        state = option.state
+        if selected:
+            option.state &= ~QStyle.StateFlag.State_Selected
+
+        # Let the style paint the base (alternating rows, etc.) without selection
         super().paint(painter, option, index)
 
+        # Restore selection state for our custom painting
         if selected:
+            option.state = state
             # Fill the selection tint over the whole row
             painter.fillRect(option.rect, _selection_tint(option))
             # Draw rail and bracket lines
