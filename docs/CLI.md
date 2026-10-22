@@ -25,22 +25,39 @@
   `main` prints as `Error: invalid state: <state>` with exit code 1. A category left
   without a task by the filter prints no heading at all. On its own it is refused with
   `parser.error("--only goes with --list")`, so it never reaches `_list`
-- `--new-category <name>` creates a category in the current directory and prints the path;
+- `--new-category <name>` creates a category in the base folder and prints the path;
   it opens nothing, because making somewhere to put tasks is not working on one. The name
   is one argument, so a name with spaces in it has to be quoted, unlike a task title or a
   new title for `--rename`. It refuses to go with `--rename` or `--list`
-- `--state <title> <state>` sets the state of the task with that title in the current
-  directory. It accepts `open`, `in-progress` and `waiting`; `closed` is not accepted from
+- `--state <title> <state>` sets the state of the task with that title in the base folder.
+  It accepts `open`, `in-progress` and `waiting`; `closed` is not accepted from
   the CLI here, closing is `--close`. The title is looked up the same way as for
   `mktsk <title>` (normalized and found by `find_task_folder`). It prints one line with the
   new state and opens nothing. An unknown title gives `TaskError` and does not create the
   task
-- `--close <title>` closes the task with that title in the current directory, found the
+- `--close <title>` closes the task with that title in the base folder, found the
   same way as for `mktsk <title>`. It prints one line with the name of the archive created
   and opens nothing, because closing is the end of the task; an unknown title gives
   `TaskError` and does not create the task. It goes with no other option: alongside
   `--rename`, `--list`, `--new-category` or `--state` it is refused, and a title of the
   plain form alongside it too
+- `--folder <path>` uses that folder instead of the configured base folder, for one
+  command. It skips the first-run routine entirely, so it works before anything is
+  configured
+- On a first run, a command that needs the base folder reads the shared config file. When
+  there is none, it migrates the last folder the GUI saved, once. The file lives in
+  `%APPDATA%\mktsk\config.json` on Windows, `$XDG_CONFIG_HOME/mktsk/config.json` (or
+  `~/.config/mktsk/config.json`) on Linux, and
+  `~/Library/Application Support/mktsk/config.json` on macOS. It holds
+  `{"base_folder": "<absolute path>"}`
+- A saved folder that is gone, or no saved folder at all, is set up from the terminal:
+  the command asks whether to start, then for the base folder and up to two optional
+  categories. A missing folder offers a retry, another folder or a quit, and choosing
+  another folder runs the same setup. Declining or quitting exits with code 1 and changes
+  nothing
+- Without a terminal the command never prompts: it prints one line to stderr and exits
+  with code 3, `EXIT_NOT_CONFIGURED`, naming the saved folder when there is one
+- After a successful setup the command that was asked for runs, in the new base folder
 - Each option checks only what it needs, and only the plain form falls back to the title;
   when a second option arrives alongside, the refusal is about the two options, not about
   the title

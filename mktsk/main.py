@@ -1,9 +1,13 @@
 import argparse
+import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import TextIO
 
-from . import files, helpers, listing, parsing, standards, state, tasks
+from . import config, files, helpers, listing, parsing, standards, state, tasks
 
 _RENAME_MINIMUM_ARGUMENTS = 2
+EXIT_NOT_CONFIGURED = 3
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,6 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--close",
         metavar="TITLE",
         help="close a task into an archive, given its title",
+    )
+    parser.add_argument(
+        "--folder",
+        metavar="PATH",
+        help="use this base folder instead of the configured one",
     )
     return parser
 
@@ -100,30 +109,40 @@ def parse_arguments() -> argparse.Namespace:
     return args
 
 
-def main() -> int:
+def main(
+    input_fn: Callable[[str], str] | None = None,
+    output: TextIO | None = None,
+) -> int:
     args = parse_arguments()
 
+    read = input if input_fn is None else input_fn
+    stream = sys.stdout if output is None else output
+
+    location = _base_location(args.folder, read, stream)
+    if isinstance(location, int):
+        return location
+
     if args.new_category is not None:
-        return _new_category(Path.cwd(), args.new_category)
+        return _new_category(location, args.new_category)
 
     if args.list:
         try:
-            return _list(Path.cwd(), args.only)
+            return _list(location, args.only)
         except helpers.TaskError as error:
             print(f"Error: {error}")
             return 1
 
     if args.state is not None:
-        return _set_state(Path.cwd(), args.state[0], args.state[1])
+        return _set_state(location, args.state[0], args.state[1])
 
     if args.close is not None:
-        return _close(Path.cwd(), args.close)
+        return _close(location, args.close)
 
     try:
         if args.rename:
-            return _rename(Path.cwd(), args.title[0], " ".join(args.title[1:]))
+            return _rename(location, args.title[0], " ".join(args.title[1:]))
 
-        result = tasks.open_or_create_task(Path.cwd(), " ".join(args.title))
+        result = tasks.open_or_create_task(location, " ".join(args.title))
         print(result.message)
     except (OSError, helpers.TaskError) as error:
         print(f"Error: {error}")
@@ -135,6 +154,139 @@ def main() -> int:
         print(f"Warning: {error}")
 
     return 0
+
+
+def _interactive() -> bool:
+    """Tells whether both ends of the command are a terminal."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _ask(
+    prompt: str,
+    input_fn: Callable[[str], str],
+    output: TextIO,
+) -> str:
+    """Writes a prompt and returns the answer, stripped."""
+    output.write(prompt)
+    output.flush()
+    return input_fn("").strip()
+
+
+def _valid_base_folder(raw: str) -> Path | None:
+    """Resolves a typed base folder, or returns None when it cannot be."""
+    if "\0" in raw:
+        return None
+
+    try:
+        return Path(raw).expanduser().resolve()
+    except (OSError, ValueError):
+        return None
+
+
+def _setup(input_fn: Callable[[str], str], output: TextIO) -> Path | int:
+    """Asks for a base folder and up to two categories, and sets them up."""
+    base: Path | None
+
+    while True:
+        raw_base = _ask("Base folder: ", input_fn, output)
+
+        if not raw_base:
+            output.write("Error: base folder must not be empty\n")
+            continue
+
+        base = _valid_base_folder(raw_base)
+
+        if base is None:
+            output.write(f"Error: '{raw_base}' is not a usable folder\n")
+            continue
+
+        break
+
+    categories: list[str] = []
+    while len(categories) < config.MAXIMUM_CATEGORIES:
+        raw_category = _ask("Category (optional): ", input_fn, output)
+
+        if not raw_category:
+            break
+
+        try:
+            categories.append(config.validate_category(raw_category, categories))
+        except ValueError as error:
+            output.write(f"Error: {error}\n")
+
+    try:
+        folder = config.run_setup(base, categories)
+    except OSError as error:
+        output.write(f"Error: {error}\n")
+        return 1
+
+    output.write(f"Configured: {folder}\n")
+
+    return folder
+
+
+def _base_location(
+    explicit_folder: str | None,
+    input_fn: Callable[[str], str],
+    output: TextIO,
+) -> Path | int:
+    """Finds the base folder to work in, setting it up on a first run.
+
+    An explicit folder wins and skips the config file entirely. Otherwise the
+    saved folder is used, and a first run asks for one when the command is
+    interactive; when it is not, the command stops and says why.
+    """
+    if explicit_folder is not None:
+        return Path(explicit_folder).expanduser()
+
+    while True:
+        resolved = config.resolve_base_folder()
+
+        if resolved.state is config.BaseFolderState.OK:
+            assert resolved.path is not None
+            return resolved.path
+
+        if resolved.state is config.BaseFolderState.NOT_CONFIGURED:
+            if not _interactive():
+                print(
+                    "mktsk is not configured: no base folder saved. "
+                    "Run it from a terminal to set it up.",
+                    file=sys.stderr,
+                )
+                return EXIT_NOT_CONFIGURED
+
+            answer = _ask(
+                "mktsk is not configured yet. Start setup? [Y/n] ", input_fn, output
+            )
+
+            if answer.lower() in {"n", "no"}:
+                return 1
+
+            return _setup(input_fn, output)
+
+        assert resolved.path is not None
+
+        if not _interactive():
+            print(
+                "mktsk is not configured: the saved base folder does not exist: "
+                f"{resolved.path}. Run it from a terminal to set it up.",
+                file=sys.stderr,
+            )
+            return EXIT_NOT_CONFIGURED
+
+        output.write(f"The saved base folder does not exist: {resolved.path}\n")
+        answer = _ask(
+            "[r]etry, [c]hoose another folder, [q]uit? ", input_fn, output
+        ).lower()
+
+        if answer in {"r", "retry"}:
+            continue
+
+        if answer in {"c", "choose"}:
+            return _setup(input_fn, output)
+
+        if answer in {"q", "quit"}:
+            return 1
 
 
 def _task_label(entry: listing.TaskEntry) -> str:
