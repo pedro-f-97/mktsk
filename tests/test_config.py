@@ -43,7 +43,7 @@ def _fake_qt(monkeypatch, value):
             return value
 
     module = types.ModuleType("PySide6.QtCore")
-    module.QSettings = FakeSettings
+    module.__dict__["QSettings"] = FakeSettings
     monkeypatch.setitem(sys.modules, "PySide6.QtCore", module)
 
     return calls
