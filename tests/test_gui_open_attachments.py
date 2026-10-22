@@ -210,3 +210,61 @@ def test_no_regression_on_attachment_list_display(window, tmp_path, make_task):
     ]
     assert names == ["Attachments/", "one.pdf"]
     assert window.preview_list.alternatingRowColors() is True
+
+
+def test_malformed_item_data_does_not_crash(window, tmp_path, make_task):
+    """An item with non-Path data is handled gracefully (line 774)."""
+    file = make_task(tmp_path, "260918", "Foo")
+    attachment = file.parent / "one.pdf"
+    attachment.write_text("x", encoding="utf-8")
+    window.navigate_to(tmp_path)
+    select_task(window, file)
+
+    # Corrupt the item data
+    item = window.preview_list.item(0)
+    item.setData(Qt.ItemDataRole.UserRole, "not a path")
+
+    # Should not raise, should just return early
+    window._open_attachment(item)
+
+
+def test_non_enter_key_passes_to_base_class(window, tmp_path, make_task):
+    """Non-Enter keys are passed to the base implementation for navigation (line 793)."""
+    file = make_task(tmp_path, "260918", "Foo")
+    (file.parent / "one.pdf").write_text("x", encoding="utf-8")
+    (file.parent / "two.pdf").write_text("x", encoding="utf-8")
+    window.navigate_to(tmp_path)
+    select_task(window, file)
+
+    # Select first item
+    item0 = window.preview_list.item(0)
+    window.preview_list.setCurrentItem(item0)
+    assert window.preview_list.currentItem() == item0
+
+    # Press Down arrow - should move selection to second item via base class
+    from PySide6.QtGui import QKeyEvent
+    event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_Down, Qt.KeyboardModifier.NoModifier)
+    window.preview_list.keyPressEvent(event)
+
+    # Selection should have moved to the second item
+    assert window.preview_list.currentItem() == window.preview_list.item(1)
+
+
+def test_enter_with_no_selection_does_nothing(window, tmp_path, make_task):
+    """Pressing Enter with no selected item does not crash (branch 790->793)."""
+    file = make_task(tmp_path, "260918", "Foo")
+    (file.parent / "one.pdf").write_text("x", encoding="utf-8")
+    window.navigate_to(tmp_path)
+    select_task(window, file)
+
+    # Clear selection
+    window.preview_list.clearSelection()
+    window.preview_list.setCurrentItem(None)
+    assert window.preview_list.currentItem() is None
+
+    # Press Enter - should not crash, should not call _open_attachment
+    from PySide6.QtGui import QKeyEvent
+    event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)
+    window.preview_list.keyPressEvent(event)
+
+    # No error, test passes if we reach here
