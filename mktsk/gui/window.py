@@ -4,7 +4,15 @@ import datetime
 from pathlib import Path
 from typing import cast
 
-from PySide6.QtCore import QMimeData, QPointF, QRectF, QSettings, QSize, Qt
+from PySide6.QtCore import (
+    QByteArray,
+    QMimeData,
+    QPointF,
+    QRectF,
+    QSettings,
+    QSize,
+    Qt,
+)
 from PySide6.QtGui import (
     QBrush,
     QCloseEvent,
@@ -93,6 +101,10 @@ _TOGGLE_LINE_GAP = 4.0
 # how many files a drop that left some out names in the warning about it; the
 # rest are counted in a line of their own, so a long list never fills it
 _MAX_SKIPPED_NAMED = 10
+
+# the key the window keeps its size and position under; the splitters keep
+# theirs under the keys `_splitters` gives them
+_GEOMETRY_KEY = "window/geometry"
 
 
 def _task_text(file: Path) -> str:
@@ -235,6 +247,7 @@ class MainWindow(QMainWindow):
         # the selected task
         self.setAcceptDrops(True)
         self._build_ui()
+        self._restore_state()
         self.navigate_to(self.current_directory)
 
     def _build_ui(self) -> None:
@@ -498,6 +511,37 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.search_results, self.tabs)
         self.setTabOrder(self.tabs, self.title_input)
         self.setTabOrder(self.title_input, self.create_button)
+
+    def _splitters(self) -> dict[str, QSplitter]:
+        """Returns every splitter of the window under the key it is saved with."""
+        return {
+            "window/main_splitter": self.splitter,
+            "window/directory_splitter": self.left_splitter,
+            "window/table_splitter": self.table_splitter,
+            "window/preview_splitter": self.preview_area,
+        }
+
+    def _restore_state(self) -> None:
+        """Restores the size of the window and of every splitter, when saved.
+
+        A value that is missing or does not read back is ignored silently, so
+        the window opens with the defaults it has always opened with.
+        """
+        geometry = self.settings.value(_GEOMETRY_KEY)
+        if isinstance(geometry, QByteArray):
+            self.restoreGeometry(geometry)
+
+        for key, splitter in self._splitters().items():
+            state = self.settings.value(key)
+            if isinstance(state, QByteArray):
+                splitter.restoreState(state)
+
+    def _save_state(self) -> None:
+        """Saves the size of the window and of every splitter for the next run."""
+        self.settings.setValue(_GEOMETRY_KEY, self.saveGeometry())
+
+        for key, splitter in self._splitters().items():
+            self.settings.setValue(key, splitter.saveState())
 
     def _align_header(self) -> None:
         """Squares the headers of the window off to the tab bar height.
@@ -1227,4 +1271,5 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.settings.setValue("last_path", str(self.current_directory))
+        self._save_state()
         super().closeEvent(event)
