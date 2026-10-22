@@ -383,9 +383,13 @@ def test_main_new_category_can_hold_a_task(monkeypatch, tmp_path):
     monkeypatch.chdir(category)
     monkeypatch.setattr("sys.argv", ["mktsk", "New", "Task"])
 
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
+
     assert main() == 0
     assert (category / "260930 - NewTask" / "NewTask.md").is_file()
     assert not (tmp_path / "260930 - NewTask").exists()
+    assert opened == [category / "260930 - NewTask" / "NewTask.md"]
 
 
 def test_main_new_category_reports_a_failure_to_create(monkeypatch, tmp_path, capsys):

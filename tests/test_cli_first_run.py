@@ -117,6 +117,8 @@ def test_missing_then_choose_another_folder(monkeypatch, tmp_path, config_file):
     monkeypatch.chdir(tmp_path)
     _interactive(monkeypatch)
     monkeypatch.setattr("sys.argv", ["mktsk", "Foo"])
+    opened = []
+    monkeypatch.setattr("mktsk.helpers.open_file", opened.append)
     output = io.StringIO()
 
     result = cli.main(input_fn=_scripted("c", str(base), ""), output=output)
@@ -125,6 +127,7 @@ def test_missing_then_choose_another_folder(monkeypatch, tmp_path, config_file):
     assert (base / "260922 - Foo" / "Foo.md").is_file()
     assert config.load_config(config_file) == base.resolve()
     assert f"The saved base folder does not exist: {missing}" in output.getvalue()
+    assert opened == [base / "260922 - Foo" / "Foo.md"]
 
 
 def test_missing_then_quit_exits_one(monkeypatch, tmp_path, config_file):
