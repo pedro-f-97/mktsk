@@ -163,6 +163,32 @@
   the listing stops one level down and a task inside a subdirectory of a subdirectory is
   not found. A subdirectory whose name starts with `.` is no category at all: it is left
   out of the listing and of the tree
+- The base folder lives in the shared config file, not in QSettings: JSON
+  `{"base_folder": "<absolute path>"}` at `%APPDATA%\mktsk\config.json` on Windows,
+  `$XDG_CONFIG_HOME/mktsk/config.json` or `~/.config/mktsk/config.json` on Linux, and
+  `~/Library/Application Support/mktsk/config.json` on macOS. The GUI and the CLI read the
+  same file, so a folder chosen once is the folder both work in
+- Reading the config never raises: a missing, unreadable, corrupt or invalid file, a file
+  that is not an object, or a `base_folder` that is missing, empty or not a string all mean
+  that no folder is saved. Resolving it gives `OK` when the saved path is a directory,
+  `NOT_CONFIGURED` when nothing is saved, and `MISSING` when the saved path is no longer a
+  directory; the missing result carries the path so it can be named
+- The old QSettings value is migrated once, and only while the config file does not exist:
+  the key is `last_path`, under the organization and application `mktsk`, which is what the
+  GUI writes. The value is only read, never changed or removed, and a folder that no longer
+  exists is saved all the same so the missing result can name it. PySide6 is imported only
+  for this migration, so a machine without the GUI is never asked for it
+- Writing the config is atomic: a temporary file in the same folder is moved into place
+  with `os.replace`, so a reader never sees half a file and a failed write leaves no
+  temporary file behind
+- `validate_category` strips whitespace and refuses a name that is empty, carries a
+  character Windows does not allow (`<>:"/\|?*` or a control character), is reserved,
+  starts with `.` or `_`, looks like a task folder (`260918 - Foo`) or ends in a dot or a
+  space. Two categories of the same name in any case are refused
+- `run_setup` validates the base folder and every category first, then creates the base
+  folder and the category subfolders, and only then writes the config file. A validation
+  or creation failure leaves the old config untouched, and an old path is replaced only
+  after the new setup succeeded. At most two categories are accepted
 - A subdirectory without tasks is a category all the same and comes with no task, so it
   stands as a divider of its own in the `All` tab. A subdirectory that holds nothing but
   closed tasks stands as a divider as well: its tasks are gone into their archives, so what

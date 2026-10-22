@@ -7,7 +7,7 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * Creates task folders using the `YYMMDD - TaskName` naming convention.
 * Creates an associated Markdown file, born with a heading holding today's date. The title
   of the task is the folder and file name, so it is not repeated inside the file.
-* Finds an existing task by title in the current directory, on any date, and starts a new
+* Finds an existing task by title in the base folder, on any date, and starts a new
   dated section in it.
 * Lists tasks by when they were last worked on, not by the date in the folder name.
 * Closes a task by compressing its folder into a verified zip archive, and reopens it from
@@ -75,7 +75,13 @@ Your notes go here.
 A new task is `open`, and the event that says so sits under two blank lines, so a note
 typed on the first one never runs into it.
 
-The task folder is created in the directory from which `mktsk` is executed.
+The task folder is created in the base folder: the one saved in the shared config file, or
+the folder given with `--folder`. The first time it runs from a terminal, `mktsk` asks for
+that folder and up to two categories, and saves the choice in
+`%APPDATA%\mktsk\config.json` on Windows and
+`$XDG_CONFIG_HOME/mktsk/config.json` (or `~/.config/mktsk/config.json`) on Linux.
+A folder saved by the GUI is picked up once, so there is nothing to set up again. Without a
+terminal the command does not prompt: it prints one line to stderr and exits with code 3.
 
 The Markdown file is then automatically opened with the system's default application.
 
@@ -114,7 +120,7 @@ Your notes go here.
 Running it twice on the same day does not add a second heading for that date and never
 changes the state. Your text is never rewritten; only trailing whitespace is dropped.
 
-The search stays in the directory you run `mktsk` from, so with this layout:
+The search stays in the base folder, so with this layout:
 
 ```text
 tasks/
@@ -125,9 +131,10 @@ tasks/
     └── 260924 - Everbind/
 ```
 
-`mktsk It's Alive!` from `tasks/` picks up `260923 - ItsAlive`, while `mktsk F Society`
-from there creates `tasks/260930 - FSociety`, because the Veritas one lives in another
-directory. To resume a task, run the command from the directory that holds it.
+`mktsk It's Alive!` picks up `260923 - ItsAlive` in the base folder, while `mktsk F Society`
+creates `tasks/260930 - FSociety`, because the Veritas one lives in another directory. To
+resume a task, run the command in a folder that holds it with `--folder`, or move the task
+to the base folder.
 
 ## Renaming a task
 
@@ -216,7 +223,7 @@ mktsk --state "It's Alive!" waiting
 
 The accepted states are `open`, `in-progress` and `waiting`. `closed` is a state a file
 can carry, but this command does not set it. The title is found the same way as for
-`mktsk <title>`, on any date and in the directory you are in, and a title that is not a
+`mktsk <title>`, on any date and in the base folder, and a title that is not a
 task there is an error that creates nothing. The file is not opened either, because
 changing the state is not working on the task.
 
@@ -261,7 +268,7 @@ the archive is in place, both are kept and the error says the task is archived a
 
 The Markdown file inside the zip carries the `closed` event; the one in the folder is
 never touched. The title is found the same way as for `mktsk <title>`, and a title that is
-not a task in the directory you are in is an error that creates nothing. Nothing is
+not a task in the base folder is an error that creates nothing. Nothing is
 opened, because closing is the end of the task.
 
 A title is unique in a directory whether it stands as a folder or as an archive, so
@@ -295,7 +302,7 @@ leaves the zip where it is.
 
 ## Creating a category
 
-Pass `--new-category` with a name, and the folder is made in the directory you are in:
+Pass `--new-category` with a name, and the folder is made in the base folder:
 
 ```bash
 mktsk --new-category "Produção"

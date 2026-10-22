@@ -1,13 +1,30 @@
 import datetime
 import os
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QMessageBox
 
+from mktsk.config import BaseFolder, BaseFolderState
 from mktsk.gui import MainWindow
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+# the first-run tests drive the shared config themselves
+_CONFIG_TESTS = {"test_config.py", "test_cli_first_run.py"}
+
+
+@pytest.fixture(autouse=True)
+def configured_base(monkeypatch, request):
+    """Keeps the tests that predate the config file on their own directory."""
+    if request.path.name in _CONFIG_TESTS:
+        return
+
+    monkeypatch.setattr(
+        "mktsk.config.resolve_base_folder",
+        lambda: BaseFolder(BaseFolderState.OK, Path.cwd()),
+    )
 
 
 @pytest.fixture
