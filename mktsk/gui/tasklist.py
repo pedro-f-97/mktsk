@@ -125,7 +125,7 @@ _ROW_LINE_REACH = 8
 
 # how far the tint of a selection moves from the Base towards the Highlight,
 # subtle enough to keep the row close to the plain background it sits on
-_SELECTION_TINT_WEIGHT = 0.08
+_SELECTION_TINT_WEIGHT = 0.25
 
 # the marker a heading carries when it stands for the destination: a small dot
 # at the right end of the row, clear of the name the style draws from the left
@@ -622,15 +622,40 @@ class _UnifiedSelectionDelegate(QStyledItemDelegate):
         option: QStyleOptionViewItem,
         index: QModelIndex | QPersistentModelIndex,
     ) -> None:
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+
+        # For selected rows, we need to paint text on top of the selection tint.
+        # Clear option.text so the style doesn't paint it, then we'll paint it
+        # ourselves after the selection background.
+        text = ""
+        if selected:
+            text = index.data(Qt.ItemDataRole.DisplayRole) or ""
+            option.text = ""
+
         # Let the style paint the base (alternating rows, etc.)
         super().paint(painter, option, index)
 
-        # Overpaint selection with unified treatment
-        if option.state & QStyle.StateFlag.State_Selected:
+        if selected:
             # Fill the selection tint over the whole row
             painter.fillRect(option.rect, _selection_tint(option))
             # Draw rail and bracket lines
             _paint_selection_lines(painter, option)
+
+            # Paint the text on top of the selection
+            if text:
+                painter.save()
+                pen_colour = _cell_pen(option)
+                painter.setPen(pen_colour)
+                # Use the same alignment as the style would: left + vcenter
+                text_rect = option.rect.adjusted(
+                    _SELECTION_INDICATOR_GAP, 0, 0, 0
+                )
+                painter.drawText(
+                    text_rect,
+                    int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
+                    text,
+                )
+                painter.restore()
 
 
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
