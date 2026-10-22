@@ -55,6 +55,7 @@ from PySide6.QtWidgets import (
 
 from mktsk import config, files, helpers, listing, standards, state, tasks
 
+from .app_icon import app_icon, set_app_identity
 from .icons import (
     _CHEVRON_HALF_HEIGHT,
     _SMALL_ICON_SIZE,
@@ -245,6 +246,10 @@ class MainWindow(QMainWindow):
         # file, so it is handed in rather than read from QSettings
         self.current_directory = base_folder or Path.cwd()
         self.setWindowTitle("mktsk")
+        # the window carries the icon the application draws for itself
+        self.setWindowIcon(app_icon())
+        # the taskbar shows the application by the identity it sets here
+        set_app_identity()
         self.setMinimumSize(640, 420)
         # the window takes in a drag of files, which lands in the folder of
         # the selected task
