@@ -53,7 +53,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from mktsk import files, helpers, listing, standards, state, tasks
+from mktsk import config, files, helpers, listing, standards, state, tasks
 
 from .icons import (
     _CHEVRON_HALF_HEIGHT,
@@ -227,7 +227,9 @@ class _PaneToggle(QToolButton):
 class MainWindow(QMainWindow):
     """Desktop interface over the CLI task logic."""
 
-    def __init__(self, settings: QSettings | None = None) -> None:
+    def __init__(
+        self, settings: QSettings | None = None, base_folder: Path | None = None
+    ) -> None:
         super().__init__()
         self.settings = settings or QSettings("mktsk", "mktsk")
         self._sorts: dict[str, tuple[int, bool]] = {}
@@ -239,8 +241,9 @@ class MainWindow(QMainWindow):
         # came from dragging the handle rather than from the bar
         self._left_width: int | None = None
         self._initial_left_width: int | None = None
-        last_path = self.settings.value("last_path", str(Path.cwd()))
-        self.current_directory = Path(str(last_path))
+        # the folder the first-run flow resolved lives in the shared config
+        # file, so it is handed in rather than read from QSettings
+        self.current_directory = base_folder or Path.cwd()
         self.setWindowTitle("mktsk")
         self.setMinimumSize(640, 420)
         # the window takes in a drag of files, which lands in the folder of
@@ -1004,7 +1007,11 @@ class MainWindow(QMainWindow):
             self, "Choose directory", str(self.current_directory)
         )
         if selected:
-            self.navigate_to(Path(selected))
+            folder = Path(selected)
+            # the shared config file is where the base folder lives now, so
+            # the CLI works in the same folder from its next run
+            config.save_config(folder)
+            self.navigate_to(folder)
 
     def go_up(self) -> None:
         parent = self.current_directory.parent
@@ -1270,6 +1277,5 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "mktsk", _skipped_message(skipped))
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        self.settings.setValue("last_path", str(self.current_directory))
         self._save_state()
         super().closeEvent(event)

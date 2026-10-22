@@ -76,11 +76,11 @@ def test_refresh_missing_directory(window, tmp_path):
     assert window.directory_tree.topLevelItemCount() == 0
 
 
-def test_close_saves_last_path(window, tmp_path):
+def test_close_leaves_no_last_path(window, tmp_path):
     window.navigate_to(tmp_path)
     window.close()
 
-    assert window.settings.value("last_path") == str(tmp_path.resolve())
+    assert not window.settings.contains("last_path")
 
 
 def test_module_entry_point_uses_gui_main():

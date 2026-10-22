@@ -9,7 +9,7 @@
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
   `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
   `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`, `tests/test_gui_drop.py`,
-  `tests/test_gui_persistence.py`
+  `tests/test_gui_persistence.py`, `tests/test_gui_first_run.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
@@ -33,9 +33,25 @@
   path and the title line up as one column
 - The path label uses the `Base` background, like the tree, so the two share one fill
 - `Choose...` and `Up` sit in the `Directory` header, to the left of `+` and in the same
-  size: `Choose...` opens the native dialog (`choose_directory`) and `Up` walks to the
+  size: `Choose...` opens the native dialog (`choose_directory`), saves the folder it
+  picks to the shared config file, and `Up` walks to the
   parent directory (`go_up`). The three share the header, so the tree's minimum width is
   the label plus the room they need, and the label never runs under them
+- The base folder lives in the config file the CLI also reads, never in `QSettings`, so
+  a folder chosen in the GUI is the folder the CLI works in and the other way around
+- Before the window opens, the first-run flow settles that folder through
+  `ensure_base_folder`: a folder that is configured and still there opens the window at
+  once; one that was never configured asks `mktsk is not configured yet. Start setup?`
+  and goes to the setup on `Yes`; one that is gone names the path and offers `Retry`,
+  `Choose another folder` and `Cancel`. A cancelled setup after a missing folder asks
+  about the missing folder again, because the saved one is still gone, and only a
+  configured-and-usable folder opens the window; anything else exits with code 1
+- The setup dialog is plain Qt widgets: a `Base folder` line edit with `Browse...` (the
+  native dialog, opened at the text it already holds), `Category 1 (optional)` and
+  `Category 2 (optional)`, and `OK` and `Cancel`. `OK` calls `run_setup`, the same
+  routine the CLI uses, so the folders are created and the config is written only after
+  everything validates; a `ValueError` or `OSError` shows its message in a small label,
+  keeps the dialog open and leaves the saved config untouched. Cancelling writes nothing
 - The header title starts at the left padding the path is indented by, and the tree drops
   the title when the header is too narrow to hold it before the buttons, restoring it as
   soon as there is room again, so the buttons never sit over it
@@ -363,8 +379,8 @@
 - The files that were not moved are named in a `QMessageBox.warning`, at most ten of
   them, each with the reason it was left out, and the rest are counted in a line of
   their own
-- Remember the last path with `QSettings`
-- The same `QSettings` keeps the window and the panel sizes between sessions: on
+- `QSettings` keeps only the visual state: the base folder is in the shared config file,
+  and the window and the panel sizes are the only things saved between sessions. On
   `closeEvent` the window writes `saveGeometry()` under `window/geometry`, and
   `saveState()` of each `QSplitter` of the window under `window/main_splitter` (the two
   panes), `window/directory_splitter` (Directory over Search), `window/table_splitter`

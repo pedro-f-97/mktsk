@@ -16,8 +16,12 @@ _CONFIG_TESTS = {"test_config.py", "test_cli_first_run.py"}
 
 
 @pytest.fixture(autouse=True)
-def configured_base(monkeypatch, request):
-    """Keeps the tests that predate the config file on their own directory."""
+def configured_base(monkeypatch, request, tmp_path):
+    """Keeps the tests on their own directory and their own config file."""
+    monkeypatch.setattr(
+        "mktsk.config.config_path", lambda: tmp_path / "config.json"
+    )
+
     if request.path.name in _CONFIG_TESTS:
         return
 
