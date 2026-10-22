@@ -1,3 +1,7 @@
+import importlib.util
+import struct
+from pathlib import Path
+
 import pytest
 from PySide6.QtGui import QColor, QImage
 
@@ -10,6 +14,37 @@ from mktsk.gui.app_icon import (
 
 _BLACK = QColor("black").rgba()
 _WHITE = QColor("white").rgba()
+
+
+def _load_make_icon():
+    """Loads the generator script, which lives outside the package."""
+    path = Path(__file__).resolve().parents[1] / "tools" / "make_icon.py"
+    spec = importlib.util.spec_from_file_location("make_icon", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_MAKE_ICON = _load_make_icon()
+
+
+def _ico_entries(data):
+    """Returns the header and the entries of an icon file.
+
+    Each entry is returned as its width, height, planes, bits per pixel, the
+    size of its payload and the offset the payload starts at.
+    """
+    reserved, kind, count = struct.unpack("<HHH", data[:6])
+    entries = []
+
+    for index in range(count):
+        start = 6 + index * 16
+        width, height, _, _, planes, bits, size, offset = struct.unpack(
+            "<BBBBHHII", data[start : start + 16]
+        )
+        entries.append((width, height, planes, bits, size, offset))
+
+    return reserved, kind, entries
 
 
 def _pixels(image):
@@ -149,3 +184,67 @@ def test_the_icon_image_is_an_argb_image_of_the_base_grid():
     image = render_icon_image(32)
 
     assert image.format() == QImage.Format.Format_ARGB32
+
+
+def test_the_icon_file_starts_with_the_header_of_an_icon():
+    data = _MAKE_ICON.build_ico([render_icon_image(16)])
+
+    reserved, kind, count = struct.unpack("<HHH", data[:6])
+
+    assert (reserved, kind, count) == (0, 1, 1)
+
+
+def test_every_image_has_an_entry():
+    images = [render_icon_image(size) for size in (16, 32, 48)]
+
+    data = _MAKE_ICON.build_ico(images)
+    _, _, count = struct.unpack("<HHH", data[:6])
+
+    assert count == len(images)
+
+
+def test_the_largest_image_is_stored_as_zero():
+    data = _MAKE_ICON.build_ico([render_icon_image(256)])
+
+    width, height = struct.unpack("<BB", data[6:8])
+
+    assert (width, height) == (0, 0)
+
+
+def test_every_payload_is_a_png():
+    images = [render_icon_image(size) for size in (16, 48, 256)]
+
+    data = _MAKE_ICON.build_ico(images)
+    _, _, entries = _ico_entries(data)
+
+    for _, _, _, _, _, offset in entries:
+        assert data[offset : offset + 8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_the_entries_point_at_the_payloads():
+    images = [render_icon_image(size) for size in (16, 48, 256)]
+
+    data = _MAKE_ICON.build_ico(images)
+    _, _, entries = _ico_entries(data)
+
+    for index, (_, _, planes, bits, size, offset) in enumerate(entries):
+        assert (planes, bits) == (1, 32)
+        assert offset + size <= len(data)
+        if index + 1 < len(entries):
+            assert entries[index + 1][5] == offset + size
+
+    assert entries[-1][5] + entries[-1][4] == len(data)
+
+
+def test_the_generator_writes_the_assets(tmp_path):
+    _MAKE_ICON.main(out_dir=tmp_path)
+
+    icon = (tmp_path / "app.ico").read_bytes()
+    picture = (tmp_path / "app.png").read_bytes()
+
+    assert icon[:4] == b"\x00\x00\x01\x00"
+    assert picture[:8] == b"\x89PNG\r\n\x1a\n"
+
+    image = QImage(str(tmp_path / "app.png"))
+    assert image.width() == 256
+    assert image.height() == 256

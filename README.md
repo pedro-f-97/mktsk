@@ -420,6 +420,16 @@ report them.
 The source distribution (`mktsk-*.tar.gz`) attached to the same release is the
 corresponding source for these executables, as required by GPL-3.0 section 6.
 
+## App icon
+
+The window icon is drawn in code, and the files the executable takes as its icon
+are generated from that same drawing. Regenerate them only when the drawing
+changes:
+
+```bash
+python tools/make_icon.py
+```
+
 ## Tests
 
 Run with:
