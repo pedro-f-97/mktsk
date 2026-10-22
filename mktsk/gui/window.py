@@ -12,10 +12,12 @@ from PySide6.QtCore import (
     QSettings,
     QSize,
     Qt,
+    QUrl,
 )
 from PySide6.QtGui import (
     QBrush,
     QCloseEvent,
+    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -284,10 +286,12 @@ class MainWindow(QMainWindow):
         self.preview_text.setReadOnly(True)
         self.preview_text.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.preview_list = QListWidget()
-        self.preview_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
-        self.preview_list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.preview_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.preview_list.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.preview_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self.preview_list.setAlternatingRowColors(True)
+        self.preview_list.itemDoubleClicked.connect(self._open_attachment)
+        self.preview_list.keyPressEvent = self._preview_list_key_press
         # each panel opens with its title over the content, carried by the
         # same standalone header as `Directory` and `Search`, so it reads as
         # one set with them and adds nothing of its own
@@ -745,12 +749,48 @@ class MainWindow(QMainWindow):
         self.preview_text.setPlainText(_task_text(entry.file))
         attachments = listing.list_attachments(entry.file.parent)
         self.preview_list.clear()
-        self.preview_list.addItems(attachments)
+        folder = entry.file.parent
+        for name in attachments:
+            item = QListWidgetItem(name)
+            # store the full path for opening; subfolders have a trailing '/'
+            path = folder / name.rstrip("/")
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            self.preview_list.addItem(item)
         # without attachments the list hides with the panel and its title, so
         # the text takes the full width
         self.preview_list.setVisible(bool(attachments))
         self.preview_list_panel.setVisible(bool(attachments))
         self.preview_area.show()
+
+    def _open_attachment(self, item: QListWidgetItem) -> None:
+        """Opens the attachment represented by the item.
+
+        Checks that the path still exists on disk before opening. If it does
+        not, shows a warning and refreshes the attachment list. If opening
+        fails, shows a warning.
+        """
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(path, Path):
+            return
+        if not path.exists():
+            QMessageBox.warning(self, "mktsk", f"Attachment no longer exists: {path}")
+            self._sync_preview()
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
+            QMessageBox.warning(self, "mktsk", f"Could not open: {path}")
+
+    def _preview_list_key_press(self, event) -> None:
+        """Handles key presses in the attachment list.
+
+        Enter opens the selected attachment. Other keys are passed to the
+        base implementation for normal navigation.
+        """
+        if event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return):
+            item = self.preview_list.currentItem()
+            if item is not None:
+                self._open_attachment(item)
+                return
+        QListWidget.keyPressEvent(self.preview_list, event)
 
     def _reload_tasks(self) -> None:
         # one day for the whole listing, so a refresh that runs as the date turns
