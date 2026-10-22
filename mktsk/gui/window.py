@@ -53,7 +53,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from mktsk import files, helpers, listing, standards, state, tasks
+from mktsk import config, files, helpers, listing, standards, state, tasks
 
 from .icons import (
     _CHEVRON_HALF_HEIGHT,
@@ -1007,7 +1007,11 @@ class MainWindow(QMainWindow):
             self, "Choose directory", str(self.current_directory)
         )
         if selected:
-            self.navigate_to(Path(selected))
+            folder = Path(selected)
+            # the shared config file is where the base folder lives now, so
+            # the CLI works in the same folder from its next run
+            config.save_config(folder)
+            self.navigate_to(folder)
 
     def go_up(self) -> None:
         parent = self.current_directory.parent

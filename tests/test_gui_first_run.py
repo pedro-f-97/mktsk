@@ -427,3 +427,42 @@ def test_the_window_opens_in_the_folder_it_is_given(qtbot, tmp_path):
     qtbot.addWidget(window)
 
     assert window.current_directory == tmp_path.resolve()
+
+
+def test_choosing_a_folder_saves_it_to_the_shared_config(
+    qtbot, tmp_path, monkeypatch
+):
+    settings = QSettings(
+        str(tmp_path / "settings.ini"), QSettings.Format.IniFormat
+    )
+    window = MainWindow(settings=settings, base_folder=tmp_path)
+    qtbot.addWidget(window)
+    chosen = tmp_path / "chosen"
+    chosen.mkdir()
+    monkeypatch.setattr(
+        QFileDialog, "getExistingDirectory", lambda *args: str(chosen)
+    )
+
+    window.choose_directory()
+
+    assert config.load_config() == chosen
+    assert window.current_directory == chosen.resolve()
+
+
+def test_cancelling_the_choose_dialog_saves_nothing(
+    qtbot, tmp_path, monkeypatch
+):
+    old = tmp_path / "old"
+    old.mkdir()
+    config.save_config(old)
+    settings = QSettings(
+        str(tmp_path / "settings.ini"), QSettings.Format.IniFormat
+    )
+    window = MainWindow(settings=settings, base_folder=old)
+    qtbot.addWidget(window)
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: "")
+
+    window.choose_directory()
+
+    assert config.load_config() == old
+    assert window.current_directory == old.resolve()

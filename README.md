@@ -80,7 +80,8 @@ the folder given with `--folder`. The first time it runs from a terminal, `mktsk
 that folder and up to two categories, and saves the choice in
 `%APPDATA%\mktsk\config.json` on Windows and
 `$XDG_CONFIG_HOME/mktsk/config.json` (or `~/.config/mktsk/config.json`) on Linux.
-A folder saved by the GUI is picked up once, so there is nothing to set up again. Without a
+A folder saved by an older GUI is picked up once, so there is nothing to set up again; the
+GUI itself writes the same file, so a folder chosen there is the one the CLI uses. Without a
 terminal the command does not prompt: it prints one line to stderr and exits with code 3.
 
 The Markdown file is then automatically opened with the system's default application.
@@ -399,8 +400,9 @@ Opens a window where you can:
   belong. Nothing is overwritten: a file whose name the task folder already carries is
   left where it is and named in a warning, with the reason why.
 
-The size and position of the window and the sizes of the panels inside it are remembered
-between sessions.
+The GUI and the CLI share one config file, so a base folder chosen in either is the
+folder both work in. The size and position of the window and the sizes of the panels
+inside it are remembered between sessions.
 
 ## Standalone executable
 

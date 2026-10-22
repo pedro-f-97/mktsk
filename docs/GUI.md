@@ -33,11 +33,12 @@
   path and the title line up as one column
 - The path label uses the `Base` background, like the tree, so the two share one fill
 - `Choose...` and `Up` sit in the `Directory` header, to the left of `+` and in the same
-  size: `Choose...` opens the native dialog (`choose_directory`) and `Up` walks to the
+  size: `Choose...` opens the native dialog (`choose_directory`), saves the folder it
+  picks to the shared config file, and `Up` walks to the
   parent directory (`go_up`). The three share the header, so the tree's minimum width is
   the label plus the room they need, and the label never runs under them
 - The base folder lives in the config file the CLI also reads, never in `QSettings`, so
-  a folder chosen in the CLI is the folder the GUI opens
+  a folder chosen in the GUI is the folder the CLI works in and the other way around
 - Before the window opens, the first-run flow settles that folder through
   `ensure_base_folder`: a folder that is configured and still there opens the window at
   once; one that was never configured asks `mktsk is not configured yet. Start setup?`
