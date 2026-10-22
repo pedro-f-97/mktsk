@@ -8,7 +8,8 @@
   `tests/test_gui_row_text.py`, `tests/test_gui_row_highlight.py`,
   `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
   `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
-  `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`, `tests/test_gui_drop.py`
+  `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`, `tests/test_gui_drop.py`,
+  `tests/test_gui_persistence.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
@@ -42,9 +43,10 @@
   and tree) in one container and the Search panel in the other, with stretch factors 3
   and 2 keeping the initial split and window-resize behaviour 3:2; `setChildrenCollapsible`
   is false, each child has a sane minimum height so neither can be dragged to nothing,
-  and the search panel keeps at least its header and the field. Persistence follows the
-  same mechanism as the other splitters when present. Under the tree the left pane holds
-  a `Search` panel: its own header titled `Search`, a line edit with the `Search tasks`
+  and the search panel keeps at least its header and the field. Its split is saved
+  with the other splitters, under `window/directory_splitter`. Under the tree the left
+  pane holds a `Search` panel: its own header titled `Search`, a line edit with the
+  `Search tasks`
   placeholder and a clear button, and a results list below. The header is a standalone
   `QHeaderView` over the results' model, the way the `Directory` header sits over the
   tree's, with the other two sections hidden; both headers take the height of the tab
@@ -362,6 +364,17 @@
   them, each with the reason it was left out, and the rest are counted in a line of
   their own
 - Remember the last path with `QSettings`
+- The same `QSettings` keeps the window and the panel sizes between sessions: on
+  `closeEvent` the window writes `saveGeometry()` under `window/geometry`, and
+  `saveState()` of each `QSplitter` of the window under `window/main_splitter` (the two
+  panes), `window/directory_splitter` (Directory over Search), `window/table_splitter`
+  (table over preview) and `window/preview_splitter` (Details beside Attachments). They
+  are read back once the widgets exist, and a value that is missing or does not read
+  back is ignored, so the window opens with the defaults it always had. The saved sizes
+  never override the rules of the content: a preview split saved with both panels in
+  view still hides Attachments when the task has none, leaving Details the full width,
+  and a Directory pane collapsed through the rail comes back collapsed, with the rail
+  reading `Show panel` and its chevron pointing right
 - Show `TaskError` in a `QMessageBox`; if opening the file fails, warn but never delete
   what was created; the warning carries the error as it is, `helpers.open_file` already
   words it, so the path is never hidden behind a duplicated prefix

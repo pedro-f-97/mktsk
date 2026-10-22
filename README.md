@@ -392,7 +392,8 @@ Opens a window where you can:
   belong. Nothing is overwritten: a file whose name the task folder already carries is
   left where it is and named in a warning, with the reason why.
 
-The last visited folder is remembered between sessions.
+The last visited folder is remembered between sessions, as are the size and position of
+the window and the sizes of the panels inside it.
 
 ## Standalone executable
 
