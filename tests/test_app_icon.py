@@ -1,15 +1,20 @@
+import ctypes
 import importlib.util
 import struct
+import sys
 from pathlib import Path
 
 import pytest
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QGuiApplication, QImage
 
 from mktsk.gui.app_icon import (
+    APP_ID,
+    DESKTOP_FILE_NAME,
     ICON_SIZES,
     _stroke_widths,
     app_icon,
     render_icon_image,
+    set_app_identity,
 )
 
 _BLACK = QColor("black").rgba()
@@ -248,3 +253,118 @@ def test_the_generator_writes_the_assets(tmp_path):
     image = QImage(str(tmp_path / "app.png"))
     assert image.width() == 256
     assert image.height() == 256
+
+
+class _RecordingShell32:
+    """Stands for the shell32 api, and records the app id it is given."""
+
+    def __init__(self, calls):
+        self._calls = calls
+
+    def SetCurrentProcessExplicitAppUserModelID(self, app_id):
+        self._calls.append(app_id)
+
+
+class _FailingShell32:
+    """Stands for the shell32 api when the call fails."""
+
+    def SetCurrentProcessExplicitAppUserModelID(self, app_id):
+        raise OSError("no shell here")
+
+
+class _EmptyShell32:
+    """Stands for a shell32 that does not carry the api."""
+
+
+def _windll(shell32):
+    """Builds a fake ctypes.windll around the given shell32."""
+
+    class _Windll:
+        pass
+
+    windll = _Windll()
+    windll.shell32 = shell32
+    return windll
+
+
+def _recording_gui_application(calls):
+    """Builds a fake QGuiApplication that records the desktop file name."""
+
+    class _GuiApplication:
+        @staticmethod
+        def setDesktopFileName(name):
+            calls.append(name)
+
+    return _GuiApplication
+
+
+def test_the_app_id_is_set_on_windows(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    monkeypatch.setattr(
+        ctypes, "windll", _windll(_RecordingShell32(calls)), raising=False
+    )
+
+    set_app_identity()
+
+    assert calls == [APP_ID]
+
+
+def test_a_failing_call_is_ignored(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    monkeypatch.setattr(ctypes, "windll", _windll(_FailingShell32()), raising=False)
+
+    # the failure is swallowed, so the call comes back without raising
+    set_app_identity()
+
+
+def test_a_missing_shell_api_is_ignored(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    monkeypatch.setattr(ctypes, "windll", _windll(_EmptyShell32()), raising=False)
+
+    # the missing api is swallowed, so the call comes back without raising
+    set_app_identity()
+
+
+def test_the_frozen_executable_keeps_the_identity_of_its_exe(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(
+        ctypes, "windll", _windll(_RecordingShell32(calls)), raising=False
+    )
+
+    set_app_identity()
+
+    assert calls == []
+
+
+def test_the_desktop_file_name_is_set_on_linux(qapp, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    previous = QGuiApplication.desktopFileName()
+    try:
+        set_app_identity()
+
+        assert QGuiApplication.desktopFileName() == DESKTOP_FILE_NAME
+    finally:
+        QGuiApplication.setDesktopFileName(previous)
+
+
+def test_other_platforms_are_left_alone(monkeypatch):
+    calls = []
+    desktops = []
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(
+        ctypes, "windll", _windll(_RecordingShell32(calls)), raising=False
+    )
+    monkeypatch.setattr(
+        "mktsk.gui.app_icon.QGuiApplication", _recording_gui_application(desktops)
+    )
+
+    set_app_identity()
+
+    assert calls == []
+    assert desktops == []

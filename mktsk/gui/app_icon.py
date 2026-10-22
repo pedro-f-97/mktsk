@@ -1,12 +1,16 @@
-"""The application icon, drawn in code.
+"""The application icon, drawn in code, and the identity the taskbar groups it by.
 
 Keeping the drawing here means the window icon needs no image file at runtime,
 and the generator script can build the committed assets from the same geometry.
 """
 
+import ctypes
+import sys
+
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import (
     QColor,
+    QGuiApplication,
     QIcon,
     QImage,
     QPainter,
@@ -14,6 +18,9 @@ from PySide6.QtGui import (
     QPen,
     QPixmap,
 )
+
+APP_ID = "mktsk.app"
+DESKTOP_FILE_NAME = "mktsk"
 
 ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
 
@@ -157,3 +164,16 @@ def app_icon() -> QIcon:
     for size in ICON_SIZES:
         icon.addPixmap(QPixmap.fromImage(render_icon_image(size)))
     return icon
+
+
+def set_app_identity() -> None:
+    """Gives the running application the identity the taskbar shows it by."""
+    if sys.platform == "win32" and not getattr(sys, "frozen", False):
+        # the frozen executable keeps the identity Windows derives from the
+        # exe, so the pinned shortcuts group with the window
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        except (AttributeError, OSError):
+            pass
+    elif sys.platform.startswith("linux"):
+        QGuiApplication.setDesktopFileName(DESKTOP_FILE_NAME)
