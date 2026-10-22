@@ -78,6 +78,7 @@ from .tasklist import (
     TaskPanel,
     _date_cell,
     _relative_age,
+    _UnifiedSelectionDelegate,
 )
 from .tree import _PATH_ROLE, _CategoryTree
 
@@ -275,6 +276,7 @@ class MainWindow(QMainWindow):
         self.directory_tree = _CategoryTree()
         self.directory_tree.set_header_label(_DIRECTORY_HEADER)
         self.directory_tree.setFrameShape(QFrame.Shape.NoFrame)
+        self.directory_tree.setItemDelegate(_UnifiedSelectionDelegate(self.directory_tree))
         self.path_label.setContentsMargins(
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
@@ -290,6 +292,7 @@ class MainWindow(QMainWindow):
         self.preview_list.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.preview_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self.preview_list.setAlternatingRowColors(True)
+        self.preview_list.setItemDelegate(_UnifiedSelectionDelegate(self.preview_list))
         self.preview_list.itemDoubleClicked.connect(self._open_attachment)
         self.preview_list.keyPressEvent = self._preview_list_key_press
         # each panel opens with its title over the content, carried by the

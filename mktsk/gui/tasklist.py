@@ -571,6 +571,68 @@ def _paint_selection(painter: QPainter, option: QStyleOptionViewItem) -> None:
     painter.restore()
 
 
+def _paint_selection_lines(painter: QPainter, option: QStyleOptionViewItem) -> None:
+    """Paints the rail and bracket lines for a selected row.
+
+    This is the `[` outline treatment shared by all three lists: a rounded rail
+    of the full Highlight at the left edge, and short lines along the top and
+    bottom edges reaching past the rail.
+
+    Args:
+        painter: the painter the row is being drawn with.
+        option: what the row is painted from, holding its rect, state and palette.
+    """
+    group = _colour_group(option.state)
+    rect = option.rect
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(option.palette.color(group, QPalette.ColorRole.Highlight))
+    painter.drawRoundedRect(
+        QRectF(
+            rect.left(),
+            rect.top(),
+            _SELECTION_INDICATOR_WIDTH,
+            rect.height(),
+        ),
+        _SELECTION_INDICATOR_RADIUS,
+        _SELECTION_INDICATOR_RADIUS,
+    )
+    painter.restore()
+    # Bracket lines: top and bottom, from left edge to rail width + reach
+    thickness = _SELECTION_INDICATOR_WIDTH
+    reach = thickness + _ROW_LINE_REACH
+    colour = option.palette.color(group, QPalette.ColorRole.Highlight)
+    for top in (rect.top(), rect.bottom() + 1 - thickness):
+        painter.fillRect(QRect(rect.left(), top, reach, thickness), colour)
+
+
+class _UnifiedSelectionDelegate(QStyledItemDelegate):
+    """A delegate that paints the unified selection appearance.
+
+    Used by the attachment list and directory tree to match the task list's
+    selection: a tinted background (Base blended toward Highlight), a rounded
+    rail of full Highlight at the left edge, and bracket lines at the top and
+    bottom.
+    """
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        # Let the style paint the base (alternating rows, etc.)
+        super().paint(painter, option, index)
+
+        # Overpaint selection with unified treatment
+        if option.state & QStyle.StateFlag.State_Selected:
+            # Fill the selection tint over the whole row
+            painter.fillRect(option.rect, _selection_tint(option))
+            # Draw rail and bracket lines
+            _paint_selection_lines(painter, option)
+
+
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
     """Returns the colour of the text of a cell, paired with its background.
 
