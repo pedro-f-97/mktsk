@@ -68,6 +68,7 @@ jobs:
       - name: Build executable
         run: >-
           pyinstaller --onefile --windowed --noupx --paths .
+          --icon assets/app.ico
           --name mktsk-gui mktsk/__main__.py
 
       - name: Detect glibc requirement
