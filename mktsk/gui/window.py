@@ -616,7 +616,9 @@ class MainWindow(QMainWindow):
         The pane is collapsed and restored through the same splitter sizes a
         drag of the handle would set, and the width to come back to is the one
         remembered at the last collapse, or the split the splitter opened with
-        when the collapse came from a drag.
+        when the collapse came from a drag. If neither is available (e.g. after
+        a restart with the panel collapsed), a sensible default based on the
+        stretch factor ratio is used.
         """
         sizes = self.splitter.sizes()
         total = sum(sizes)
@@ -625,8 +627,14 @@ class MainWindow(QMainWindow):
             self._left_width = sizes[0]
             self.splitter.setSizes([0, total])
         else:
-            width = self._left_width or self._initial_left_width or total
-            self.splitter.setSizes([width, max(total - width, 0)])
+            width = self._left_width or self._initial_left_width
+            if not width:
+                # No valid previous width (e.g. after restart with collapsed panel):
+                # use a sensible default (1/3 of total, matching the 1:2 stretch ratio)
+                width = max(total // 3, 1)
+            # Clamp so the right panel keeps a non-zero width
+            width = min(width, max(total - 1, 1))
+            self.splitter.setSizes([width, total - width])
 
         self._update_toggle_tooltip()
 
