@@ -14,6 +14,7 @@ from PySide6.QtCore import (
     QRectF,
     QSize,
     Qt,
+    QTimer,
     Signal,
     SignalInstance,
 )
@@ -1227,11 +1228,10 @@ class TaskListing(QListWidget):
         if item is not None:
             self.setCurrentItem(item)
             # The selection triggers _sync_preview which may show the preview
-            # panel and resize the table. Process events so the layout settles,
-            # then scroll to the item.
-            from PySide6.QtWidgets import QApplication
-            QApplication.processEvents()
-            self.scrollToItem(item)
+            # panel and resize the table. Defer the scroll until the layout
+            # has settled, looking the row up again by path in case a refresh
+            # replaced the item.
+            QTimer.singleShot(0, lambda: self._scroll_to_path(path))
             return True
 
         window = self.window()
@@ -1253,9 +1253,7 @@ class TaskListing(QListWidget):
             # the current tab, so it must already be the tab holding the row
             select_tab(tabs.tabText(index))
             other.setCurrentItem(item)
-            from PySide6.QtWidgets import QApplication
-            QApplication.processEvents()
-            other.scrollToItem(item)
+            QTimer.singleShot(0, lambda other=other, path=path: other._scroll_to_path(path))
             return True
 
         return False
@@ -1278,6 +1276,20 @@ class TaskListing(QListWidget):
             if entry is not None and entry.file == path:
                 return item
         return None
+
+    def _scroll_to_path(self, path: Path) -> None:
+        """Scrolls to the row carrying a path, if it still exists.
+
+        The item is looked up by path at the time of the scroll, not captured
+        from the caller, so a refresh that replaced the row does not cause a
+        crash or scroll to the wrong row.
+
+        Args:
+            path: the .md of the task, or the archive that holds it.
+        """
+        item = self._item_for(path)
+        if item is not None:
+            self.scrollToItem(item)
 
     def set_destination(self, directory: Path | None) -> None:
         """Points the marker at the category a new task would land in.
