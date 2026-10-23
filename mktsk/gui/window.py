@@ -163,6 +163,19 @@ def _panel_title(text: str) -> QHeaderView:
     return header
 
 
+def _set_panel_title(header: QHeaderView, text: str) -> None:
+    """Replaces the title a panel header carries.
+
+    Args:
+        header: the header built by `_panel_title`.
+        text: the title to show.
+    """
+    model = header.model()
+
+    if model is not None:
+        model.setHeaderData(0, Qt.Orientation.Horizontal, text)
+
+
 def _skipped_message(skipped: list[tuple[Path, str]]) -> str:
     """Builds the text of the warning about the files a drop did not move.
 
@@ -248,6 +261,9 @@ class MainWindow(QMainWindow):
         # came from dragging the handle rather than from the bar
         self._left_width: int | None = None
         self._initial_left_width: int | None = None
+        # whether the attachment list of the preview stands for a closed task,
+        # whose entries open the archive itself rather than a folder on disk
+        self._archived_preview = False
         # the folder the first-run flow resolved lives in the shared config
         # file, so it is handed in rather than read from QSettings
         self.current_directory = base_folder or Path.cwd()
@@ -745,10 +761,11 @@ class MainWindow(QMainWindow):
         The preview follows the selection of the current tab through the same
         path the action bar takes, so a task row shows it and a heading, `Esc`
         or another tab hides it with no special case. Every rendering reads
-        the folder again, so a reload re-renders the task that is still
-        selected, or hides the preview when it is gone. A closed task hides
-        the preview as well: its folder is gone into the archive, which is
-        never opened, so there is no text to read and no attachments to list.
+        the task again, so a reload re-renders the task that is still selected,
+        or hides the preview when it is gone. A closed task is read from inside
+        its archive, which is never extracted: its `.md` is shown as it stands
+        and the other entries are listed, while the details title says the task
+        is archived and the list opens the archive itself.
         """
         panel = self.tabs.currentWidget()
         entry = (
@@ -757,20 +774,37 @@ class MainWindow(QMainWindow):
             else None
         )
 
-        if entry is None or standards.is_task_archive(entry.file.name):
+        if entry is None:
             self.preview_area.hide()
             return
 
-        self.preview_text.setPlainText(_task_text(entry.file))
-        attachments = listing.list_attachments(entry.file.parent)
+        archived = standards.is_task_archive(entry.file.name)
+
+        if archived:
+            text, attachments = listing.read_archived_task(entry.file)
+            folder = entry.file
+        else:
+            text = _task_text(entry.file)
+            attachments = listing.list_attachments(entry.file.parent)
+            folder = entry.file.parent
+
+        self.preview_text.setPlainText(text)
+        _set_panel_title(
+            self.preview_text_header,
+            "Details (archived)" if archived else "Details",
+        )
         self.preview_list.clear()
-        folder = entry.file.parent
         for name in attachments:
             item = QListWidgetItem(name)
             # store the full path for opening; subfolders have a trailing '/'
-            path = folder / name.rstrip("/")
+            # and an archived task opens its whole archive instead
+            path = folder if archived else folder / name.rstrip("/")
             item.setData(Qt.ItemDataRole.UserRole, path)
             self.preview_list.addItem(item)
+        self._archived_preview = archived
+        self.preview_list.setToolTip(
+            "Double-click opens the archive (.zip)" if archived else ""
+        )
         # without attachments the list hides with the panel and its title, so
         # the text takes the full width
         self.preview_list.setVisible(bool(attachments))
@@ -782,7 +816,9 @@ class MainWindow(QMainWindow):
 
         Checks that the path still exists on disk before opening. If it does
         not, shows a warning and refreshes the attachment list. If opening
-        fails, shows a warning.
+        fails, shows a warning. An entry of a closed task opens the archive it
+        stands in, with the same helper the rest of the window uses, so nothing
+        is extracted and no temporary file is made.
         """
         path = item.data(Qt.ItemDataRole.UserRole)
         if not isinstance(path, Path):
@@ -790,6 +826,12 @@ class MainWindow(QMainWindow):
         if not path.exists():
             QMessageBox.warning(self, "mktsk", f"Attachment no longer exists: {path}")
             self._sync_preview()
+            return
+        if self._archived_preview:
+            try:
+                helpers.open_file(path)
+            except OSError as error:
+                QMessageBox.warning(self, "mktsk", str(error))
             return
         if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
             QMessageBox.warning(self, "mktsk", f"Could not open: {path}")

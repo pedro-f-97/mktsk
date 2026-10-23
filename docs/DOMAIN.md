@@ -232,6 +232,18 @@
   attribute), `desktop.ini`, `Thumbs.db` and Office lock files named `~$…` are not
   attachments. A folder that is missing or cannot be read carries none and never raises,
   and an archive carries none either, because it is never opened
+- `read_archived_task(zip_path)` reads the `.md` and the other entries of a task from
+  inside its archive, without extracting anything. It accepts two layouts: the nested one
+  the closing writes (`<folder>/<title>.md` and `<folder>/...`) and a flat one with the
+  members at the zip root (`<title>.md`, `...`). The `.md` is decoded with `utf-8-sig`
+  and `errors="replace"`, so a BOM is accepted and invalid bytes become U+FFFD. The
+  attachments are the direct children of the task root (the zip root, or the single
+  top-level folder in the nested layout) minus the task `.md`; a folder counts as one
+  entry (inferred from the first path segment, since zips may have no explicit directory
+  entries), with the same ignored names and the same display names as `list_attachments`
+  uses. The result is sorted case-insensitively. A corrupt zip, a zip without the `.md`,
+  a password-protected member, or any OS error returns `("", [])` or the entries that
+  could still be listed with an empty text; it never raises.
 - Tasks of a category are listed by `last_activity`, newest first, and alphabetical for tasks
   of the same last activity. Coming back to a task moves it to the top, whichever day it was
   created

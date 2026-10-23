@@ -282,22 +282,26 @@
   are none, so the text takes the full width. The preview follows the selection through
   the same path the action bar takes, so no selection, a heading selected or `Esc`
   hides it and the table keeps the full height; a `.md` that cannot be read previews as
-  empty and never raises, and a closed task hides the preview instead, because its
-  archive is never opened, so there is no content to read and the next active selection brings
-  the preview back. The attachment list allows single-click selection, double-click
-  activation, and `Enter` to open the selected attachment. Files open with the
-  operating system's default application; folders open in the native file manager.
-  If the selected file or folder no longer exists on disk, a warning is shown and
-  the attachment list is refreshed to reflect the actual filesystem state. The
+  empty and never raises. A closed task shows the same preview read from inside its
+  archive (`read_archived_task`), with nothing extracted: the `.md` it holds on the left
+  and the other entries it carries on the right, folders with a trailing `/`. The
+  attachment list allows single-click selection, double-click activation, and `Enter` to
+  open the selected attachment. Files open with the operating system's default
+  application; folders open in the native file manager. An entry of a closed task opens
+  the archive itself through `helpers.open_file`, with the list carrying the tooltip
+  `Double-click opens the archive (.zip)`, so no member is extracted and no temporary
+  file is made. If the selected file or folder no longer exists on disk, a warning is
+  shown and the attachment list is refreshed to reflect the actual filesystem state. The
   attachment list stripes its rows through `setAlternatingRowColors`, so the colour
   comes from the palette and a light or dark mode follows with nothing written down
 - Each panel of the preview opens with a title at its top, inside it: `Details` over
-  the raw text and `Attachments` over the list. Both are standalone `QHeaderView`s
-  carrying their title the way the `Directory` and `Search` headers do, so they take
-  the tab bar height and the palette with nothing written down, and neither takes a
-  click, a sort or the focus. The titles show and hide with the preview itself, so
-  they appear only while a task is selected, and the `Attachments` title hides with
-  its panel when the folder carries none, leaving `Details` the full width
+  the raw text and `Attachments` over the list. A closed task reads `Details (archived)`
+  instead, and selecting an open task brings `Details` back. Both are standalone
+  `QHeaderView`s carrying their title the way the `Directory` and `Search` headers do,
+  so they take the tab bar height and the palette with nothing written down, and neither
+  takes a click, a sort or the focus. The titles show and hide with the preview itself,
+  so they appear only while a task is selected, and the `Attachments` title hides with
+  its panel when the task carries none, leaving `Details` the full width
 - The buttons carry an icon and a tooltip, never a text label; the icons are a folder for
   `Open`, a plus for `Resume`, a pencil for `Rename`, a ring with a dot for the state and
   an archive box for `Close`, all drawn with `QPainter` in `gui/icons.py`, so no image
@@ -383,7 +387,7 @@
   task. The window takes the drag in only when it carries files of this machine
   (`hasUrls` and a local file for each) and an open task is selected; anything else is
   left to the widget it belongs to
-- A closed task stands as an archive, which is never opened, so it takes nothing: the
+- A closed task stands as an archive, whose folder is gone, so it takes nothing: the
   drag is refused with a closed task selected, and so is one with no task selected at
   all, or with the window showing no task
 - The files land in the task that was already selected, and the selection does not move:
