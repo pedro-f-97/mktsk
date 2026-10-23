@@ -283,11 +283,14 @@
   the same path the action bar takes, so no selection, a heading selected or `Esc`
   hides it and the table keeps the full height; a `.md` that cannot be read previews as
   empty and never raises, and a closed task hides the preview instead, because its
-  archive is never opened, so no content is read and the next active selection brings
-  the preview back. Neither panel takes focus, and the attachment list takes no
-  selection, no click and no context menu. The attachment list stripes its rows through
-  `setAlternatingRowColors`, so the colour comes from the palette and a light or dark
-  mode follows with nothing written down
+  archive is never opened, so there is no content to read and the next active selection brings
+  the preview back. The attachment list allows single-click selection, double-click
+  activation, and `Enter` to open the selected attachment. Files open with the
+  operating system's default application; folders open in the native file manager.
+  If the selected file or folder no longer exists on disk, a warning is shown and
+  the attachment list is refreshed to reflect the actual filesystem state. The
+  attachment list stripes its rows through `setAlternatingRowColors`, so the colour
+  comes from the palette and a light or dark mode follows with nothing written down
 - Each panel of the preview opens with a title at its top, inside it: `Details` over
   the raw text and `Attachments` over the list. Both are standalone `QHeaderView`s
   carrying their title the way the `Directory` and `Search` headers do, so they take

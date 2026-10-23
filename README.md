@@ -394,6 +394,9 @@ Opens a window where you can:
   left, and the names of the other files and folders the task carries on the right,
   subfolders with a trailing `/`. The preview is read-only, hides again when nothing is
   selected (`Esc` drops it too), and its two halves can be resized between them.
+  Attachments can be opened by double-clicking them or pressing `Enter`; files open
+  with the default application, folders in the file manager. If an attachment no longer
+  exists, a warning appears and the list refreshes.
 
 * drop files and folders from the file manager on the window and they land in the folder
   of the task that is selected, so the attachments of a task are gathered where they

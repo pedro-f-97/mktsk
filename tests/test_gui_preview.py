@@ -49,14 +49,17 @@ def test_selecting_a_task_lists_the_names_of_its_attachments(
     assert window.preview_list.isHidden() is False
 
 
-def test_the_attachment_list_is_not_interactive(window, tmp_path, make_task):
+def test_the_attachment_list_supports_single_selection_and_focus(
+    window, tmp_path, make_task
+):
+    """The attachment list allows single-item selection and keyboard focus."""
     file = make_task(tmp_path, "260918", "Foo")
     (file.parent / "one.pdf").write_text("x", encoding="utf-8")
     window.navigate_to(tmp_path)
     select_task(window, file)
 
-    assert window.preview_list.selectionMode() == QListWidget.SelectionMode.NoSelection
-    assert window.preview_list.focusPolicy() == Qt.FocusPolicy.NoFocus
+    assert window.preview_list.selectionMode() == QListWidget.SelectionMode.SingleSelection
+    assert window.preview_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
     assert window.preview_text.focusPolicy() == Qt.FocusPolicy.NoFocus
     assert window.preview_list.contextMenuPolicy() == (
         Qt.ContextMenuPolicy.NoContextMenu
@@ -68,15 +71,16 @@ def test_the_attachment_list_is_not_interactive(window, tmp_path, make_task):
     )
 
 
-def test_the_attachment_list_is_striped(window, tmp_path, make_task):
+def test_the_attachment_list_is_striped_and_selectable(window, tmp_path, make_task):
+    """The attachment list shows alternating row colors and supports selection."""
     file = make_task(tmp_path, "260918", "Foo")
     (file.parent / "one.pdf").write_text("x", encoding="utf-8")
     window.navigate_to(tmp_path)
     select_task(window, file)
 
     assert window.preview_list.alternatingRowColors() is True
-    assert window.preview_list.selectionMode() == QListWidget.SelectionMode.NoSelection
-    assert window.preview_list.focusPolicy() == Qt.FocusPolicy.NoFocus
+    assert window.preview_list.selectionMode() == QListWidget.SelectionMode.SingleSelection
+    assert window.preview_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
 
 
 def test_a_task_without_attachments_hides_the_attachment_list(
