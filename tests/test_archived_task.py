@@ -112,3 +112,46 @@ def test_a_zip_without_the_task_md_returns_nothing(tmp_path):
 
 def test_an_os_error_returns_nothing(tmp_path):
     assert read_archived_task(tmp_path / "260918 - Foo.zip") == ("", [])
+
+
+def test_a_member_with_only_the_prefix_is_ignored(tmp_path):
+    """A member whose relative path is empty (just the prefix) is not listed."""
+    archive = write_archive(
+        tmp_path / "260918 - Foo.zip",
+        [
+            ("260918 - Foo/Foo.md", b"text"),
+            ("260918 - Foo/", b""),
+        ],
+    )
+
+    _, attachments = read_archived_task(archive)
+
+    assert attachments == []
+
+
+def test_decoding_error_in_md_returns_empty_text(tmp_path):
+    """If reading the .md member fails, text is empty but other entries are listed."""
+    import zipfile
+    from unittest.mock import patch
+
+    archive = write_archive(
+        tmp_path / "260918 - Foo.zip",
+        [
+            ("260918 - Foo/Foo.md", b"text"),
+            ("260918 - Foo/one.pdf", b"x"),
+        ],
+    )
+
+    # Patch ZipFile.read to raise for the .md member
+    original_read = zipfile.ZipFile.read
+
+    def failing_read(self, name):
+        if name.endswith(".md"):
+            raise RuntimeError("password protected")
+        return original_read(self, name)
+
+    with patch.object(zipfile.ZipFile, "read", failing_read):
+        text, attachments = read_archived_task(archive)
+
+    assert text == ""
+    assert attachments == ["one.pdf"]
