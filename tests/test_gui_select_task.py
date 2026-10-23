@@ -1,6 +1,7 @@
 """select_task: choosing a task row by path, and what it must not touch."""
 
 from PySide6.QtCore import QPoint, QRect
+from PySide6.QtWidgets import QApplication
 
 from mktsk.gui.tasklist import _ENTRY_ROLE, TaskListing
 from tests.gui_helpers import (
@@ -101,3 +102,58 @@ def test_select_task_on_a_listing_without_a_window_is_false(qtbot, tmp_path):
     qtbot.addWidget(rows)
 
     assert rows.select_task(tmp_path / "260918 - Foo" / "Foo.md") is False
+
+
+def test_select_task_deferred_scroll_survives_refresh(window, tmp_path, make_task, qtbot):
+    """A refresh before the deferred scroll runs does not raise."""
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+
+    # Select the task, which schedules a deferred scroll on this listing
+    assert listing.select_task(file) is True
+
+    # Refresh the window, which rebuilds all listings and replaces items.
+    # The old listing is no longer in the UI, but its deferred scroll is still pending.
+    window.refresh()
+    QApplication.processEvents()
+
+    # The deferred scroll runs here (via processEvents above).
+    # It calls _scroll_to_path on the old listing, which looks up the item by path.
+    # Since the old listing was cleared, _item_for returns None and the scroll is skipped.
+    # This exercises the `if item is not None:` branch where item is None.
+    # No exception should be raised.
+    # The new listing (from the refreshed tabs) has no selection.
+    new_listing = task_listing(window)
+    assert new_listing.selected_entry() is None
+
+
+def test_scroll_to_path_on_cleared_listing_does_nothing(qapp):
+    """Calling _scroll_to_path on a cleared listing exercises the empty branch."""
+    import datetime
+    from pathlib import Path
+
+    from mktsk import listing
+    from mktsk.gui.tasklist import _ENTRY_ROLE, TaskListing
+
+    task_list = TaskListing()
+    entry = listing.TaskEntry(
+        file=Path("/tmp/260918 - Foo/Foo.md"),
+        title="Foo",
+        date=datetime.date(2026, 9, 18),
+        last_activity=datetime.date(2026, 9, 18),
+        interventions=1,
+        state="open",
+        attachments=0,
+    )
+    from PySide6.QtWidgets import QListWidgetItem
+    item = QListWidgetItem()
+    item.setData(_ENTRY_ROLE, entry)
+    task_list.addItem(item)
+
+    # Clear the listing
+    task_list.clear()
+
+    # Call _scroll_to_path - should not raise, item is None so branch is not taken
+    task_list._scroll_to_path(entry.file)
+    # If we reach here without exception, the test passes

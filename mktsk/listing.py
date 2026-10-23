@@ -166,13 +166,37 @@ def _has_hidden_attribute(entry: os.DirEntry[str]) -> bool:
     )
 
 
+def _ignored_name(name: str, hidden: bool = False) -> bool:
+    """Tells whether a name is not an attachment of a task.
+
+    A hidden entry, the two files the shell leaves behind and the lock file
+    Office holds while a document is open are all part of the folder rather
+    than work attached to the task, so none of them counts. An archive carries
+    no attributes of its own, so its entries reach here without the hidden flag
+    and only their names can tell them apart.
+
+    Args:
+        name: the name of the entry to check.
+        hidden: whether the filesystem marks the entry hidden or as a system
+            file, which only a folder on disk can say.
+
+    Returns:
+        True when the entry is left out of the count.
+    """
+    if name.startswith((".", "~$")):
+        return True
+
+    if name.casefold() in {"desktop.ini", "thumbs.db"}:
+        return True
+
+    return hidden
+
+
 def _ignored(entry: os.DirEntry[str]) -> bool:
     """Tells whether an entry of a task folder is not an attachment.
 
-    A hidden entry, an entry Windows marks hidden or as a system file, the two
-    files the shell leaves behind and the lock file Office holds while a
-    document is open are all part of the folder rather than work attached to
-    the task, so none of them counts.
+    The name is read the same way an archive reads the name of a member, and
+    the hidden attribute only a folder on disk carries is added here.
 
     Args:
         entry: the directory entry to check.
@@ -180,15 +204,7 @@ def _ignored(entry: os.DirEntry[str]) -> bool:
     Returns:
         True when the entry is left out of the count.
     """
-    name = entry.name
-
-    if name.startswith((".", "~$")):
-        return True
-
-    if name.casefold() in {"desktop.ini", "thumbs.db"}:
-        return True
-
-    return _has_hidden_attribute(entry)
+    return _ignored_name(entry.name, _has_hidden_attribute(entry))
 
 
 def list_attachments(folder: Path) -> list[str]:
@@ -244,6 +260,126 @@ def attachment_count(folder: Path) -> int:
         How many attachments the folder carries.
     """
     return len(list_attachments(folder))
+
+
+def _archive_task_member(
+    archive_name: str, names: list[str]
+) -> tuple[str, str | None]:
+    """Finds the .md of a task inside its archive and the folder it stands in.
+
+    The archive is written with the task folder as its root, so the .md sits at
+    `<folder name>/<title>.md`, the name the file carries on disk. A zip that
+    keeps its members flat holds it at `<title>.md` instead, and either layout
+    is read with the zip name standing in for the folder name.
+
+    Args:
+        archive_name: the name of the archive, `.zip` included.
+        names: the member names the archive carries.
+
+    Returns:
+        The root the task lives under, empty for the flat layout, and the
+        member that holds its .md, or None when the archive holds none.
+    """
+    stem = archive_name.removesuffix(standards._ARCHIVE_SUFFIX)
+    title = standards.task_folder_title(stem) or stem
+
+    for root, member in (
+        (stem, f"{stem}/{title}.md"),
+        (stem, f"{stem}/{stem}.md"),
+        ("", f"{stem}.md"),
+        ("", f"{title}.md"),
+    ):
+        if member in names:
+            return root, member
+
+    return "", None
+
+
+def _archive_attachments(
+    names: list[str], root: str, task_member: str | None
+) -> list[str]:
+    """Lists what a task archive carries besides its own .md.
+
+    Only the direct children of the task root count, and a folder counts once
+    whatever it holds: the first path segment of a member says which entry it
+    belongs to, so a folder is read from its files even when the archive holds
+    no entry for the folder itself. The task .md is the task rather than an
+    attachment, and the names are filtered and named the way
+    `list_attachments` does, subfolders with a trailing `/` and the list sorted
+    ignoring the case.
+
+    Args:
+        names: the member names the archive carries.
+        root: the folder the task lives under, empty for the flat layout.
+        task_member: the member that holds the .md of the task, or None.
+
+    Returns:
+        The attachment names, subfolders with a trailing `/`, sorted
+        case-insensitively.
+    """
+    prefix = f"{root}/" if root else ""
+    found = set()
+
+    for name in names:
+        if name == task_member or not name.startswith(prefix):
+            continue
+
+        relative = name[len(prefix) :]
+
+        relative = relative.removesuffix("/")
+
+        if not relative:
+            continue
+
+        first, separator, _ = relative.partition("/")
+        is_folder = bool(separator) or name.endswith("/")
+
+        if _ignored_name(first):
+            continue
+
+        found.add(first + ("/" if is_folder else ""))
+
+    return sorted(found, key=str.casefold)
+
+
+def read_archived_task(zip_path: Path) -> tuple[str, list[str]]:
+    """Reads the text and the attachments of a task out of its archive.
+
+    The .md travels into the archive with the closed event written into it,
+    and it is read from there rather than from a folder that no longer exists.
+    Both layouts are accepted: the nested one the closing writes, with the task
+    folder as the root of every member, and a flat one with the members at the
+    top of the zip. Nothing is extracted to disk.
+
+    An archive that cannot be read, does not hold the .md, or holds a member
+    that cannot be read answers with no text rather than raising, the same way
+    a task folder that cannot be read previews as empty. The attachments that
+    can still be named are listed with the empty text, and a byte of the .md
+    that is not valid utf-8 is replaced rather than failing the read.
+
+    Args:
+        zip_path: the archive of the closed task.
+
+    Returns:
+        The raw text of the .md and the names of the other attachments,
+        subfolders with a trailing `/`, sorted case-insensitively.
+    """
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            names = archive.namelist()
+            root, member = _archive_task_member(zip_path.name, names)
+
+            if member is None:
+                return "", []
+
+            try:
+                text = archive.read(member).decode("utf-8-sig", errors="replace")
+            except (OSError, RuntimeError, NotImplementedError, zipfile.BadZipFile):
+                text = ""
+
+            return text, _archive_attachments(names, root, member)
+    except (OSError, zipfile.BadZipFile):
+        return "", []
 
 
 def _activity(file: Path, date: datetime.date) -> tuple[datetime.date, int, str]:
