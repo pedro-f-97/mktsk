@@ -1226,6 +1226,11 @@ class TaskListing(QListWidget):
         item = self._item_for(path)
         if item is not None:
             self.setCurrentItem(item)
+            # The selection triggers _sync_preview which may show the preview
+            # panel and resize the table. Process events so the layout settles,
+            # then scroll to the item.
+            from PySide6.QtWidgets import QApplication
+            QApplication.processEvents()
             self.scrollToItem(item)
             return True
 
@@ -1248,6 +1253,8 @@ class TaskListing(QListWidget):
             # the current tab, so it must already be the tab holding the row
             select_tab(tabs.tabText(index))
             other.setCurrentItem(item)
+            from PySide6.QtWidgets import QApplication
+            QApplication.processEvents()
             other.scrollToItem(item)
             return True
 

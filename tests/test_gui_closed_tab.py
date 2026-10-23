@@ -140,3 +140,71 @@ def test_selecting_a_closed_task_keeps_the_new_task_destination(
     select_task(window, tmp_path / "260918 - Foo.zip", "Closed")
 
     assert window.creation_directory() == category
+
+
+def test_search_result_selects_low_closed_task_and_shows_it(
+    window, tmp_path, make_task, qtbot
+):
+    """Picking a closed task low in the table from search shows the row fully."""
+    # Create many tasks so the closed one is low in the list
+    active = make_task(tmp_path, "260917", "FirstTask")
+    for i in range(10):
+        make_task(tmp_path, f"2609{18+i:02d}", f"Task{i}")
+    file = make_task(tmp_path, "260928", "LowClosed")
+    close_task(file.parent, "LowClosed")
+    window.navigate_to(tmp_path)
+    # Select an active task first (as the existing test does)
+    from tests.gui_helpers import select_task
+    select_task(window, active)
+    qtbot.wait(100)
+
+    # Search for the low task
+    qtbot.keyClicks(window.search_input, "Low Closed")
+    qtbot.waitUntil(lambda: window.search_results.topLevelItemCount() > 0)
+    from tests.gui_helpers import task_listing
+    listing = task_listing(window, "Closed")
+    item = window.search_results.topLevelItem(0)
+    assert item is not None
+    window.search_results.setCurrentItem(item)
+    window._activate_search_result(item, 0)
+
+    # The selected row should be fully visible in the table viewport (vertically)
+    selected_item = listing.currentItem()
+    assert selected_item is not None
+    row_rect = listing.visualItemRect(selected_item)
+    viewport_rect = listing.viewport().rect()
+    # Check vertical containment: row top and bottom within viewport
+    assert viewport_rect.top() <= row_rect.top()
+    assert row_rect.bottom() <= viewport_rect.bottom()
+
+
+def test_search_result_selects_low_open_task_and_shows_it(
+    window, tmp_path, make_task, qtbot
+):
+    """Picking an open task low in the table from search shows the row fully."""
+    active = make_task(tmp_path, "260917", "FirstTask")
+    for i in range(10):
+        make_task(tmp_path, f"2609{18+i:02d}", f"Task{i}")
+    make_task(tmp_path, "260928", "LowOpen")
+    window.navigate_to(tmp_path)
+    # Select an active task first
+    from tests.gui_helpers import select_task
+    select_task(window, active)
+    qtbot.wait(100)
+
+    qtbot.keyClicks(window.search_input, "Low Open")
+    qtbot.waitUntil(lambda: window.search_results.topLevelItemCount() > 0)
+    from tests.gui_helpers import task_listing
+    listing = task_listing(window, "All")
+    item = window.search_results.topLevelItem(0)
+    assert item is not None
+    window.search_results.setCurrentItem(item)
+    window._activate_search_result(item, 0)
+
+    selected_item = listing.currentItem()
+    assert selected_item is not None
+    row_rect = listing.visualItemRect(selected_item)
+    viewport_rect = listing.viewport().rect()
+    # Check vertical containment: row top and bottom within viewport
+    assert viewport_rect.top() <= row_rect.top()
+    assert row_rect.bottom() <= viewport_rect.bottom()
