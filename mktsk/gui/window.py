@@ -31,6 +31,7 @@ from PySide6.QtGui import (
     QStandardItemModel,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -47,6 +48,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStyleFactory,
     QTabWidget,
     QToolButton,
     QTreeWidget,
@@ -77,6 +79,7 @@ from .tasklist import (
     TaskListing,
     TaskPanel,
     _date_cell,
+    _DirectorySelectionStyle,
     _relative_age,
     _UnifiedSelectionDelegate,
 )
@@ -276,7 +279,16 @@ class MainWindow(QMainWindow):
         self.directory_tree = _CategoryTree()
         self.directory_tree.set_header_label(_DIRECTORY_HEADER)
         self.directory_tree.setFrameShape(QFrame.Shape.NoFrame)
-        self.directory_tree.setItemDelegate(_UnifiedSelectionDelegate(self.directory_tree))
+        self.directory_tree.setItemDelegate(
+            _UnifiedSelectionDelegate(self.directory_tree, rail_at_left_edge=True)
+        )
+        # the native fill of the selected row ends before its item, so the tree
+        # takes a style that leaves that band to the delegate's tint
+        self.directory_tree.setStyle(
+            _DirectorySelectionStyle(
+                QStyleFactory.create(QApplication.style().objectName())
+            )
+        )
         self.path_label.setContentsMargins(
             self.directory_tree.header_text_indent(), 0, 0, 0
         )

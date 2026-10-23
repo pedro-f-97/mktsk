@@ -43,8 +43,10 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QProxyStyle,
     QStyle,
     QStyledItemDelegate,
+    QStyleOption,
     QStyleOptionViewItem,
     QToolButton,
     QVBoxLayout,
@@ -511,7 +513,7 @@ def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
     return QPalette.ColorGroup.Inactive
 
 
-def _selection_tint(option: QStyleOptionViewItem) -> QColor:
+def _selection_tint(option: QStyleOption) -> QColor:
     """Returns the colour the delegate fills a selected row with.
 
     The tint is the `Base` of the palette group the state belongs to, blended
@@ -571,7 +573,9 @@ def _paint_selection(painter: QPainter, option: QStyleOptionViewItem) -> None:
     painter.restore()
 
 
-def _paint_selection_lines(painter: QPainter, option: QStyleOptionViewItem) -> None:
+def _paint_selection_lines(
+    painter: QPainter, option: QStyleOptionViewItem, left: int | None = None
+) -> None:
     """Paints the rail and bracket lines for a selected row.
 
     This is the `[` outline treatment shared by all three lists: a rounded rail
@@ -581,16 +585,19 @@ def _paint_selection_lines(painter: QPainter, option: QStyleOptionViewItem) -> N
     Args:
         painter: the painter the row is being drawn with.
         option: what the row is painted from, holding its rect, state and palette.
+        left: the column the rail starts at, or None for the left edge of the
+            row's item, which is where a list without indentation starts.
     """
     group = _colour_group(option.state)
     rect = option.rect
+    left = rect.left() if left is None else left
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(option.palette.color(group, QPalette.ColorRole.Highlight))
     painter.drawRoundedRect(
         QRectF(
-            rect.left(),
+            left,
             rect.top(),
             _SELECTION_INDICATOR_WIDTH,
             rect.height(),
@@ -599,12 +606,38 @@ def _paint_selection_lines(painter: QPainter, option: QStyleOptionViewItem) -> N
         _SELECTION_INDICATOR_RADIUS,
     )
     painter.restore()
-    # Bracket lines: top and bottom, from left edge to rail width + reach
+    # Bracket lines: top and bottom, from the rail to rail width + reach
     thickness = _SELECTION_INDICATOR_WIDTH
     reach = thickness + _ROW_LINE_REACH
     colour = option.palette.color(group, QPalette.ColorRole.Highlight)
     for top in (rect.top(), rect.bottom() + 1 - thickness):
-        painter.fillRect(QRect(rect.left(), top, reach, thickness), colour)
+        painter.fillRect(QRect(left, top, reach, thickness), colour)
+
+
+class _DirectorySelectionStyle(QProxyStyle):
+    """Leaves the selection of a directory row to the delegate.
+
+    `QTreeView` paints the part of a selected row that lies before its items
+    itself, through `PE_PanelItemViewRow`, before the item delegate sees the
+    row. Clearing `State_Selected` in the delegate therefore never removed that
+    native fill. The tree paints the band with the tint the delegate uses
+    instead, so the custom rail at the left edge is the only indicator.
+    """
+
+    def drawPrimitive(
+        self,
+        element: QStyle.PrimitiveElement,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: QWidget | None = None,
+    ) -> None:
+        if element == QStyle.PrimitiveElement.PE_PanelItemViewRow and (
+            option.state & QStyle.StateFlag.State_Selected
+        ):
+            painter.fillRect(option.rect, _selection_tint(option))
+            return
+
+        super().drawPrimitive(element, option, painter, widget)
 
 
 class _UnifiedSelectionDelegate(QStyledItemDelegate):
@@ -614,7 +647,23 @@ class _UnifiedSelectionDelegate(QStyledItemDelegate):
     selection: a tinted background (Base blended toward Highlight), a rounded
     rail of full Highlight at the left edge, and bracket lines at the top and
     bottom.
+
+    Args:
+        parent: the object that owns the delegate.
+        rail_at_left_edge: whether the rail sits at the left edge of the view
+            rather than at the left edge of the item. The directory tree
+            indents its items, and the rail takes the place its native row
+            panel used to fill, so it is asked for there.
     """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        rail_at_left_edge: bool = False,
+    ) -> None:
+        super().__init__(parent)
+        self.rail_at_left_edge = rail_at_left_edge
 
     def paint(
         self,
@@ -649,7 +698,8 @@ class _UnifiedSelectionDelegate(QStyledItemDelegate):
             # Fill the selection tint over the whole row
             painter.fillRect(option.rect, _selection_tint(option))
             # Draw rail and bracket lines
-            _paint_selection_lines(painter, option)
+            left = 0 if self.rail_at_left_edge else option.rect.left()
+            _paint_selection_lines(painter, option, left)
 
             # Paint the text on top of the selection
             if text:

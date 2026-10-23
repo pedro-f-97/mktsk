@@ -1,151 +1,145 @@
-"""Regression test for duplicate selection indicators in directory tree.
+"""Regression tests for the selection indicator of the directory tree.
 
-The directory tree uses _UnifiedSelectionDelegate which paints a custom '['
-outline (rounded rail + bracket lines). However, the base QStyledItemDelegate
-also paints the native Qt selection indicator (a vertical bar at the left edge),
-resulting in two indicators being visible.
+`QTreeView` paints the part of a selected row that lies before its items
+itself, through `PE_PanelItemViewRow`, before the item delegate sees the row.
+Clearing `State_Selected` inside the delegate cannot remove that native fill:
+it stayed behind the custom `[` outline, and the outline sat at the item's text
+origin rather than where the native bar was, at the left edge of the row.
 """
 
 from collections import Counter
 
+import pytest
 from PySide6.QtGui import QColor, QImage, QPalette
-from PySide6.QtWidgets import QStyle
+from PySide6.QtWidgets import QStyleFactory
 
 from mktsk.gui.tasklist import (
+    _ROW_LINE_REACH,
     _SELECTION_INDICATOR_GAP,
     _SELECTION_INDICATOR_WIDTH,
     _contrast_ratio,
 )
-from tests.gui_helpers import find_directory, render_row
+from tests.gui_helpers import find_directory
 
-_SELECTED_ACTIVE = (
-    QStyle.StateFlag.State_Enabled
-    | QStyle.StateFlag.State_Selected
-    | QStyle.StateFlag.State_Active
-)
-_SELECTED_INACTIVE = QStyle.StateFlag.State_Enabled | QStyle.StateFlag.State_Selected
+# the outline has to leave the text clear of the rail, at least as far as the
+# bracket lines reach past it
+_MINIMUM_TEXT_GAP = _ROW_LINE_REACH
 
-
-def _count_vertical_indicators(image: QImage, highlight: QColor) -> int:
-    """Count distinct vertical indicator lines at the left edge of a selected row.
-
-    The custom indicator is a rounded rail of width _SELECTION_INDICATOR_WIDTH
-    at x=0. The native indicator would be a separate vertical line, typically
-    at x=0 or x=1. We scan the leftmost columns for the highlight colour and
-    count contiguous vertical runs that span most of the row height.
-    """
-    height = image.height()
-    if height == 0:
-        return 0
-
-    # Scan the first few columns for vertical lines of the highlight colour
-    # A real indicator spans most of the row height
-    min_span = height * 0.6  # at least 60% of row height
-    indicator_columns = []
-
-    for x in range(min(6, image.width())):  # Check first 6 columns
-        highlight_pixels = 0
-        for y in range(height):
-            if image.pixelColor(x, y) == highlight:
-                highlight_pixels += 1
-        if highlight_pixels >= min_span:
-            indicator_columns.append(x)
-
-    # Group contiguous columns into single indicators
-    if not indicator_columns:
-        return 0
-
-    groups = 1
-    for i in range(1, len(indicator_columns)):
-        if indicator_columns[i] > indicator_columns[i - 1] + 1:
-            groups += 1
-    return groups
+_STYLES = tuple(QStyleFactory.keys())
 
 
-def test_directory_tree_selected_row_has_single_indicator(window, tmp_path):
-    """Selected row in directory tree must have exactly one selection indicator.
+@pytest.fixture(params=_STYLES)
+def styled(request, qapp):
+    """Sets a style on the application before the window is built."""
+    original = qapp.style().objectName()
+    style = QStyleFactory.create(request.param)
+    if style is None:
+        pytest.skip(f"{request.param} cannot be created")
+    qapp.setStyle(style)
+    yield request.param
+    restored = QStyleFactory.create(original)
+    if restored is not None:
+        qapp.setStyle(restored)
 
-    The custom '[` outline (rounded rail + brackets) should be the only
-    indicator. The native Qt vertical bar must be suppressed.
-    """
+
+def _select_row(window, qapp, tmp_path):
+    """Selects a directory row and returns the tree and the row."""
     (tmp_path / "Reports").mkdir()
     (tmp_path / "Projects").mkdir()
     window.navigate_to(tmp_path)
     tree = window.directory_tree
     item = find_directory(window, tmp_path / "Reports")
-
-    palette = tree.viewport().palette()
-    highlight = palette.color(QPalette.ColorRole.Highlight)
-
-    for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
-        image = render_row(tree, item, state, palette)
-        indicator_count = _count_vertical_indicators(image, highlight)
-        assert indicator_count == 1, (
-            f"Expected 1 selection indicator, found {indicator_count}. "
-            f"This indicates both native and custom indicators are visible."
-        )
+    tree.setCurrentItem(item)
+    tree.setFocus()
+    qapp.processEvents()
+    return tree, item
 
 
-def test_directory_tree_indicator_position(window, tmp_path):
-    """The custom indicator rail should be at the left edge (x=0)."""
-    (tmp_path / "Reports").mkdir()
-    window.navigate_to(tmp_path)
-    tree = window.directory_tree
-    item = find_directory(window, tmp_path / "Reports")
-
-    palette = tree.viewport().palette()
-    highlight = palette.color(QPalette.ColorRole.Highlight)
-
-    image = render_row(tree, item, _SELECTED_ACTIVE, palette)
-
-    # The rail should occupy columns 0 to _SELECTION_INDICATOR_WIDTH - 1
-    rail_columns = []
-    for x in range(_SELECTION_INDICATOR_WIDTH):
-        for y in range(image.height()):
-            if image.pixelColor(x, y) == highlight:
-                rail_columns.append(x)
-                break
-
-    assert rail_columns == list(range(_SELECTION_INDICATOR_WIDTH)), (
-        f"Rail should occupy columns 0-{_SELECTION_INDICATOR_WIDTH - 1}, "
-        f"found {rail_columns}"
-    )
+def _viewport_image(tree):
+    """Renders the real viewport, including the row around the delegate."""
+    image = QImage(tree.viewport().size(), QImage.Format.Format_RGB32)
+    image.fill(tree.viewport().palette().color(QPalette.ColorRole.Base))
+    tree.viewport().render(image)
+    return image
 
 
-def test_directory_tree_text_spacing(window, tmp_path):
-    """Text should start after the indicator gap, leaving adequate space."""
-    (tmp_path / "Reports").mkdir()
-    window.navigate_to(tmp_path)
-    tree = window.directory_tree
-    item = find_directory(window, tmp_path / "Reports")
+def _highlight_columns(image, row, highlight):
+    """The columns of the highlight colour on the middle line of a row."""
+    y = row.center().y()
+    return [
+        x for x in range(image.width()) if image.pixelColor(x, y) == highlight
+    ]
 
-    palette = tree.viewport().palette()
-    palette.color(QPalette.ColorRole.Base)
-    image = render_row(tree, item, _SELECTED_ACTIVE, palette)
 
-    # Find the leftmost text pixel (high contrast against background)
-    # Actually the selected row has a tint, so find the dominant colour
+def _row_background(image, row):
+    """The colour most of the item area is made of, which is its background."""
     counts = Counter(
         image.pixelColor(x, y).rgb()
-        for y in range(image.height())
-        for x in range(image.width())
+        for y in range(max(row.top(), 0), min(row.bottom() + 1, image.height()))
+        for x in range(max(row.left(), 0), image.width())
     )
-    bg_colour = QColor(counts.most_common(1)[0][0])
+    return QColor(counts.most_common(1)[0][0])
 
-    _MINIMUM_CONTRAST = 4.5
-    first_text_x = None
-    for x in range(image.width()):
-        for y in range(image.height()):
-            colour = image.pixelColor(x, y)
-            if _contrast_ratio(colour, bg_colour) >= _MINIMUM_CONTRAST:
-                first_text_x = x
-                break
-        if first_text_x is not None:
-            break
 
-    assert first_text_x is not None, "No text found on selected row"
-    # Text should start at or after the indicator gap
-    assert first_text_x >= _SELECTION_INDICATOR_GAP, (
-        f"Text starts at x={first_text_x}, expected at least "
-        f"_SELECTION_INDICATOR_GAP={_SELECTION_INDICATOR_GAP}"
+def _first_text_column(image, row, background):
+    """The first column of the item area whose ink reads against the background."""
+    for x in range(max(row.left(), 0), image.width()):
+        colour = image.pixelColor(x, row.center().y())
+        if _contrast_ratio(colour, background) >= 4.5:
+            return x
+    return None
+
+
+def test_directory_tree_selected_row_has_one_indicator_at_the_left_edge(
+    styled, window, tmp_path, qapp
+):
+    """The custom rail is the only indicator, where the native bar used to be."""
+    tree, item = _select_row(window, qapp, tmp_path)
+    row = tree.visualItemRect(item)
+    palette = tree.viewport().palette()
+    highlight = palette.color(QPalette.ColorRole.Highlight)
+
+    image = _viewport_image(tree)
+    painted = _highlight_columns(image, row, highlight)
+
+    assert painted == list(range(_SELECTION_INDICATOR_WIDTH)), (
+        f"expected only the custom rail in columns 0-"
+        f"{_SELECTION_INDICATOR_WIDTH - 1}, found highlight in {painted}. "
+        "A native indicator left of the rail, or a rail away from the left "
+        "edge, means the tree still paints its own selection."
+    )
+
+    # the band the native panel used to fill carries the same 25% tint as the
+    # item area, not a second selection colour
+    background = _row_background(image, row)
+    band = image.pixelColor(_SELECTION_INDICATOR_WIDTH + 1, row.center().y())
+    assert band == background, (
+        f"the row band left of the item is {band.name()}, expected the "
+        f"selection tint {background.name()}"
+    )
+
+
+def test_directory_tree_selected_row_separates_outline_from_text(
+    styled, window, tmp_path, qapp
+):
+    """The text starts after the outline, leaving a clear gap."""
+    tree, item = _select_row(window, qapp, tmp_path)
+    row = tree.visualItemRect(item)
+    palette = tree.viewport().palette()
+    highlight = palette.color(QPalette.ColorRole.Highlight)
+
+    image = _viewport_image(tree)
+    painted = _highlight_columns(image, row, highlight)
+    assert painted, "the selected row painted no indicator"
+    rail_end = max(painted) + 1
+
+    background = _row_background(image, row)
+    first_text = _first_text_column(image, row, background)
+
+    assert first_text is not None, "no text found on the selected row"
+    gap = first_text - rail_end
+    assert gap >= _MINIMUM_TEXT_GAP, (
+        f"text starts at x={first_text}, {gap} px after the outline ends at "
+        f"x={rail_end}; expected at least {_MINIMUM_TEXT_GAP} px, the room the "
+        f"bracket lines take (indicator gap is {_SELECTION_INDICATOR_GAP})"
     )
