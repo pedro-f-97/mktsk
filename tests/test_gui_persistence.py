@@ -140,3 +140,28 @@ def test_a_collapsed_directory_panel_comes_back_with_the_rail(qtbot, tmp_path):
     window.toggle_left_pane()
     assert window.splitter.sizes()[0] > 0
     assert window.toggle_button.toolTip() == "Hide panel"
+
+
+def test_expanding_after_restart_uses_sensible_default_width(qtbot, tmp_path):
+    """After a restart with the left panel collapsed, expanding gives a sensible width.
+
+    The left panel should not take the whole width; both panels must have non-zero
+    width, and the left panel should respect the 1:2 stretch ratio bound.
+    """
+    settings = _settings(tmp_path)
+    first = _window(qtbot, settings)
+    first.toggle_left_pane()
+    first.close()
+
+    window = _window(qtbot, settings)
+    window.toggle_left_pane()
+
+    left, right = window.splitter.sizes()
+    total = left + right
+
+    # Both panels have non-zero width
+    assert left > 0
+    assert right > 0
+
+    # Left panel respects the 1:2 stretch ratio (at most 1/3 of total, plus 1 for rounding)
+    assert left <= total // 3 + 1
