@@ -84,9 +84,9 @@ def test_a_result_row_shows_the_date_the_title_and_the_category(
 
     assert [row.text(0) for row in rows] == ["18/09/2026", "25/09/2026"]
     assert [row.text(1) for row in rows] == ["Society Launch", "Society Echo"]
-    assert [row.text(2) for row in rows] == [tmp_path.name, "Veritas"]
+    assert [row.text(3) for row in rows] == [tmp_path.name, "Veritas"]
     for row in rows:
-        assert row.foreground(2).color() == dim
+        assert row.foreground(3).color() == dim
 
 
 def test_clicking_a_result_selects_it_in_the_table(window, tmp_path, make_task, qtbot):
@@ -341,7 +341,7 @@ def test_off_mode_searches_while_typing_and_excerpt_column_hidden(
     qtbot.keyClicks(window.search_input, "society")
     assert len(_results(window)) == 1
     # excerpt column hidden in off mode
-    assert window.search_results.isColumnHidden(3) is True
+    assert window.search_results.isColumnHidden(2) is True
 
 
 def test_on_mode_does_not_search_while_typing_enter_runs_and_shows_excerpt(
@@ -358,7 +358,7 @@ def test_on_mode_does_not_search_while_typing_enter_runs_and_shows_excerpt(
     qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
     # should show results and excerpt column visible
     assert len(_results(window)) == 1
-    assert window.search_results.isColumnHidden(3) is False
+    assert window.search_results.isColumnHidden(2) is False
 
 
 def test_toggling_clears_results_toggling_back_to_off_reruns_title_search(
@@ -392,3 +392,87 @@ def test_empty_field_gives_no_results_in_both_modes(
     window.search_input.clear()
     qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
     assert _results(window) == []
+
+
+def test_content_checkbox_is_in_header_row(window):
+    """The Content checkbox sits in the Search header row, right-aligned."""
+    # Checkbox parent is the search header, not the search panel
+    assert window.search_content_checkbox.parent() is window.search_header
+    # Checkbox is not in the search panel layout as a separate widget
+    panel_layout = window.search_panel.layout()
+    # The layout has: header, input, results (no checkbox widget)
+    assert panel_layout.count() == 3
+
+
+def test_no_excerpt_text_in_header_row(window):
+    """The Search header shows only 'Search', not 'Excerpt'."""
+    model = window.search_header.model()
+    assert model.headerData(0, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole) == "Search"
+    # Sections 1, 2, 3 are hidden in the header
+    assert window.search_header.isSectionHidden(1) is True
+    assert window.search_header.isSectionHidden(2) is True
+    assert window.search_header.isSectionHidden(3) is True
+
+
+def test_column_order_off_mode(window, tmp_path, make_task, qtbot):
+    """OFF mode column order: Date, Title, Category (Excerpt hidden)."""
+    make_task(tmp_path, "260918", "SocietyLaunch")
+    window.navigate_to(tmp_path)
+    qtbot.keyClicks(window.search_input, "society")
+    rows = _results(window)
+
+    assert len(rows) == 1
+    row = rows[0]
+    # Column 0: Date
+    assert row.text(0) == "18/09/2026"
+    # Column 1: Title
+    assert row.text(1) == "Society Launch"
+    # Column 2: Excerpt (hidden, empty)
+    assert row.text(2) == ""
+    # Column 3: Category
+    assert row.text(3) == tmp_path.name
+    # Excerpt column is hidden
+    assert window.search_results.isColumnHidden(2) is True
+    # Category column is visible
+    assert window.search_results.isColumnHidden(3) is False
+
+
+def test_column_order_on_mode(window, tmp_path, make_task, qtbot):
+    """ON mode column order: Date, Title, Excerpt, Category."""
+    file = make_task(tmp_path, "260918", "SocietyLaunch")
+    file.write_text("# 18/09/2026\n\nfindsecret here\n\n", encoding="utf-8")
+    window.navigate_to(tmp_path)
+
+    window.search_content_checkbox.setChecked(True)
+    qtbot.keyClicks(window.search_input, "findsecret")
+    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+
+    rows = _results(window)
+    assert len(rows) == 1
+    row = rows[0]
+    # Column 0: Date
+    assert row.text(0) == "18/09/2026"
+    # Column 1: Title
+    assert row.text(1) == "Society Launch"
+    # Column 2: Excerpt (visible, has content)
+    assert "findsecret" in row.text(2)
+    # Column 3: Category
+    assert row.text(3) == tmp_path.name
+    # Excerpt column is visible
+    assert window.search_results.isColumnHidden(2) is False
+    # Category column is visible
+    assert window.search_results.isColumnHidden(3) is False
+
+
+def test_placeholder_changes_with_content_mode(window):
+    """Placeholder changes to 'Type and press Enter to search content' when ON."""
+    # Default OFF mode
+    assert window.search_input.placeholderText() == "Search tasks"
+
+    # Switch to ON mode
+    window.search_content_checkbox.setChecked(True)
+    assert window.search_input.placeholderText() == "Type and press Enter to search content"
+
+    # Switch back to OFF mode
+    window.search_content_checkbox.setChecked(False)
+    assert window.search_input.placeholderText() == "Search tasks"
