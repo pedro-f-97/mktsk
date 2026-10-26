@@ -328,3 +328,67 @@ def test_the_search_panel_holds_the_header_the_field_and_the_results(window):
     assert _bottom(window.search_input, panel) <= _top(window.search_results, panel)
     assert window.search_results.height() > 0
     assert window.search_header.height() == directory_header(window).height()
+
+
+def test_off_mode_searches_while_typing_and_excerpt_column_hidden(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "SocietyLaunch")
+    window.navigate_to(tmp_path)
+
+    # OFF by default
+    assert window.search_content_checkbox.isChecked() is False
+    qtbot.keyClicks(window.search_input, "society")
+    assert len(_results(window)) == 1
+    # excerpt column hidden in off mode
+    assert window.search_results.isColumnHidden(3) is True
+
+
+def test_on_mode_does_not_search_while_typing_enter_runs_and_shows_excerpt(
+    window, tmp_path, make_task, qtbot
+):
+    file = make_task(tmp_path, "260918", "SocietyLaunch")
+    file.write_text("# 18/09/2026\n\nfindsecret here\n\n", encoding="utf-8")
+    window.navigate_to(tmp_path)
+
+    window.search_content_checkbox.setChecked(True)
+    qtbot.keyClicks(window.search_input, "findsecret")
+    # should not search while typing
+    assert len(_results(window)) == 0
+    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    # should show results and excerpt column visible
+    assert len(_results(window)) == 1
+    assert window.search_results.isColumnHidden(3) is False
+
+
+def test_toggling_clears_results_toggling_back_to_off_reruns_title_search(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "SocietyLaunch")
+    window.navigate_to(tmp_path)
+    qtbot.keyClicks(window.search_input, "society")
+    assert len(_results(window)) == 1
+
+    window.search_content_checkbox.setChecked(True)
+    assert len(_results(window)) == 0
+
+    window.search_content_checkbox.setChecked(False)
+    # toggling back to OFF re-runs the live title search for the current text
+    assert len(_results(window)) == 1
+
+
+def test_empty_field_gives_no_results_in_both_modes(
+    window, tmp_path, make_task, qtbot
+):
+    make_task(tmp_path, "260918", "SocietyLaunch")
+    window.navigate_to(tmp_path)
+
+    # off mode empty
+    window.search_input.clear()
+    assert _results(window) == []
+
+    # on mode empty
+    window.search_content_checkbox.setChecked(True)
+    window.search_input.clear()
+    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    assert _results(window) == []

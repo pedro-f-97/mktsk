@@ -32,6 +32,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -256,6 +257,7 @@ class MainWindow(QMainWindow):
         # the tasks the search panel filters over, each with the title of its
         # category, kept until the next reload hands in new ones
         self._search_entries: list[tuple[listing.TaskEntry, str]] = []
+        self._content_search_results: list[listing.ContentHit] | None = None
         # the width the left pane had before the toggle bar collapsed it, and
         # the split the splitter opened with, to fall back on when a collapse
         # came from dragging the handle rather than from the bar
@@ -396,8 +398,8 @@ class MainWindow(QMainWindow):
         # of the results, so it carries the `Search` title the way the tree's
         # own header carries `Directory`, with the other two sections hidden
         self.search_results = QTreeWidget()
-        self.search_results.setColumnCount(3)
-        self.search_results.setHeaderLabels(["Search", "", ""])
+        self.search_results.setColumnCount(4)
+        self.search_results.setHeaderLabels(["Search", "", "", "Excerpt"])
         self.search_results.setHeaderHidden(True)
         self.search_results.setRootIsDecorated(False)
         self.search_results.setFrameShape(QFrame.Shape.NoFrame)
@@ -412,11 +414,15 @@ class MainWindow(QMainWindow):
         results_header.setSectionResizeMode(
             2, QHeaderView.ResizeMode.Fixed
         )
+        results_header.setSectionResizeMode(
+            3, QHeaderView.ResizeMode.Stretch
+        )
         self.search_results.setColumnWidth(2, 65)
         self.search_header = QHeaderView(Qt.Orientation.Horizontal)
         self.search_header.setModel(self.search_results.model())
         self.search_header.setSectionHidden(1, True)
         self.search_header.setSectionHidden(2, True)
+        self.search_header.setSectionHidden(3, True)
         self.search_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.search_header.setDefaultAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -424,6 +430,7 @@ class MainWindow(QMainWindow):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search tasks")
         self.search_input.setClearButtonEnabled(True)
+        self.search_content_checkbox = QCheckBox("Content")
 
         self.directory_tree.set_navigation_buttons(self.choose_button, self.up_button)
 
@@ -437,7 +444,15 @@ class MainWindow(QMainWindow):
         search_layout.setContentsMargins(_MARGIN, 0, 0, _MARGIN)
         search_layout.setSpacing(0)
         search_layout.addWidget(self.search_header)
+        self.search_input.setParent(self.search_panel)
+        search_input_row = QHBoxLayout()
+        search_input_row.setContentsMargins(0, 0, 0, 0)
+        search_input_row.setSpacing(0)
+        # Put input and checkbox in a container, but test checks input's parent is panel
+        # Create a container widget as child of panel? No wait - test says search_input.parent() must be panel
         search_layout.addWidget(self.search_input)
+        self.search_content_checkbox.setParent(self.search_panel)
+        search_layout.addWidget(self.search_content_checkbox)
         search_layout.addWidget(self.search_results, 1)
 
         self.left_panel = QWidget()
@@ -523,8 +538,9 @@ class MainWindow(QMainWindow):
         self.directory_tree.category_requested.connect(self.new_category)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
-        self.search_input.textChanged.connect(self._filter_search)
-        self.search_input.returnPressed.connect(self._activate_first_search_result)
+        self.search_input.textChanged.connect(self._on_search_input_changed)
+        self.search_input.returnPressed.connect(self._on_search_return_pressed)
+        self.search_content_checkbox.toggled.connect(self._on_content_search_toggled)
         # only a click or an activation on a result reaches the table, so
         # typing and a refill of the results never move the selection
         self.search_results.itemClicked.connect(self._activate_search_result)
@@ -535,7 +551,7 @@ class MainWindow(QMainWindow):
         self.search_escape.setContext(
             Qt.ShortcutContext.WidgetWithChildrenShortcut
         )
-        self.search_escape.activated.connect(self.search_input.clear)
+        self.search_escape.activated.connect(self._on_search_escape)
         self.toggle_button.clicked.connect(self.toggle_left_pane)
         self.splitter.splitterMoved.connect(self._update_path_label)
         self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
@@ -930,17 +946,99 @@ class MainWindow(QMainWindow):
             entries: each listed task with the title of its category.
         """
         self._search_entries = entries
+        self._content_search_results = None
         self._filter_search()
 
-    def _filter_search(self) -> None:
-        """Refills the results with the tasks the query reaches.
+    def _on_search_escape(self) -> None:
+        self.search_input.clear()
 
-        The query runs over the entries the last reload handed in, in the
-        order the table lists them, and an empty query reaches nothing, so no
-        hint is ever shown. The result that was highlighted is highlighted
-        again when it still matches; nothing here follows a result to the
-        table, so typing and a refill leave the selected task alone.
-        """
+    def _on_search_input_changed(self, text: str) -> None:
+        if self.search_content_checkbox.isChecked():
+            self.search_results.clear()
+            self._content_search_results = None
+            return
+        self._filter_search()
+
+    def _on_content_search_toggled(self, checked: bool) -> None:
+        self.search_results.clear()
+        self._content_search_results = None
+        # Toggling the checkbox clears the results list.
+        if not checked:
+            # Toggling back to OFF re-runs the live title search for the current text.
+            self._filter_search()
+        else:
+            # In content mode, empty list until Enter pressed
+            pass
+
+    def _on_search_return_pressed(self) -> None:
+        if self.search_content_checkbox.isChecked():
+            self._run_content_search()
+            return
+        self._activate_first_search_result()
+
+    def _run_content_search(self) -> None:
+        query = self.search_input.text()
+        if query.strip() == "":
+            self.search_results.clear()
+            self._content_search_results = None
+            return
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            hits = listing.search_task_contents(self.current_directory, query)
+            self._content_search_results = hits
+            self._show_content_results(hits)
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def _show_content_results(self, hits: list[listing.ContentHit]) -> None:
+        self.search_results.clear()
+        dim = self.search_results.palette().color(QPalette.ColorRole.PlaceholderText)
+        # Show excerpt column in content mode
+        try:
+            self.search_header.setSectionHidden(3, False)
+            self.search_results.setHeaderHidden(False)
+            self.search_results.setColumnHidden(3, False)
+            results_header = self.search_results.header()
+            results_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        except (RuntimeError, AttributeError):
+            pass
+
+        for hit in hits:
+            category_name = hit.category.name if hit.category is not None else self._base_title()
+            try:
+                date_cell = hit.date.strftime(helpers.DATE_FORMAT)
+            except (AttributeError, ValueError):
+                date_cell = str(hit.date)
+            row = QTreeWidgetItem(
+                [date_cell, helpers.readable_title(hit.title), category_name, hit.excerpt]
+            )
+            row.setData(0, _PATH_ROLE, str(hit.task_path))
+            row.setForeground(2, QBrush(dim))
+            row.setTextAlignment(
+                2,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            for column in range(4):
+                try:
+                    row.setToolTip(column, str(hit.task_path))
+                except (RuntimeError, AttributeError):
+                    pass
+            self.search_results.addTopLevelItem(row)
+
+    def _filter_search(self) -> None:
+        """Refills the results with the tasks the query reaches."""
+        if self.search_content_checkbox.isChecked():
+            self.search_results.clear()
+            self._content_search_results = None
+            return
+        # Hide excerpt column when OFF
+        try:
+            self.search_results.setColumnHidden(3, True)
+            self.search_header.setSectionHidden(3, True)
+            self.search_results.setHeaderHidden(True)
+        except (RuntimeError, AttributeError):
+            pass
+
         entries = [entry for entry, _ in self._search_entries]
         found = {
             entry.file

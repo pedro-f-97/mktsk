@@ -71,7 +71,7 @@
 - The results hold the tasks the listings hold, closed ones included, and the query runs
   again over them on every reload, so a task created or closed since is reached the way
   the table now lists it; the result that was highlighted is highlighted again when it
-  still matches. The query comes from `search_tasks`, so it matches the text the `Task`
+  still matches. The query comes from `search_tasks` in title mode, so it matches the text the `Task`
   column shows, and an empty or whitespace-only query shows no results and no hint
 - A result row carries the date in the `Date` column format, the title as the `Task`
   column spells it, and the category in the palette's `PlaceholderText`, so it is dimmed
@@ -82,6 +82,11 @@
   result, and `Esc` in the field clears it, which empties the results with it. Selecting
   a result never picks a category, so the destination a new task lands in stays where it
   was
+- A `QCheckBox` labelled `Content` sits next to the search field. Default OFF.
+- OFF: exactly the previous behaviour (live title search as you type, no extra column).
+- ON: typing does NOT search. The search runs only when the user presses Enter in the field. Show a wait cursor while it runs. The results list gets one extra column, `Excerpt`, after the existing ones; the column is hidden when OFF. Content search scans every task of every category under the base directory, open and closed (reading closed tasks from their `.zip` files without extracting), matches case- and accent-insensitively with all words in any order anywhere in the file text, returns one hit per task with an excerpt of up to 6 words before and after the first match using the original text and ellipsis at cut ends. Only the task's `.md` is searched; attachments are not. A corrupt or unreadable `.zip`/`.md` is skipped silently.
+- Toggling the checkbox clears the results list. Toggling back to OFF re-runs the live title search for the current text. Esc still clears the field.
+- Empty field means no results, in both modes. Choosing a result behaves exactly as today.
 - The right pane is a side rail beside the creation bar and the tabs: the rail is the
   first column, spans the full height of the pane and is as wide as the `Refresh` button
   it carries at its top, so the button no longer sits in the tab bar corner, which is

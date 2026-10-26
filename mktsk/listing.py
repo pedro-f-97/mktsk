@@ -675,6 +675,120 @@ def _folded(text: str) -> str:
     return standards._without_accents(text).casefold()
 
 
+class ContentHit(NamedTuple):
+    """A task found by searching its content.
+
+    Attributes:
+        date: the date in the name of the folder or archive.
+        title: the standardized title of the task.
+        category: the category path or None for the base directory.
+        task_path: the path to the task file or archive.
+        excerpt: a short excerpt around the match.
+    """
+
+    date: datetime.date
+    title: str
+    category: Path | None
+    task_path: Path
+    excerpt: str
+
+
+def _read_task_content_for_search(entry: TaskEntry) -> str:
+    """Reads the text of a task for content search."""
+    if standards.is_task_archive(entry.file.name):
+        try:
+            with zipfile.ZipFile(entry.file) as archive:
+                names = archive.namelist()
+                _root, member = _archive_task_member(entry.file.name, names)
+                if member is None:
+                    return ""
+                try:
+                    return archive.read(member).decode("utf-8", errors="replace")
+                except (OSError, RuntimeError, NotImplementedError, zipfile.BadZipFile):
+                    return ""
+        except (OSError, zipfile.BadZipFile):
+            return ""
+    else:
+        try:
+            return entry.file.read_text(encoding="utf-8", errors="replace")
+        except (OSError, UnicodeDecodeError):
+            return ""
+
+
+def _make_excerpt(text: str, query_words_folded: list[str], context_words: int) -> str:
+    """Builds an excerpt around the first word containing any query word."""
+    words = text.split()
+    if not words:
+        return ""
+
+    folded_words = [_folded(word) for word in words]
+    first_index = -1
+    for i, folded_word in enumerate(folded_words):
+        for query_word in query_words_folded:
+            if query_word and query_word in folded_word:
+                first_index = i
+                break
+        if first_index != -1:
+            break
+
+    if first_index == -1:
+        return ""
+
+    start = max(0, first_index - context_words)
+    end = min(len(words), first_index + context_words + 1)
+
+    excerpt_words = words[start:end]
+    result = " ".join(excerpt_words)
+
+    if start > 0:
+        result = "…" + result
+    if end < len(words):
+        result = result + "…"
+
+    return result
+
+
+def search_task_contents(
+    base: Path, query: str, *, context_words: int = 6
+) -> list[ContentHit]:
+    """Searches the full text of every task, open and closed."""
+    query_words = query.split()
+    query_words_folded = [_folded(word) for word in query_words]
+
+    if not query_words_folded or not all(query_words_folded):
+        return []
+
+    hits: list[ContentHit] = []
+
+    try:
+        groups = find_task_groups(base)
+    except (OSError, ValueError, AttributeError):
+        return []
+
+    for group in groups:
+        for entry in group.entries:
+            text = _read_task_content_for_search(entry)
+            if not text:
+                continue
+
+            folded_text = _folded(text)
+            if not all(word in folded_text for word in query_words_folded):
+                continue
+
+            excerpt = _make_excerpt(text, query_words_folded, context_words)
+            hits.append(
+                ContentHit(
+                    date=entry.date,
+                    title=entry.title,
+                    category=group.category,
+                    task_path=entry.file,
+                    excerpt=excerpt,
+                )
+            )
+
+    return hits
+
+
 def search_tasks(entries: list[TaskEntry], query: str) -> list[TaskEntry]:
     """Filters the entries whose title holds every word of a query.
 
