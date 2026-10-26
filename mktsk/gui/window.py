@@ -617,10 +617,16 @@ class MainWindow(QMainWindow):
         self.preview_list_header.setFixedHeight(height)
 
     def _place_search_header_checkbox(self) -> None:
-        """Places the Content checkbox at the right end of the Search header."""
+        """Places the Content checkbox at the right end of the Search header.
+
+        The checkbox is sized to its hint and its right edge stays inside the
+        header, a margin away from the border, so nothing is painted beside it.
+        """
         header = self.search_header
         side = min(self.search_content_checkbox.sizeHint().height(), header.height())
-        x = header.width() - _HEADER_BUTTON_MARGIN - side
+        width = self.search_content_checkbox.sizeHint().width()
+        x = header.width() - _HEADER_BUTTON_MARGIN - width
+        self.search_content_checkbox.resize(width, side)
         self.search_content_checkbox.move(x, (header.height() - side) // 2)
 
     def _update_path_label(self) -> None:
