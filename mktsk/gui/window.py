@@ -409,15 +409,18 @@ class MainWindow(QMainWindow):
             0, QHeaderView.ResizeMode.ResizeToContents
         )
         results_header.setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch
+            1, QHeaderView.ResizeMode.Interactive
         )
         results_header.setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
+            2, QHeaderView.ResizeMode.Interactive
         )
         results_header.setSectionResizeMode(
             3, QHeaderView.ResizeMode.Fixed
         )
+        self.search_results.setColumnWidth(1, 150)
+        self.search_results.setColumnWidth(2, 200)
         self.search_results.setColumnWidth(3, 65)
+        results_header.setMinimumSectionSize(40)
         self.search_header = QHeaderView(Qt.Orientation.Horizontal)
         self.search_header.setModel(self.search_results.model())
         self.search_header.setSectionHidden(1, True)

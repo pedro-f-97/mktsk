@@ -2,7 +2,7 @@
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QHeaderView
 
 from mktsk.gui.tree import _PATH_ROLE
 from tests.gui_helpers import (
@@ -476,3 +476,25 @@ def test_placeholder_changes_with_content_mode(window):
     # Switch back to OFF mode
     window.search_content_checkbox.setChecked(False)
     assert window.search_input.placeholderText() == "Search tasks"
+
+
+def test_title_and_excerpt_columns_are_interactive(window):
+    """Title and Excerpt columns resize interactively; others keep their mode."""
+    header = window.search_results.header()
+    assert header.sectionResizeMode(0) == QHeaderView.ResizeMode.ResizeToContents
+    assert header.sectionResizeMode(1) == QHeaderView.ResizeMode.Interactive
+    assert header.sectionResizeMode(2) == QHeaderView.ResizeMode.Interactive
+    assert header.sectionResizeMode(3) == QHeaderView.ResizeMode.Fixed
+
+
+def test_resizing_a_column_changes_its_width_and_excerpt_stays_hidden_in_off(
+    window,
+):
+    """Resizing a column programmatically changes its width.
+
+    The Excerpt column stays hidden in OFF mode.
+    """
+    header = window.search_results.header()
+    header.resizeSection(1, 220)
+    assert header.sectionSize(1) == 220
+    assert window.search_results.isColumnHidden(2) is True
