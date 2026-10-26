@@ -42,8 +42,9 @@ def _png_bytes(image: QImage) -> bytes:
     """
     buffer = QBuffer()
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-    image.save(buffer, "PNG")
-    return bytes(buffer.data())
+    if not image.save(buffer, b"PNG"):
+        raise RuntimeError("Failed to encode image as PNG")
+    return bytes(buffer.data().data())
 
 
 def build_ico(images: list[QImage]) -> bytes:
