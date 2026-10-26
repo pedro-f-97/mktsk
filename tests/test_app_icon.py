@@ -3,6 +3,7 @@ import importlib.util
 import struct
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PySide6.QtGui import QColor, QGuiApplication, QImage
@@ -25,6 +26,8 @@ def _load_make_icon():
     """Loads the generator script, which lives outside the package."""
     path = Path(__file__).resolve().parents[1] / "tools" / "make_icon.py"
     spec = importlib.util.spec_from_file_location("make_icon", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load module spec from {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -276,11 +279,11 @@ class _EmptyShell32:
     """Stands for a shell32 that does not carry the api."""
 
 
-def _windll(shell32):
+def _windll(shell32: Any) -> Any:
     """Builds a fake ctypes.windll around the given shell32."""
 
     class _Windll:
-        pass
+        shell32: Any
 
     windll = _Windll()
     windll.shell32 = shell32

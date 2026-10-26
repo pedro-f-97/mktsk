@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QIODevice
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QImage, QImageWriter
 
 # the script runs from the repository, where the package sits one folder up
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -32,18 +32,12 @@ _ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 
 
 def _png_bytes(image: QImage) -> bytes:
-    """Encodes an image as PNG.
-
-    Args:
-        image: the image to encode.
-
-    Returns:
-        The bytes of the PNG file.
-    """
     buffer = QBuffer()
     buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-    image.save(buffer, "PNG")
-    return bytes(buffer.data())
+    writer = QImageWriter(buffer, b"PNG")
+    if not writer.write(image):
+        raise RuntimeError(writer.errorString())
+    return bytes(buffer.data().data())
 
 
 def build_ico(images: list[QImage]) -> bytes:
