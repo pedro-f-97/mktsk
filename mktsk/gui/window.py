@@ -84,7 +84,7 @@ from .tasklist import (
     _relative_age,
     _UnifiedSelectionDelegate,
 )
-from .tree import _PATH_ROLE, _CategoryTree
+from .tree import _HEADER_BUTTON_MARGIN, _PATH_ROLE, _CategoryTree
 
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
@@ -399,7 +399,7 @@ class MainWindow(QMainWindow):
         # own header carries `Directory`, with the other two sections hidden
         self.search_results = QTreeWidget()
         self.search_results.setColumnCount(4)
-        self.search_results.setHeaderLabels(["Search", "", "", "Excerpt"])
+        self.search_results.setHeaderLabels(["Date", "Title", "Excerpt", "Category"])
         self.search_results.setHeaderHidden(True)
         self.search_results.setRootIsDecorated(False)
         self.search_results.setFrameShape(QFrame.Shape.NoFrame)
@@ -412,12 +412,12 @@ class MainWindow(QMainWindow):
             1, QHeaderView.ResizeMode.Stretch
         )
         results_header.setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Fixed
+            2, QHeaderView.ResizeMode.Stretch
         )
         results_header.setSectionResizeMode(
-            3, QHeaderView.ResizeMode.Stretch
+            3, QHeaderView.ResizeMode.Fixed
         )
-        self.search_results.setColumnWidth(2, 65)
+        self.search_results.setColumnWidth(3, 65)
         self.search_header = QHeaderView(Qt.Orientation.Horizontal)
         self.search_header.setModel(self.search_results.model())
         self.search_header.setSectionHidden(1, True)
@@ -427,10 +427,18 @@ class MainWindow(QMainWindow):
         self.search_header.setDefaultAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
+        # Override the model's section 0 label to "Search" (like Directory header)
+        self.search_header.model().setHeaderData(
+            0, Qt.Orientation.Horizontal, "Search", Qt.ItemDataRole.DisplayRole
+        )
+        # Content checkbox placed in the header row, right-aligned like Directory header buttons
+        self.search_content_checkbox = QCheckBox("Content")
+        self.search_content_checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.search_content_checkbox.setParent(self.search_header)
+        self.search_header.geometriesChanged.connect(self._place_search_header_checkbox)
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search tasks")
         self.search_input.setClearButtonEnabled(True)
-        self.search_content_checkbox = QCheckBox("Content")
 
         self.directory_tree.set_navigation_buttons(self.choose_button, self.up_button)
 
@@ -445,14 +453,7 @@ class MainWindow(QMainWindow):
         search_layout.setSpacing(0)
         search_layout.addWidget(self.search_header)
         self.search_input.setParent(self.search_panel)
-        search_input_row = QHBoxLayout()
-        search_input_row.setContentsMargins(0, 0, 0, 0)
-        search_input_row.setSpacing(0)
-        # Put input and checkbox in a container, but test checks input's parent is panel
-        # Create a container widget as child of panel? No wait - test says search_input.parent() must be panel
         search_layout.addWidget(self.search_input)
-        self.search_content_checkbox.setParent(self.search_panel)
-        search_layout.addWidget(self.search_content_checkbox)
         search_layout.addWidget(self.search_results, 1)
 
         self.left_panel = QWidget()
@@ -614,6 +615,13 @@ class MainWindow(QMainWindow):
         self.search_header.setFixedHeight(height)
         self.preview_text_header.setFixedHeight(height)
         self.preview_list_header.setFixedHeight(height)
+
+    def _place_search_header_checkbox(self) -> None:
+        """Places the Content checkbox at the right end of the Search header."""
+        header = self.search_header
+        side = min(self.search_content_checkbox.sizeHint().height(), header.height())
+        x = header.width() - _HEADER_BUTTON_MARGIN - side
+        self.search_content_checkbox.move(x, (header.height() - side) // 2)
 
     def _update_path_label(self) -> None:
         """Shows the current directory, elided to the room the row has."""
@@ -962,6 +970,11 @@ class MainWindow(QMainWindow):
     def _on_content_search_toggled(self, checked: bool) -> None:
         self.search_results.clear()
         self._content_search_results = None
+        # Update placeholder based on Content mode
+        if checked:
+            self.search_input.setPlaceholderText("Type and press Enter to search content")
+        else:
+            self.search_input.setPlaceholderText("Search tasks")
         # Toggling the checkbox clears the results list.
         if not checked:
             # Toggling back to OFF re-runs the live title search for the current text.
@@ -993,13 +1006,14 @@ class MainWindow(QMainWindow):
     def _show_content_results(self, hits: list[listing.ContentHit]) -> None:
         self.search_results.clear()
         dim = self.search_results.palette().color(QPalette.ColorRole.PlaceholderText)
-        # Show excerpt column in content mode
+        # Show excerpt column (2) in content mode; category is column 3
         try:
-            self.search_header.setSectionHidden(3, False)
             self.search_results.setHeaderHidden(False)
-            self.search_results.setColumnHidden(3, False)
+            self.search_results.setColumnHidden(2, False)
             results_header = self.search_results.header()
-            results_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+            results_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            results_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+            self.search_results.setColumnWidth(3, 65)
         except (RuntimeError, AttributeError):
             pass
 
@@ -1009,13 +1023,14 @@ class MainWindow(QMainWindow):
                 date_cell = hit.date.strftime(helpers.DATE_FORMAT)
             except (AttributeError, ValueError):
                 date_cell = str(hit.date)
+            # Column order: Date (0), Title (1), Excerpt (2), Category (3)
             row = QTreeWidgetItem(
-                [date_cell, helpers.readable_title(hit.title), category_name, hit.excerpt]
+                [date_cell, helpers.readable_title(hit.title), hit.excerpt, category_name]
             )
             row.setData(0, _PATH_ROLE, str(hit.task_path))
-            row.setForeground(2, QBrush(dim))
+            row.setForeground(3, QBrush(dim))  # Category is now column 3
             row.setTextAlignment(
-                2,
+                3,
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
             for column in range(4):
@@ -1033,8 +1048,7 @@ class MainWindow(QMainWindow):
             return
         # Hide excerpt column when OFF
         try:
-            self.search_results.setColumnHidden(3, True)
-            self.search_header.setSectionHidden(3, True)
+            self.search_results.setColumnHidden(2, True)
             self.search_results.setHeaderHidden(True)
         except (RuntimeError, AttributeError):
             pass
@@ -1056,15 +1070,15 @@ class MainWindow(QMainWindow):
                 continue
 
             row = QTreeWidgetItem(
-                [_date_cell(entry), helpers.readable_title(entry.title), category]
+                [_date_cell(entry), helpers.readable_title(entry.title), "", category]
             )
             row.setData(0, _PATH_ROLE, str(entry.file))
-            row.setForeground(2, QBrush(dim))
+            row.setForeground(3, QBrush(dim))  # Category is column 3
             row.setTextAlignment(
-                2,
+                3,
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
-            for column in range(3):
+            for column in range(4):
                 row.setToolTip(column, str(entry.file))
             self.search_results.addTopLevelItem(row)
             if str(entry.file) == kept:
