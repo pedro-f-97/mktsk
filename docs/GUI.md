@@ -63,11 +63,13 @@
   and the search panel keeps at least its header and the field. Its split is saved
   with the other splitters, under `window/directory_splitter`. Under the tree the left
   pane holds a `Search` panel: its own header titled `Search`, a line edit with the
-  `Search tasks`
-  placeholder and a clear button, and a results list below. The header is a standalone
+  `Search tasks` placeholder (changes to `Type and press Enter to search content` when
+  Content is ON) and a clear button, and a results list below. The header is a standalone
   `QHeaderView` over the results' model, the way the `Directory` header sits over the
-  tree's, with the other two sections hidden; both headers take the height of the tab
-  bar, so they read as one set. The panel sits inside the pane and it collapses with the pane
+  tree's, with the other three sections hidden; both headers take the height of the tab
+  bar, so they read as one set. A `QCheckBox` labelled `Content` sits in the header row,
+  right-aligned like the Directory header buttons. Default OFF. The panel sits inside the
+  pane and it collapses with the pane
 - The results hold the tasks the listings hold, closed ones included, and the query runs
   again over them on every reload, so a task created or closed since is reached the way
   the table now lists it; the result that was highlighted is highlighted again when it
@@ -82,9 +84,8 @@
   result, and `Esc` in the field clears it, which empties the results with it. Selecting
   a result never picks a category, so the destination a new task lands in stays where it
   was
-- A `QCheckBox` labelled `Content` sits next to the search field. Default OFF.
-- OFF: exactly the previous behaviour (live title search as you type, no extra column).
-- ON: typing does NOT search. The search runs only when the user presses Enter in the field. Show a wait cursor while it runs. The results list gets one extra column, `Excerpt`, after the existing ones; the column is hidden when OFF. Content search scans every task of every category under the base directory, open and closed (reading closed tasks from their `.zip` files without extracting), matches case- and accent-insensitively with all words in any order anywhere in the file text, returns one hit per task with an excerpt of up to 6 words before and after the first match using the original text and ellipsis at cut ends. Only the task's `.md` is searched; attachments are not. A corrupt or unreadable `.zip`/`.md` is skipped silently.
+- OFF: exactly the previous behaviour (live title search as you type). Column order: Date, Title, Category. The Excerpt column is hidden.
+- ON: typing does NOT search. The search runs only when the user presses Enter in the field. Show a wait cursor while it runs. The results list shows columns: Date, Title, Excerpt, Category (category last, after the excerpt). The Excerpt column title appears only in ON mode. Content search scans every task of every category under the base directory, open and closed (reading closed tasks from their `.zip` files without extracting), matches case- and accent-insensitively with all words in any order anywhere in the file text, returns one hit per task with an excerpt of up to 6 words before and after the first match using the original text and ellipsis at cut ends. Only the task's `.md` is searched; attachments are not. A corrupt or unreadable `.zip`/`.md` is skipped silently.
 - Toggling the checkbox clears the results list. Toggling back to OFF re-runs the live title search for the current text. Esc still clears the field.
 - Empty field means no results, in both modes. Choosing a result behaves exactly as today.
 - The right pane is a side rail beside the creation bar and the tabs: the rail is the
