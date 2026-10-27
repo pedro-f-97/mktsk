@@ -440,4 +440,23 @@
   system tray and the GUI exits with code 0 without opening a window. The lock
   stays alive for the whole run and is released on a real quit. The guard
   applies to the GUI only, never to the CLI, and regardless of tray availability.
-- There are no notifications, no timers and no reminder code in this step.
+
+## Reminders and notifications
+
+- `TrayController.notify(title, message)` shows a notification through
+  `QSystemTrayIcon.showMessage` with the information icon and a 10 second timeout.
+- `ReminderScheduler` (a `QObject`) polls the reminders store every 30 seconds:
+  `start()` activates the timer and `stop()` deactivates it.
+- At startup, only when a tray controller exists, the scheduler is created, `check()`
+  runs once right after the window is shown, and then `start()` is called. Without a tray
+  no scheduler is created and the reminders file is never touched, so reminders stay
+  pending.
+- `check(now=None)` (default `datetime.now()`) pops the due reminders (`due <= now`,
+  `due == now` counts as due) and fires them through `tray.notify("mktsk", ...)`. The
+  body is `"<title>: <message>"`, or just `"<title>"` when the message is empty. The first
+  notification is immediate; the following ones are staggered 1500 ms apart with
+  `QTimer.singleShot`. `changed` is emitted only when at least one reminder was fired.
+- `add` and `remove` persist through the reminders core and emit `changed`;
+  `reminders()` returns all reminders and `for_task(task)` returns those of one task.
+- Fired reminders are deleted from the file before being returned, so each fires at most
+  once.
