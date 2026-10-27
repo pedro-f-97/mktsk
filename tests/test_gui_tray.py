@@ -163,6 +163,9 @@ class _FakeWindow:
     def quit_application(self):
         self.quit_application_called = True
 
+    def attach_reminder_scheduler(self, scheduler):
+        self.reminder_scheduler = scheduler
+
 
 def test_startup_sets_quit_on_last_window_closed_only_when_tray_available(
     monkeypatch, tmp_path

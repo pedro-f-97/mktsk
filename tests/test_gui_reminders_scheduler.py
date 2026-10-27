@@ -185,6 +185,9 @@ class _FakeWindow:
     def show(self):
         self.shown = True
 
+    def attach_reminder_scheduler(self, scheduler):
+        self.reminder_scheduler = scheduler
+
 
 class _FakeTrayController:
     pass
