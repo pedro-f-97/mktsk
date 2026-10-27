@@ -47,3 +47,12 @@ class TrayController:
         self.window.showNormal()
         self.window.raise_()
         self.window.activateWindow()
+
+    def notify(self, title: str, message: str) -> None:
+        """Shows a notification with the information icon for 10 seconds."""
+        self.tray.showMessage(
+            title,
+            message,
+            QSystemTrayIcon.MessageIcon.Information,
+            10_000,
+        )
