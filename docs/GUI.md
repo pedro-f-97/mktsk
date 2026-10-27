@@ -421,3 +421,23 @@
   what was created; the warning carries the error as it is, `helpers.open_file` already
   words it, so the path is never hidden behind a duplicated prefix
 - Keep the window open and clear the title field after creating
+
+## System tray, close-to-tray and single instance
+
+- When the platform offers a system tray, the window icon is also shown in the
+  tray with a tooltip of `mktsk` and a menu holding exactly `Open` and `Quit`.
+  Clicking or double-clicking the tray icon, or choosing `Open`, shows and
+  raises the window. `Quit` is a real quit: it saves the layout and exits the
+  application.
+- Closing the window with the `X` hides it to the tray instead of quitting,
+  saving the geometry and splitter states under the same `QSettings` keys as a
+  real quit. When the session is being saved, or a real quit has been requested,
+  the close is accepted and the application exits. When no tray is available the
+  `X` closes the application exactly as before, with no change in behaviour.
+- `mktsk` runs as a single instance: a `QLockFile` named `mktsk.lock` is taken
+  beside the shared config file before the window opens. When another instance
+  already holds it, a message tells the user to look for the mktsk icon in the
+  system tray and the GUI exits with code 0 without opening a window. The lock
+  stays alive for the whole run and is released on a real quit. The guard
+  applies to the GUI only, never to the CLI, and regardless of tray availability.
+- There are no notifications, no timers and no reminder code in this step.

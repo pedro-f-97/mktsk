@@ -20,6 +20,7 @@ from PySide6.QtGui import (
     QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
+    QGuiApplication,
     QKeySequence,
     QPainter,
     QPaintEvent,
@@ -266,6 +267,14 @@ class MainWindow(QMainWindow):
         # whether the attachment list of the preview stands for a closed task,
         # whose entries open the archive itself rather than a folder on disk
         self._archived_preview = False
+        # whether a real quit has been requested, so a close event that comes
+        # after it is accepted instead of hiding the window to the tray
+        self._quitting = False
+        # the tray controller, when the platform offers a tray; set from the
+        # entry point once the window exists
+        self.tray_controller = None
+        # the instance lock, kept alive for the whole run and released on quit
+        self._instance_lock = None
         # the folder the first-run flow resolved lives in the shared config
         # file, so it is handed in rather than read from QSettings
         self.current_directory = base_folder or Path.cwd()
@@ -1507,6 +1516,29 @@ class MainWindow(QMainWindow):
         """
         QMessageBox.warning(self, "mktsk", _skipped_message(skipped))
 
+    def quit_application(self) -> None:
+        """Requests a real quit: saves the layout and quits the application.
+
+        Sets the quit flag so a close event that follows is accepted rather
+        than hiding the window to the tray.
+        """
+        self._quitting = True
+        self._save_state()
+        if self._instance_lock is not None:
+            self._instance_lock.unlock()
+        QApplication.quit()
+
     def closeEvent(self, event: QCloseEvent) -> None:
+        # with a tray active and no real quit in progress, closing hides the
+        # window to the tray instead of quitting; a session save always quits
+        if (
+            self.tray_controller is not None
+            and not self._quitting
+            and not QGuiApplication.instance().isSavingSession()
+        ):
+            self._save_state()
+            self.hide()
+            event.ignore()
+            return
         self._save_state()
         super().closeEvent(event)
