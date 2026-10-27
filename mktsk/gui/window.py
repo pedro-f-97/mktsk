@@ -50,6 +50,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStackedLayout,
     QStyleFactory,
     QTabWidget,
     QToolButton,
@@ -73,6 +74,7 @@ from .icons import (
     _icon_button,
 )
 from .reminders_scheduler import ReminderScheduler
+from .reminders_ui import RemindersList
 from .tasklist import (
     _AGE_ROLE,
     _CATEGORY_ROLE,
@@ -94,6 +96,10 @@ _CLOSED_TAB = "Closed"
 # the title of the left Directory header, kept in one place so the tree can hide
 # it when the header is too narrow to hold it before the buttons
 _DIRECTORY_HEADER = "Directory"
+
+# the title the same header carries while the reminders panel takes the place
+# of the tree
+_REMINDERS_HEADER = "Reminders"
 
 # the outer margin the left Directory header, the tab bar and the bottom bar
 # share, so the two panes line up on a single grid
@@ -277,6 +283,9 @@ class MainWindow(QMainWindow):
         # the reminder scheduler, created with the tray; set from the entry
         # point once the window exists
         self.reminder_scheduler: ReminderScheduler | None = None
+        # the reminders panel and its list, built when a scheduler is attached
+        self.reminders_panel: QWidget | None = None
+        self.reminders_list: RemindersList | None = None
         # the instance lock, kept alive for the whole run and released on quit
         self._instance_lock = None
         # the folder the first-run flow resolved lives in the shared config
@@ -324,7 +333,6 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
         self.tabs = QTabWidget()
-        # the preview of the selected task: the raw text of the .md beside the
         # names of the other attachments, both read-only and neither in the
         # tab order, so the tabs keep the order they had
         self.preview_text = QPlainTextEdit()
@@ -480,7 +488,14 @@ class MainWindow(QMainWindow):
         left_layout.setSpacing(0)
         left_layout.addWidget(self.directory_tree.header_view)
         left_layout.addWidget(self.path_row)
-        left_layout.addWidget(self.directory_tree)
+        # the tree and the reminders panel take turns under the shared header,
+        # which stays outside the stack; the tree is only hidden, never rebuilt,
+        # so its selection and the creation target survive a swap
+        self.directory_stack = QStackedLayout()
+        self.directory_stack.setContentsMargins(0, 0, 0, 0)
+        self.directory_stack.setSpacing(0)
+        left_layout.addLayout(self.directory_stack)
+        self.directory_stack.addWidget(self.directory_tree)
 
         self.directory_panel = self.left_panel
 
@@ -553,6 +568,7 @@ class MainWindow(QMainWindow):
         self.directory_tree.itemDoubleClicked.connect(self.open_directory)
         self.directory_tree.itemSelectionChanged.connect(self._sync_creation_target)
         self.directory_tree.category_requested.connect(self.new_category)
+        self.directory_tree.bell_button.toggled.connect(self._toggle_reminders)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
         self.search_input.textChanged.connect(self._on_search_input_changed)
@@ -618,6 +634,100 @@ class MainWindow(QMainWindow):
 
         for key, splitter in self._splitters().items():
             self.settings.setValue(key, splitter.saveState())
+
+    def attach_reminder_scheduler(self, scheduler: ReminderScheduler) -> None:
+        """Takes the scheduler and offers the reminders panel behind a bell.
+
+        The panel is built here rather than with the rest of the window, so a
+        run without a scheduler never holds one and the bell stays hidden.
+
+        Args:
+            scheduler: the scheduler the reminders are read from and removed
+                through.
+        """
+        self.reminder_scheduler = scheduler
+        self.reminders_list = RemindersList(
+            scheduler, resolver=self._resolve_reminder_task
+        )
+        self.reminders_panel = QWidget()
+        panel_layout = QVBoxLayout(self.reminders_panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+        panel_layout.addWidget(self.reminders_list)
+        self.directory_stack.addWidget(self.reminders_panel)
+        # the panel is read again whenever it comes on show, so a reminder
+        # added while the tree stood there is there when the bell is clicked
+        self.directory_stack.currentChanged.connect(self._refresh_reminders_panel)
+        self.reminders_list.task_clicked.connect(self._select_reminder_task)
+        self.directory_tree.show_bell()
+
+    def _toggle_reminders(self, checked: bool) -> None:
+        """Swaps the left panel between the directory tree and the reminders.
+
+        The header stays where it is: only its title and the buttons that act
+        on the tree change, while the tree itself is left standing with its
+        selection and the destination of a new task untouched.
+
+        Args:
+            checked: whether the reminders panel takes the place of the tree.
+        """
+        page = self.reminders_panel if checked else self.directory_tree
+        if page is None:
+            return
+
+        for button in (
+            self.choose_button,
+            self.up_button,
+            self.directory_tree.header_button,
+        ):
+            button.setVisible(not checked)
+        self.directory_tree.set_header_label(
+            _REMINDERS_HEADER if checked else _DIRECTORY_HEADER
+        )
+        self.directory_stack.setCurrentWidget(page)
+
+    def _refresh_reminders_panel(self, index: int) -> None:
+        """Reads the reminders again whenever the stack shows their panel."""
+        if (
+            self.reminders_panel is not None
+            and self.reminders_list is not None
+            and index == self.directory_stack.indexOf(self.reminders_panel)
+        ):
+            self.reminders_list.refresh()
+
+    def _resolve_reminder_task(self, task: str) -> Path | None:
+        """Finds the task a reminder names among the entries the search holds.
+
+        The reminder carries the folder name of its task, which is the name of
+        the folder for a task that stands and the stem of the archive for a
+        closed one. Several tasks of a name keep the first the entries hold.
+
+        Args:
+            task: the task folder name the reminder carries.
+
+        Returns:
+            The `.md` of the task or the archive that holds it, or None when no
+            entry of the reload carries the name.
+        """
+        for entry, _ in self._search_entries:
+            name = (
+                entry.file.stem
+                if standards.is_task_archive(entry.file.name)
+                else entry.file.parent.name
+            )
+            if name == task:
+                return entry.file
+        return None
+
+    def _select_reminder_task(self, task: str) -> None:
+        """Selects the task a reminder names, the way a search result does.
+
+        Args:
+            task: the task folder name the reminder carries.
+        """
+        path = self._resolve_reminder_task(task)
+        if path is not None:
+            self._select_task(path)
 
     def _align_header(self) -> None:
         """Squares the headers of the window off to the tab bar height.

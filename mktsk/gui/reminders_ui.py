@@ -5,9 +5,12 @@ the reminders, adds to it and removes from it, and leaves the task logic and
 the file itself where they are.
 """
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from pathlib import Path
 
-from PySide6.QtCore import QDate, QDateTime, Qt, QTime
+from PySide6.QtCore import QDate, QDateTime, Qt, QTime, Signal
+from PySide6.QtGui import QBrush, QPalette
 from PySide6.QtWidgets import (
     QDateTimeEdit,
     QDialog,
@@ -32,6 +35,7 @@ _DELETE_WIDTH = 24
 _DELETE_TEXT = "×"
 _DELETE_TOOLTIP = "Delete"
 _REMINDER_ROLE = Qt.ItemDataRole.UserRole + 1
+_TASK_NAME_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 def _next_whole_hour() -> datetime:
@@ -44,26 +48,39 @@ class RemindersList(QTreeWidget):
     """The reminders of one task, or every reminder, sorted by due.
 
     The last column carries a `×` that removes the reminder of its row and
-    nothing else, so a click anywhere else in a row leaves the store alone.
-    The list follows `scheduler.changed`, so a reminder added or removed
-    anywhere shows up without another call.
+    nothing else, so a click anywhere else in a row reports the task it
+    belongs to. The list follows `scheduler.changed`, so a reminder added or
+    removed anywhere shows up without another call. A resolver that answers
+    `None` for the task of a row dims that row and keeps it from reporting a
+    click, because there is no task left to select.
 
     Args:
         scheduler: the scheduler the reminders are read from and removed
             through.
         task: the task folder name to filter by, or None for every reminder.
         parent: the widget the list belongs to.
+        resolver: maps a task folder name to the task it still reaches, or
+            None when the task is gone; without one every row reports a
+            click and none is dimmed.
+
+    Attributes:
+        task_clicked: emitted with the task folder name of the row clicked
+            outside its delete cell, unless the task cannot be resolved.
     """
+
+    task_clicked = Signal(str)
 
     def __init__(
         self,
         scheduler: ReminderScheduler,
         task: str | None = None,
         parent: QWidget | None = None,
+        resolver: Callable[[str], Path | None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.scheduler = scheduler
         self.task = task
+        self.resolver = resolver
         self.setRootIsDecorated(False)
         self.setUniformRowHeights(True)
 
@@ -112,18 +129,30 @@ class RemindersList(QTreeWidget):
         row.setText(delete, _DELETE_TEXT)
         row.setToolTip(delete, _DELETE_TOOLTIP)
         row.setData(_WHEN_COLUMN, _REMINDER_ROLE, reminder.id)
+        row.setData(_WHEN_COLUMN, _TASK_NAME_ROLE, reminder.task)
+
+        # a reminder whose task is gone says so by fading, the way the category
+        # of a search result does, and no click on it reaches a task
+        if self.resolver is not None and self.resolver(reminder.task) is None:
+            dim = self.palette().color(QPalette.ColorRole.PlaceholderText)
+            for column in range(self.columnCount()):
+                row.setForeground(column, QBrush(dim))
 
     def _clicked(self, row: QTreeWidgetItem, column: int) -> None:
-        """Removes the reminder whose delete cell was clicked, and nothing else.
+        """Removes the reminder of the delete cell, or reports the task clicked.
 
         Args:
             row: the row that was clicked.
             column: the column the click landed in.
         """
-        if column != self.columnCount() - 1:
+        if column == self.columnCount() - 1:
+            self.scheduler.remove(row.data(_WHEN_COLUMN, _REMINDER_ROLE))
             return
 
-        self.scheduler.remove(row.data(_WHEN_COLUMN, _REMINDER_ROLE))
+        task = row.data(_WHEN_COLUMN, _TASK_NAME_ROLE)
+        if self.resolver is not None and self.resolver(task) is None:
+            return
+        self.task_clicked.emit(task)
 
 
 class AddReminderDialog(QDialog):

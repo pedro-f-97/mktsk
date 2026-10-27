@@ -49,7 +49,7 @@ def main() -> int:
         window.tray_controller = tray
         QApplication.setQuitOnLastWindowClosed(False)
         scheduler = ReminderScheduler(tray, reminders_path())
-        window.reminder_scheduler = scheduler
+        window.attach_reminder_scheduler(scheduler)
         scheduler.check()
         scheduler.start()
 

@@ -12,13 +12,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .icons import _draw_plus, _icon_button
+from .icons import _draw_bell, _draw_plus, _icon_button
 
 _PATH_ROLE = Qt.ItemDataRole.UserRole
 
 _HEADER_BUTTON_MARGIN = 4
 _HEADER_ICON_SIZE = 12
-_HEADER_BUTTONS = 3
 
 
 class _CategoryTree(QTreeWidget):
@@ -55,6 +54,15 @@ class _CategoryTree(QTreeWidget):
         self.header_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.header_button.setIconSize(QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE))
         self.header_button.clicked.connect(self.category_requested.emit)
+        # the bell shares the header but is hidden until a reminder scheduler
+        # is attached, so a run without a tray offers no reminders to see
+        self.bell_button = _icon_button(
+            self.header_view, "Reminders", _draw_bell, "Reminders"
+        )
+        self.bell_button.setCheckable(True)
+        self.bell_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.bell_button.setIconSize(QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE))
+        self.bell_button.hide()
         self.header_view.geometriesChanged.connect(self._place_header_buttons)
         self.header_view.geometriesChanged.connect(self._update_directory_header_label)
         self.header_button.show()
@@ -63,7 +71,7 @@ class _CategoryTree(QTreeWidget):
     def set_header_label(self, text: str) -> None:
         """Sets the header label and widens the tree to keep it clear of the buttons.
 
-        Three buttons share the header, so the narrowest the tree may be is the
+        The buttons share the header, so the narrowest the tree may be is the
         label plus the room those buttons need; without it the label runs under
         them when the tree is squeezed.
 
@@ -73,8 +81,12 @@ class _CategoryTree(QTreeWidget):
         self._header_text = text
         self.setHeaderLabel(text)
         side = self.header_button.sizeHint().height()
-        reserved = _HEADER_BUTTONS * side + (_HEADER_BUTTONS + 1) * _HEADER_BUTTON_MARGIN
+        shown = self._shown_header_buttons()
+        reserved = len(shown) * side + (len(shown) + 1) * _HEADER_BUTTON_MARGIN
         self.setMinimumWidth(self.fontMetrics().horizontalAdvance(text) + reserved)
+        # a button that appeared or went changes where the others stand, so the
+        # row is laid out again before the title is judged against it
+        self._place_header_buttons()
         self._update_directory_header_label()
 
     def _update_directory_header_label(self) -> None:
@@ -85,7 +97,7 @@ class _CategoryTree(QTreeWidget):
         that room together, the title is dropped so the two never cross, and it
         comes back as soon as the header grows again.
         """
-        room = self._header_buttons()[0].x() - self.header_text_indent()
+        room = self._shown_header_buttons()[0].x() - self.header_text_indent()
         text = self._header_text
         if self.header_view.fontMetrics().horizontalAdvance(text) > room:
             text = ""
@@ -124,8 +136,16 @@ class _CategoryTree(QTreeWidget):
             button.setParent(self.header_view)
             button.setIconSize(self.header_button.iconSize())
             button.show()
-        self._place_header_buttons()
-        self._update_directory_header_label()
+        self.set_header_label(self._header_text)
+
+    def show_bell(self) -> None:
+        """Shows the reminders button and makes room for it in the header.
+
+        The bell stays hidden until a reminder scheduler is attached, so a run
+        without a tray offers no reminders panel to reach.
+        """
+        self.bell_button.show()
+        self.set_header_label(self._header_text)
 
     def select_subdirectory(self, directory: Path) -> None:
         """Puts the selection on a subdirectory of the current directory.
@@ -164,12 +184,16 @@ class _CategoryTree(QTreeWidget):
         header = self.header_view
         side = min(self.header_button.sizeHint().height(), header.height())
         x = header.width() - _HEADER_BUTTON_MARGIN
-        for button in reversed(self._header_buttons()):
+        for button in reversed(self._shown_header_buttons()):
             button.resize(side, side)
             x -= side
             button.move(x, (header.height() - side) // 2)
             x -= _HEADER_BUTTON_MARGIN
 
     def _header_buttons(self) -> list[QToolButton]:
-        """Returns the header buttons, from the left, ending with the category one."""
-        return [*self._navigation, self.header_button]
+        """Returns the header buttons, from the left, ending with the bell."""
+        return [*self._navigation, self.header_button, self.bell_button]
+
+    def _shown_header_buttons(self) -> list[QToolButton]:
+        """Returns the header buttons that are not hidden, from the left."""
+        return [button for button in self._header_buttons() if not button.isHidden()]
