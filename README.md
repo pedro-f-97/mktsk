@@ -24,6 +24,9 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * Reminders: due reminders fire as tray notifications (30 second poll, staggered),
   stored in `reminders.json` next to the shared config file; the bell buttons on the
   selected task row add a reminder or list and delete the ones of that task.
+* The `Directory` heading carries a `Reminders` bell that swaps the left panel to a list
+  of every reminder; clicking a reminder selects its task in the table, and rows whose
+  task is gone are dimmed.
 
 ## Installation
 

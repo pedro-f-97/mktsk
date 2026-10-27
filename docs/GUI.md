@@ -477,3 +477,28 @@
   tooltip is `Delete`. Rows are sorted by due. A click on the `×` removes that reminder at
   once through `scheduler.remove`; a click on any other cell does nothing. The list follows
   `scheduler.changed`, and an empty list is simply empty.
+- The `Directory` header carries a `Reminders` bell button beside the other header icons,
+  drawn with the same bell and sized like them, with the tooltip `Reminders`. It stays
+  hidden until a reminder scheduler is attached (`attach_reminder_scheduler`), so a run
+  without a tray offers no bell. The bell is checkable.
+- Clicking the bell swaps the left panel between the Directory tree and a reminders panel.
+  The header stays in place: only its title and the buttons that act on the tree change.
+  Checked shows the reminders panel, sets the header title to `Reminders` and hides
+  `Choose...`, `Up` and `+`; the bell stays visible. Unchecked shows the tree, restores the
+  title to `Directory` and the buttons. The tree is only hidden, never destroyed, so its
+  selection and the destination a new task lands in are untouched by the toggle. The search
+  panel below stays visible in both modes. The app always starts in Directory mode and the
+  mode is not saved in `QSettings`; collapsing and restoring the left panel through the rail
+  keeps the current mode.
+- The reminders panel holds an unfiltered `RemindersList` (all reminders, with the `Task`
+  column and the `Message` column stretching). It refreshes on `scheduler.changed` and
+  every time the panel is shown.
+- A click on a reminder cell other than `×` selects its task in the right panel through the
+  same path a search result uses: it switches to the tab that holds the task, selects the
+  row and scrolls it into view, without changing the new-task destination. It works for
+  open tasks and for archived ones (switching to the `Closed` tab). The task is resolved
+  from the reminder's folder name: the folder name for a task that stands, the zip stem for
+  an archived one, the first match when several share a name, and `None` when there is none.
+- A reminder whose task can no longer be reached is shown dimmed (the palette's
+  `PlaceholderText` colour, the same one the search `Category` column uses) and does not
+  select anything when clicked. Without a resolver nothing is dimmed and every row selects.
