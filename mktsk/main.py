@@ -495,6 +495,9 @@ def _close(location: Path, raw_title: str) -> int:
         # so a folder renamed by hand still has its file found
         folder_title = standards.task_folder_title(folder.name) or title
         result = tasks.close_task(folder, folder_title)
+    except tasks.TaskInUseError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
     except (OSError, helpers.TaskError) as error:
         print(f"Error: {error}")
         return 1

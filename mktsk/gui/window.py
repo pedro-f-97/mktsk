@@ -1488,6 +1488,14 @@ class MainWindow(QMainWindow):
         """
         try:
             tasks.close_task(entry.file.parent, entry.title)
+        except tasks.TaskInUseError:
+            QMessageBox.warning(
+                self,
+                "mktsk",
+                "Could not close the task: some of its files are in use. "
+                "Close them and try again.",
+            )
+            return
         except (OSError, helpers.TaskError) as error:
             QMessageBox.critical(self, "mktsk", str(error))
             return
