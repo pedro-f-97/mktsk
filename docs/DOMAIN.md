@@ -258,3 +258,25 @@
   `björk` finds `Bjork Naive`. An empty or whitespace-only query matches nothing, no title
   holding every word gives an empty list, the input order is kept, closed entries are matched
   like open ones, and the function is pure: no Qt
+
+## Reminders
+
+- Reminders live in `reminders.json`, next to the shared config file (the parent of
+  `config.config_path()`), so they travel with the base folder configuration.
+- The file holds `{"version": 1, "reminders": [...]}`, each reminder carrying `id`, `due`
+  (`YYYY-MM-DDTHH:MM`), `message`, `task` and `title`, written UTF-8 with
+  `ensure_ascii=False` and indent 2.
+- A reminder's identity is its task folder name (`YYMMDD - TaskName`), never an absolute
+  path; `title` is a readable snapshot used when the task can no longer be found.
+- `due` is a naive local time at minute precision; the core accepts any date, and validation
+  of past dates belongs to the UI.
+- Writes are atomic: a temp file in the same directory moved into place with `os.replace`,
+  so no temp file is ever left behind.
+- A missing file loads as `[]`; an unreadable or corrupted file is renamed to
+  `reminders.json.bad` (replacing an existing `.bad`) and loads as `[]`; an invalid entry
+  (missing key, bad date) is skipped and the valid ones kept.
+- `pop_due` returns the reminders due at or before `now`, sorted by due (`due == now`
+  counts as due), removes them from the file before returning, and leaves the rest: each
+  reminder fires at most once.
+- There is no scheduler and no reminder file is touched unless a system tray is available;
+  without a tray, reminders stay pending.

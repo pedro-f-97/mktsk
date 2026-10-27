@@ -9,7 +9,10 @@ tray, and `window` puts the rest together.
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
+from mktsk.reminders import reminders_path
+
 from .first_run import ensure_base_folder
+from .reminders_scheduler import ReminderScheduler
 from .single_instance import acquire_instance_lock
 from .tray import TrayController, tray_available
 from .window import MainWindow
@@ -39,10 +42,14 @@ def main() -> int:
     window = MainWindow(base_folder=base_folder)
     window._instance_lock = lock
 
+    window.show()
+
     if tray_available():
         tray = TrayController(window)
         window.tray_controller = tray
         QApplication.setQuitOnLastWindowClosed(False)
+        scheduler = ReminderScheduler(tray, reminders_path())
+        scheduler.check()
+        scheduler.start()
 
-    window.show()
     return app.exec()
