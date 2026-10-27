@@ -10,7 +10,7 @@
   `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
   `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`, `tests/test_gui_drop.py`,
   `tests/test_gui_persistence.py`, `tests/test_gui_first_run.py`,
-  `tests/test_app_icon.py`
+  `tests/test_app_icon.py`, `tests/test_gui_reminders_ui.py`
   and `tests/test_gui_window.py` with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
@@ -460,3 +460,20 @@
   `reminders()` returns all reminders and `for_task(task)` returns those of one task.
 - Fired reminders are deleted from the file before being returned, so each fires at most
   once.
+- The bar of a selected open task carries two more icon buttons after the existing ones,
+  `Add reminder` and `Reminders`, drawn as a bell, the first with a small plus badge. They
+  stand only while the window carries a reminder scheduler, so a run without a tray offers
+  none, and they go with the rest of the bar on a closed task.
+- `Add reminder` opens `AddReminderDialog`: a `QDateTimeEdit` with a calendar popup that
+  starts at the next whole hour, a message field with the `Message (optional)` placeholder,
+  and `OK` and `Cancel`. `OK` stands enabled only while the chosen minute is in the future,
+  and accepting calls `scheduler.add` with the folder name of the task, its readable title
+  and the stripped message.
+- `Reminders` opens `RemindersDialog`, titled `Reminders - <readable title>` and modal,
+  holding the reminders of that task and a `Close` button.
+- `RemindersList` is the widget both show: a `When` column (`DD/MM/YYYY HH:MM`), a
+  `Message` column that falls back to the title of the reminder when the message is empty,
+  a `Task` column only when no task is given, and a last narrow column with a `×` whose
+  tooltip is `Delete`. Rows are sorted by due. A click on the `×` removes that reminder at
+  once through `scheduler.remove`; a click on any other cell does nothing. The list follows
+  `scheduler.changed`, and an empty list is simply empty.
