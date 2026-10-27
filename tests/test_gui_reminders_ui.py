@@ -4,6 +4,7 @@ import datetime
 
 from PySide6.QtCore import QDate, QDateTime, QPoint, QSize, Qt, QTime
 from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QDialog
 
 from mktsk.gui.icons import _draw_bell, _draw_bell_plus, _stroked_icon
 from mktsk.gui.reminders_scheduler import ReminderScheduler
@@ -12,6 +13,8 @@ from mktsk.gui.reminders_ui import (
     RemindersDialog,
     RemindersList,
 )
+from mktsk.tasks import close_task
+from tests.gui_helpers import action_bar, select_tab
 
 
 class _FakeTray:
@@ -63,12 +66,78 @@ def _click_cell(qtbot, widget, row, column):
     )
 
 
+class _AcceptDialog:
+    """Stands in for the add dialog and accepts at once."""
+
+    def __init__(self, task_title, parent=None):
+        self.task_title = task_title
+
+    def exec(self):
+        return QDialog.DialogCode.Accepted
+
+    def due(self):
+        return _due(12)
+
+    def message(self):
+        return "note"
+
+
+class _RejectDialog(_AcceptDialog):
+    """Stands in for the add dialog and cancels at once."""
+
+    def exec(self):
+        return QDialog.DialogCode.Rejected
+
+
 def test_both_bell_icons_draw_at_several_sizes(qapp):
     for draw in (_draw_bell, _draw_bell_plus):
         icon = _stroked_icon(QColor("#000000"), draw)
         assert icon.isNull() is False
         for size in (12, 16, 18, 24):
             assert icon.pixmap(QSize(size, size)).isNull() is False
+
+
+def test_the_row_bar_offers_the_reminder_buttons_for_an_open_task(
+    window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "261027", "Teste")
+    window.navigate_to(tmp_path)
+    window.reminder_scheduler = _scheduler(tmp_path)
+
+    bar = action_bar(window, file)
+
+    assert [button.toolTip() for button in bar.reminder_buttons()] == [
+        "Add reminder",
+        "Reminders",
+    ]
+    for button in bar.reminder_buttons():
+        assert button.text() == ""
+        assert button.isVisible() is True
+        assert button.iconSize() == bar.open_button.iconSize()
+        assert button.autoRaise() is True
+
+
+def test_the_row_bar_offers_no_reminders_without_a_scheduler(
+    window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "261027", "Teste")
+    window.navigate_to(tmp_path)
+
+    bar = action_bar(window, file)
+
+    assert [button.isVisible() for button in bar.reminder_buttons()] == [False, False]
+
+
+def test_the_closed_tab_offers_no_reminder_buttons(window, tmp_path, make_task):
+    file = make_task(tmp_path, "261027", "Teste")
+    close_task(file.parent, "Teste")
+    window.navigate_to(tmp_path)
+    window.reminder_scheduler = _scheduler(tmp_path)
+
+    select_tab(window, "Closed")
+    bar = action_bar(window, tmp_path / "261027 - Teste.zip", "Closed")
+
+    assert [button.isVisible() for button in bar.reminder_buttons()] == [False, False]
 
 
 def test_the_add_dialog_opens_at_the_next_whole_hour(qapp, monkeypatch):
@@ -104,19 +173,59 @@ def test_the_add_dialog_reads_a_stripped_message_and_a_minute_due(qapp):
     assert dialog.message() == "call back"
 
 
-def test_the_popup_titles_itself_and_lists_one_task(qtbot, tmp_path):
+def test_accepting_the_add_dialog_stores_the_reminder(
+    window, tmp_path, make_task, monkeypatch
+):
+    file = make_task(tmp_path, "261027", "MyTask")
+    window.navigate_to(tmp_path)
     scheduler = _scheduler(tmp_path)
-    scheduler.add(_due(9), "first", "261027 - Alpha", "Alpha")
-    scheduler.add(_due(10), "other", "261027 - Beta", "Beta")
+    window.reminder_scheduler = scheduler
+    monkeypatch.setattr("mktsk.gui.tasklist.AddReminderDialog", _AcceptDialog)
 
-    dialog = RemindersDialog(scheduler, "261027 - Alpha", "Alpha")
-    qtbot.addWidget(dialog)
+    action_bar(window, file).add_reminder_button.click()
 
-    assert dialog.windowTitle() == "Reminders - Alpha"
-    assert dialog.isModal() is True
-    assert dialog.reminders_list.topLevelItemCount() == 1
-    assert dialog.reminders_list.topLevelItem(0).text(1) == "first"
-    assert dialog.close_button.text() == "Close"
+    [stored] = scheduler.reminders()
+    assert stored.task == "261027 - MyTask"
+    assert stored.title == "My Task"
+    assert stored.message == "note"
+    assert stored.due == _due(12)
+
+
+def test_cancelling_the_add_dialog_adds_nothing(
+    window, tmp_path, make_task, monkeypatch
+):
+    file = make_task(tmp_path, "261027", "MyTask")
+    window.navigate_to(tmp_path)
+    scheduler = _scheduler(tmp_path)
+    window.reminder_scheduler = scheduler
+    monkeypatch.setattr("mktsk.gui.tasklist.AddReminderDialog", _RejectDialog)
+
+    action_bar(window, file).add_reminder_button.click()
+
+    assert scheduler.reminders() == []
+
+
+def test_the_reminders_button_opens_the_popup_for_the_selected_task(
+    window, tmp_path, make_task, monkeypatch
+):
+    file = make_task(tmp_path, "261027", "MyTask")
+    window.navigate_to(tmp_path)
+    scheduler = _scheduler(tmp_path)
+    window.reminder_scheduler = scheduler
+    seen = []
+
+    class _Dialog:
+        def __init__(self, *args):
+            seen.append(args)
+
+        def exec(self):
+            return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr("mktsk.gui.tasklist.RemindersDialog", _Dialog)
+
+    action_bar(window, file).reminders_button.click()
+
+    assert seen[0][:3] == (scheduler, "261027 - MyTask", "My Task")
 
 
 def test_the_filtered_list_shows_one_task_sorted_by_due(qtbot, tmp_path):
@@ -205,3 +314,18 @@ def test_adding_and_removing_through_the_scheduler_refreshes_the_list(
 
     scheduler.remove(reminder.id)
     assert widget.topLevelItemCount() == 0
+
+
+def test_the_popup_titles_itself_and_lists_one_task(qtbot, tmp_path):
+    scheduler = _scheduler(tmp_path)
+    scheduler.add(_due(9), "first", "261027 - Alpha", "Alpha")
+    scheduler.add(_due(10), "other", "261027 - Beta", "Beta")
+
+    dialog = RemindersDialog(scheduler, "261027 - Alpha", "Alpha")
+    qtbot.addWidget(dialog)
+
+    assert dialog.windowTitle() == "Reminders - Alpha"
+    assert dialog.isModal() is True
+    assert dialog.reminders_list.topLevelItemCount() == 1
+    assert dialog.reminders_list.topLevelItem(0).text(1) == "first"
+    assert dialog.close_button.text() == "Close"

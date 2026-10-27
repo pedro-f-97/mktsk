@@ -72,6 +72,7 @@ from .icons import (
     _draw_up,
     _icon_button,
 )
+from .reminders_scheduler import ReminderScheduler
 from .tasklist import (
     _AGE_ROLE,
     _CATEGORY_ROLE,
@@ -273,6 +274,9 @@ class MainWindow(QMainWindow):
         # the tray controller, when the platform offers a tray; set from the
         # entry point once the window exists
         self.tray_controller = None
+        # the reminder scheduler, created with the tray; set from the entry
+        # point once the window exists
+        self.reminder_scheduler: ReminderScheduler | None = None
         # the instance lock, kept alive for the whole run and released on quit
         self._instance_lock = None
         # the folder the first-run flow resolved lives in the shared config
