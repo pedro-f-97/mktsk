@@ -19,6 +19,8 @@ CLI tool and desktop GUI for quickly setting up task folders.
 * The GUI moves a task from one category to another by dragging it onto the category.
 * The GUI takes files and folders dropped on the window into the folder of the selected
   task.
+* Closing the window hides it to the system tray (tray menu: `Open` and a real `Quit`);
+  the GUI runs as a single instance, so a second launch shows a message and exits.
 
 ## Installation
 
