@@ -64,13 +64,19 @@ def _click_cell(qtbot, widget, row, column):
     )
 
 
+def _top_level_item(widget, row):
+    item = widget.topLevelItem(row)
+    assert item is not None
+    return item
+
+
 class _AcceptDialog:
     """Stands in for the add dialog and accepts at once."""
 
     def __init__(self, task_title, parent=None):
         self.task_title = task_title
 
-    def exec(self):
+    def exec(self) -> QDialog.DialogCode:
         return QDialog.DialogCode.Accepted
 
     def due(self):
@@ -83,7 +89,7 @@ class _AcceptDialog:
 class _RejectDialog(_AcceptDialog):
     """Stands in for the add dialog and cancels at once."""
 
-    def exec(self):
+    def exec(self) -> QDialog.DialogCode:
         return QDialog.DialogCode.Rejected
 
 
@@ -231,11 +237,11 @@ def test_the_filtered_list_shows_one_task_sorted_by_due(qtbot, tmp_path):
     assert [
         widget.headerItem().text(column) for column in range(widget.columnCount())
     ] == ["When", "Message", ""]
-    assert [widget.topLevelItem(row).text(1) for row in range(2)] == [
+    assert [_top_level_item(widget, row).text(1) for row in range(2)] == [
         "first",
         "second",
     ]
-    assert widget.topLevelItem(0).text(0) == "27/10/2026 09:00"
+    assert _top_level_item(widget, 0).text(0) == "27/10/2026 09:00"
 
 
 def test_the_unfiltered_list_carries_a_task_column(qtbot, tmp_path):
@@ -250,7 +256,7 @@ def test_the_unfiltered_list_carries_a_task_column(qtbot, tmp_path):
     assert [
         widget.headerItem().text(column) for column in range(widget.columnCount())
     ] == ["When", "Message", "Task", ""]
-    assert [widget.topLevelItem(row).text(2) for row in range(3)] == [
+    assert [_top_level_item(widget, row).text(2) for row in range(3)] == [
         "Alpha",
         "Beta",
         "Alpha",
@@ -263,7 +269,7 @@ def test_a_reminder_without_a_message_shows_its_title(qtbot, tmp_path):
 
     widget = _shown_list(qtbot, scheduler, "261027 - Alpha")
 
-    assert widget.topLevelItem(0).text(1) == "Alpha"
+    assert _top_level_item(widget, 0).text(1) == "Alpha"
 
 
 def test_the_delete_cell_removes_the_reminder_at_once(qtbot, tmp_path):
@@ -278,7 +284,7 @@ def test_the_delete_cell_removes_the_reminder_at_once(qtbot, tmp_path):
         "second"
     ]
     assert widget.topLevelItemCount() == 1
-    assert widget.topLevelItem(0).text(1) == "second"
+    assert _top_level_item(widget, 0).text(1) == "second"
 
 
 def test_any_other_cell_removes_nothing(qtbot, tmp_path):
@@ -318,5 +324,5 @@ def test_the_popup_titles_itself_and_lists_one_task(qtbot, tmp_path):
     assert dialog.windowTitle() == "Reminders - Alpha"
     assert dialog.isModal() is True
     assert dialog.reminders_list.topLevelItemCount() == 1
-    assert dialog.reminders_list.topLevelItem(0).text(1) == "first"
+    assert _top_level_item(dialog.reminders_list, 0).text(1) == "first"
     assert dialog.close_button.text() == "Close"

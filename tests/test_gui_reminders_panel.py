@@ -45,6 +45,12 @@ def _click_cell(qtbot, widget, row, column):
     )
 
 
+def _top_level_item(widget, row):
+    item = widget.topLevelItem(row)
+    assert item is not None
+    return item
+
+
 def _attach(window, tmp_path):
     scheduler = _scheduler(tmp_path)
     window.attach_reminder_scheduler(scheduler)
@@ -85,7 +91,7 @@ def test_a_row_whose_task_is_gone_is_dimmed_and_reports_nothing(qtbot, tmp_path)
     widget.task_clicked.connect(clicked.append)
     dim = widget.palette().color(QPalette.ColorRole.PlaceholderText)
 
-    row = widget.topLevelItem(0)
+    row = _top_level_item(widget, 0)
     assert row.foreground(1).color() == dim
 
     _click_cell(qtbot, widget, 0, 1)
@@ -100,7 +106,7 @@ def test_a_row_without_a_resolver_is_not_dimmed(qtbot, tmp_path):
     clicked = []
     widget.task_clicked.connect(clicked.append)
 
-    assert widget.topLevelItem(0).foreground(1).style() == Qt.BrushStyle.NoBrush
+    assert _top_level_item(widget, 0).foreground(1).style() == Qt.BrushStyle.NoBrush
 
     _click_cell(qtbot, widget, 0, 1)
 
@@ -114,7 +120,7 @@ def test_a_resolved_row_is_not_dimmed(qtbot, tmp_path):
         qtbot, scheduler, resolver=lambda task: Path(tmp_path) / "task.md"
     )
 
-    assert widget.topLevelItem(0).foreground(1).style() == Qt.BrushStyle.NoBrush
+    assert _top_level_item(widget, 0).foreground(1).style() == Qt.BrushStyle.NoBrush
 
 
 def test_bell_hidden_until_scheduler_attached(window, tmp_path):

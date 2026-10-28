@@ -2,6 +2,8 @@
 
 from typing import ClassVar
 
+from PySide6.QtWidgets import QDialog
+
 from mktsk.gui.reminders_scheduler import ReminderScheduler
 from mktsk.tasks import close_task
 from tests.gui_helpers import action_bar, select_tab, task_listing
@@ -24,9 +26,7 @@ class _AcceptDialog:
     def __init__(self, task_title, parent=None):
         self.task_title = task_title
 
-    def exec(self):
-        from PySide6.QtWidgets import QDialog
-
+    def exec(self) -> QDialog.DialogCode:
         return QDialog.DialogCode.Accepted
 
     def due(self):
@@ -41,9 +41,7 @@ class _AcceptDialog:
 class _RejectDialog(_AcceptDialog):
     """Stands in for the add dialog and cancels at once."""
 
-    def exec(self):
-        from PySide6.QtWidgets import QDialog
-
+    def exec(self) -> QDialog.DialogCode:
         return QDialog.DialogCode.Rejected
 
 
