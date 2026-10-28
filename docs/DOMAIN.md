@@ -88,14 +88,18 @@
 - A move that fails is skipped with the error of the system, and the files after it are
   still moved, so one file that cannot be moved never holds the rest
 - Closing compresses the task folder into an archive beside it: `close_task(folder, title)`
-  writes `<folder name>.zip` under a temporary name next to the folder, with every file of
-  the folder under the path `<folder name>/<relative path>` and the `.md` carried in with
-  the `closed` event written into the zip rather than into the folder, so the `.md` on disk
-  is never touched. It verifies the zip with `testzip`, the exact set of names and the size
-  of every member, moves it into place with `os.replace`, and only then deletes the folder.
-  A failure before that leaves the folder intact and removes the temporary file; a failure
-  deleting the folder keeps both and raises `TaskError` saying the task is archived but the
-  folder could not be removed. Nothing is ever lost. The message is `Closed: <zip name>`
+  first renames the folder to a temporary sibling name and straight back to prove no file of
+  the task is in use; if the rename fails (a file is open, `PermissionError` on Windows) it
+  raises `TaskInUseError` naming the task, creates no zip and leaves the folder untouched.
+  Otherwise it writes `<folder name>.zip` under a temporary name next to the folder, with
+  every file of the folder under the path `<folder name>/<relative path>` and the `.md`
+  carried in with the `closed` event written into the zip rather than into the folder, so
+  the `.md` on disk is never touched. It verifies the zip with `testzip`, the exact set of
+  names and the size of every member, moves it into place with `os.replace`, and only then
+  deletes the folder. A failure before that leaves the folder intact and removes the
+  temporary file; a failure deleting the folder keeps both and raises `TaskError` saying the
+  task is archived but the folder could not be removed. Nothing is ever lost. The message is
+  `Closed: <zip name>`
 - Reopening brings the archive back as a folder: `reopen_task(location, title)` finds the
   archive, extracts it into `.<folder name>.part` beside it, validating each member before
   it is written — a name that is absolute or that leaves the destination once resolved is

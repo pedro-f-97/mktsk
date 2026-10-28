@@ -379,6 +379,14 @@ def _verify_archive(temp: Path, members: list[tuple[str, bytes]]) -> None:
                 )
 
 
+class TaskInUseError(helpers.TaskError):
+    """The task cannot be closed because one of its files is open.
+
+    A folder holding an open file cannot be renamed on Windows, so a failed
+    rename probe means the task is in use and must not be closed yet.
+    """
+
+
 def close_task(folder: Path, title: str) -> TaskResult:
     """Compresses a task folder into an archive beside it and deletes it.
 
@@ -397,6 +405,8 @@ def close_task(folder: Path, title: str) -> TaskResult:
         The archive and a message describing what happened.
 
     Raises:
+        TaskInUseError: If a file of the task is in use and the folder cannot
+            be renamed. No zip is created and the folder is not touched.
         TaskError: If the task is already archived, has no .md, the archive
             fails verification, or the folder cannot be removed now that the
             archive is in place.
@@ -410,6 +420,20 @@ def close_task(folder: Path, title: str) -> TaskResult:
 
     if not file.is_file():
         raise helpers.TaskError(f"'{title}' has no Markdown file")
+
+    # Probe that no file of the task is in use: renaming the folder to a
+    # temporary sibling and straight back must succeed. A folder holding an
+    # open file cannot be renamed (PermissionError on Windows), so a failed
+    # rename means the task is in use and nothing is created or touched.
+    probe = folder.parent / f".{folder.name}.close.part"
+    try:
+        os.rename(folder, probe)
+        os.rename(probe, folder)
+    except OSError as error:
+        raise TaskInUseError(
+            f"Could not close the task '{folder.name}': some of its files are "
+            f"in use. Close them and try again."
+        ) from error
 
     temp = folder.parent / f".{folder.name}.zip.part"
 

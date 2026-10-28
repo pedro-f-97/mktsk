@@ -388,10 +388,14 @@ class _ActionBar(QWidget):
         # the menu opens from the click rather than from the press, so the
         # button never waits for a menu that the click itself has to close
         self.state_button.clicked.connect(self._open_state_menu)
-        for button in self.buttons():
+        # the archive button closes the task, so it stands last of the bar,
+        # after even the reminder buttons when they are shown; the other
+        # buttons keep their order
+        for button in self.buttons()[:-1]:
             layout.addWidget(button)
         for button in self.reminder_buttons():
             layout.addWidget(button)
+        layout.addWidget(self.close_button)
         self._update_reminder_buttons()
         # the stretch keeps the surplus of the bar away from the buttons, so
         # they pack to the left edge even when only the reopen one is shown

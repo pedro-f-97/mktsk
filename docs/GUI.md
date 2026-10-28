@@ -460,10 +460,10 @@
   `reminders()` returns all reminders and `for_task(task)` returns those of one task.
 - Fired reminders are deleted from the file before being returned, so each fires at most
   once.
-- The bar of a selected open task carries two more icon buttons after the existing ones,
-  `Add reminder` and `Reminders`, drawn as a bell, the first with a small plus badge. They
-  stand only while the window carries a reminder scheduler, so a run without a tray offers
-  none, and they go with the rest of the bar on a closed task.
+- The bar of a selected open task carries two more icon buttons after the change-state one,
+  `Add reminder` and `Reminders`, drawn as a bell, the first with a small plus badge. `Close`
+  stands last, after them. They stand only while the window carries a reminder scheduler, so a
+  run without a tray offers none, and they go with the rest of the bar on a closed task.
 - `Add reminder` opens `AddReminderDialog`: a `QDateTimeEdit` with a calendar popup that
   starts at the next whole hour, a message field with the `Message (optional)` placeholder,
   and `OK` and `Cancel`. `OK` stands enabled only while the chosen minute is in the future,
