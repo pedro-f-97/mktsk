@@ -1,6 +1,8 @@
 """The system tray, close-to-tray and real Quit behaviour."""
 
-from PySide6.QtCore import QSettings
+from typing import cast
+
+from PySide6.QtCore import QLockFile, QSettings
 from PySide6.QtGui import QCloseEvent, QGuiApplication
 from PySide6.QtWidgets import QSystemTrayIcon
 
@@ -80,7 +82,7 @@ def test_quit_releases_the_instance_lock(qtbot, tmp_path, monkeypatch):
         def unlock(self):
             released.append(True)
 
-    window._instance_lock = _FakeLock()
+    window._instance_lock = cast(QLockFile, _FakeLock())
     monkeypatch.setattr("mktsk.gui.window.QApplication.quit", lambda: None)
     window.quit_application()
     assert released == [True]

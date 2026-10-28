@@ -60,7 +60,6 @@ from mktsk import helpers, listing, parsing, standards
 from .icons import (
     _ICON_SIZE,
     _draw_bell,
-    _draw_bell_plus,
     _draw_clip,
     _draw_close,
     _draw_folder,
@@ -366,15 +365,19 @@ class _ActionBar(QWidget):
             self, "Change the state of this task", _draw_state, "ChangeState"
         )
         self.close_button = _icon_button(self, "Close this task", _draw_close, "CloseTask")
-        # the reminder buttons speak to the reminders of the task rather than
-        # to the task itself, and stand only when the window carries a
-        # scheduler behind them, so a run without a tray never offers them
-        self.add_reminder_button = _icon_button(
-            self, "Add reminder", _draw_bell_plus, "AddReminder"
-        )
+        # the reminders button speaks to the reminders of the task rather than
+        # to the task itself, and stands only when the window carries a
+        # scheduler behind them, so a run without a tray never offers it
         self.reminders_button = _icon_button(
             self, "Reminders", _draw_bell, "Reminders"
         )
+        self.reminders_menu = QMenu(self.reminders_button)
+        self.reminders_menu.addAction("Add reminder...")
+        self.reminders_menu.addAction("Reminders...")
+        self.reminders_button.setMenu(self.reminders_menu)
+        # the menu opens from the click rather than from the press, so the
+        # button never waits for a menu that the click itself has to close
+        self.reminders_button.clicked.connect(self._open_reminders_menu)
         self._reminders_available = False
         self._reopening = False
         # the resume button is the one set_reopening turns into the reopen
@@ -389,12 +392,11 @@ class _ActionBar(QWidget):
         # button never waits for a menu that the click itself has to close
         self.state_button.clicked.connect(self._open_state_menu)
         # the archive button closes the task, so it stands last of the bar,
-        # after even the reminder buttons when they are shown; the other
-        # buttons keep their order
+        # after the reminders button when it is shown; the other buttons keep
+        # their order
         for button in self.buttons()[:-1]:
             layout.addWidget(button)
-        for button in self.reminder_buttons():
-            layout.addWidget(button)
+        layout.addWidget(self.reminders_button)
         layout.addWidget(self.close_button)
         self._update_reminder_buttons()
         # the stretch keeps the surplus of the bar away from the buttons, so
@@ -405,6 +407,12 @@ class _ActionBar(QWidget):
         """Opens the menu of states under the button that carries it."""
         self.state_menu.popup(
             self.state_button.mapToGlobal(self.state_button.rect().bottomLeft())
+        )
+
+    def _open_reminders_menu(self) -> None:
+        """Opens the reminders menu under the button that carries it."""
+        self.reminders_menu.popup(
+            self.reminders_button.mapToGlobal(self.reminders_button.rect().bottomLeft())
         )
 
     def buttons(self) -> tuple[QToolButton, ...]:
@@ -418,8 +426,8 @@ class _ActionBar(QWidget):
         )
 
     def reminder_buttons(self) -> tuple[QToolButton, ...]:
-        """Returns the two reminder buttons, in order."""
-        return (self.add_reminder_button, self.reminders_button)
+        """Returns the reminders button, alone."""
+        return (self.reminders_button,)
 
     def set_reminders_available(self, available: bool) -> None:
         """Offers the reminder buttons only when a scheduler stands behind them.
@@ -431,10 +439,9 @@ class _ActionBar(QWidget):
         self._update_reminder_buttons()
 
     def _update_reminder_buttons(self) -> None:
-        """Shows the reminder buttons on an open task when a scheduler exists."""
+        """Shows the reminders button on an open task when a scheduler exists."""
         visible = self._reminders_available and not self._reopening
-        for button in self.reminder_buttons():
-            button.setVisible(visible)
+        self.reminders_button.setVisible(visible)
 
     def set_reopening(self, reopening: bool) -> None:
         """Offers reopen alone for a row that holds a closed task.
@@ -1225,8 +1232,12 @@ class TaskListing(QListWidget):
         self.action_bar.close_button.clicked.connect(
             lambda: self._request(self.close_requested)
         )
-        self.action_bar.add_reminder_button.clicked.connect(self._add_reminder)
-        self.action_bar.reminders_button.clicked.connect(self._show_reminders)
+        self.action_bar.reminders_menu.actions()[0].triggered.connect(
+            self._add_reminder
+        )
+        self.action_bar.reminders_menu.actions()[1].triggered.connect(
+            self._show_reminders
+        )
         for action in self.action_bar.state_menu.actions():
             name = action.text()
             action.triggered.connect(
