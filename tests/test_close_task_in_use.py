@@ -2,6 +2,7 @@ import zipfile
 
 import pytest
 
+import mktsk.main as cli
 from mktsk import tasks
 from mktsk.helpers import TaskError
 from mktsk.tasks import TaskInUseError, close_task
@@ -73,3 +74,29 @@ def test_close_with_a_file_in_use_shows_a_warning_and_keeps_the_task(
     # the task stays open and unchanged
     assert file.parent.is_dir()
     assert not (tmp_path / "260918 - Foo.zip").exists()
+
+
+def test_cli_close_with_a_task_in_use_exits_one_and_reports_it_on_stderr(
+    monkeypatch, tmp_path, make_task, capsys
+):
+    make_task(tmp_path, "260918", "Foo")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "sys.argv", ["mktsk", "--folder", str(tmp_path), "--close", "Foo"]
+    )
+
+    def raise_in_use(folder, title):
+        raise tasks.TaskInUseError(
+            f"Could not close the task '{title}': some of its files are in use. "
+            "Close them and try again."
+        )
+
+    monkeypatch.setattr("mktsk.tasks.close_task", raise_in_use)
+
+    result = cli.main()
+
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "Foo" in captured.err
+    assert "in use" in captured.err
+    assert captured.out == ""
