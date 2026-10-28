@@ -34,7 +34,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -69,6 +68,7 @@ from .icons import (
     _SMALL_ICON_SIZE,
     _draw_chevron,
     _draw_choose,
+    _draw_content,
     _draw_cross,
     _draw_refresh,
     _draw_up,
@@ -90,7 +90,12 @@ from .tasklist import (
     _UnifiedSelectionDelegate,
 )
 from .tray import TrayController
-from .tree import _HEADER_BUTTON_MARGIN, _PATH_ROLE, _CategoryTree
+from .tree import (
+    _HEADER_BUTTON_MARGIN,
+    _HEADER_ICON_SIZE,
+    _PATH_ROLE,
+    _CategoryTree,
+)
 
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
@@ -123,6 +128,50 @@ _MAX_SKIPPED_NAMED = 10
 # the key the window keeps its size and position under; the splitters keep
 # theirs under the keys `_splitters` gives them
 _GEOMETRY_KEY = "window/geometry"
+
+
+class _SearchResults(QTreeWidget):
+    """The search results list, with an optional empty-state message.
+
+    The message is painted on the viewport, never added as an item, so it is
+    never selected and never counted. It only shows when there are no
+    top-level items and a message is set.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._empty_message = ""
+
+    def set_empty_message(self, text: str) -> None:
+        """Sets the empty-state message, repainting the viewport when it changes.
+
+        Args:
+            text: the message to show when the results list is empty.
+        """
+        if self._empty_message == text:
+            return
+        self._empty_message = text
+        self.viewport().update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        if self.topLevelItemCount() == 0 and self._empty_message:
+            painter = QPainter(self.viewport())
+            rect = self.viewport().rect()
+            metrics = self.fontMetrics()
+            text = metrics.elidedText(
+                self._empty_message,
+                Qt.TextElideMode.ElideRight,
+                rect.width(),
+            )
+            painter.setPen(
+                self.palette().color(QPalette.ColorRole.PlaceholderText)
+            )
+            painter.drawText(
+                rect,
+                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                text,
+            )
 
 
 def _task_text(file: Path) -> str:
@@ -421,7 +470,7 @@ class MainWindow(QMainWindow):
         # the search panel under the tree: its header shares the single model
         # of the results, so it carries the `Search` title the way the tree's
         # own header carries `Directory`, with the other two sections hidden
-        self.search_results = QTreeWidget()
+        self.search_results = _SearchResults()
         self.search_results.setColumnCount(4)
         self.search_results.setHeaderLabels(["Date", "Title", "Excerpt", "Category"])
         self.search_results.setHeaderHidden(True)
@@ -458,11 +507,21 @@ class MainWindow(QMainWindow):
         self.search_header.model().setHeaderData(
             0, Qt.Orientation.Horizontal, "Search", Qt.ItemDataRole.DisplayRole
         )
-        # Content checkbox placed in the header row, right-aligned like Directory header buttons
-        self.search_content_checkbox = QCheckBox("Content")
+        # Content toggle placed in the header row, right-aligned like Directory header buttons
+        self.search_content_checkbox = _icon_button(
+            self.search_header, "Search in content", _draw_content, "ContentToggle"
+        )
+        self.search_content_checkbox.setCheckable(True)
         self.search_content_checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.search_content_checkbox.setParent(self.search_header)
-        self.search_header.geometriesChanged.connect(self._place_search_header_checkbox)
+        self.search_content_checkbox.setChecked(False)
+        # the same icon size as the Directory header buttons, so the glyph
+        # reads at their size and stroke weight
+        self.search_content_checkbox.setIconSize(
+            QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE)
+        )
+        self.search_header.geometriesChanged.connect(
+            self._place_search_header_toggle
+        )
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search tasks")
         self.search_input.setClearButtonEnabled(True)
@@ -745,17 +804,17 @@ class MainWindow(QMainWindow):
         self.preview_text_header.setFixedHeight(height)
         self.preview_list_header.setFixedHeight(height)
 
-    def _place_search_header_checkbox(self) -> None:
-        """Places the Content checkbox at the right end of the Search header.
+    def _place_search_header_toggle(self) -> None:
+        """Places the Content toggle at the right end of the Search header.
 
-        The checkbox is sized to its hint and its right edge stays inside the
-        header, a margin away from the border, so nothing is painted beside it.
+        Squared off to the header height and kept a margin inside the right
+        edge, exactly like the Directory header buttons, so none of them
+        overflows the row and the gaps between them are all the same.
         """
         header = self.search_header
         side = min(self.search_content_checkbox.sizeHint().height(), header.height())
-        width = self.search_content_checkbox.sizeHint().width()
-        x = header.width() - _HEADER_BUTTON_MARGIN - width
-        self.search_content_checkbox.resize(width, side)
+        self.search_content_checkbox.resize(side, side)
+        x = header.width() - _HEADER_BUTTON_MARGIN - side
         self.search_content_checkbox.move(x, (header.height() - side) // 2)
 
     def _update_path_label(self) -> None:
@@ -1099,6 +1158,7 @@ class MainWindow(QMainWindow):
         if self.search_content_checkbox.isChecked():
             self.search_results.clear()
             self._content_search_results = None
+            self._refresh_content_message()
             return
         self._filter_search()
 
@@ -1111,12 +1171,30 @@ class MainWindow(QMainWindow):
         else:
             self.search_input.setPlaceholderText("Search tasks")
         # Toggling the checkbox clears the results list.
+        self._refresh_content_message()
         if not checked:
             # Toggling back to OFF re-runs the live title search for the current text.
             self._filter_search()
         else:
             # In content mode, empty list until Enter pressed
             pass
+
+    def _refresh_content_message(self) -> None:
+        """Sets the empty-state message for content mode, or clears it.
+
+        Nothing searched yet (or the text changed since the last Enter) shows
+        the hint, an empty hit list shows "No results", and a hit list with
+        hits shows no message. Off mode never shows a message.
+        """
+        if not self.search_content_checkbox.isChecked():
+            self.search_results.set_empty_message("")
+            return
+        if self._content_search_results is None:
+            self.search_results.set_empty_message("Press Enter to search content")
+        elif not self._content_search_results:
+            self.search_results.set_empty_message("No results")
+        else:
+            self.search_results.set_empty_message("")
 
     def _on_search_return_pressed(self) -> None:
         if self.search_content_checkbox.isChecked():
@@ -1129,12 +1207,14 @@ class MainWindow(QMainWindow):
         if query.strip() == "":
             self.search_results.clear()
             self._content_search_results = None
+            self._refresh_content_message()
             return
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             hits = listing.search_task_contents(self.current_directory, query)
             self._content_search_results = hits
             self._show_content_results(hits)
+            self._refresh_content_message()
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -1181,6 +1261,8 @@ class MainWindow(QMainWindow):
             self.search_results.clear()
             self._content_search_results = None
             return
+        # OFF mode: no empty-state message, the live title search speaks for itself.
+        self.search_results.set_empty_message("")
         # Hide excerpt column when OFF
         try:
             self.search_results.setColumnHidden(2, True)
