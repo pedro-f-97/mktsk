@@ -2,11 +2,9 @@
 
 import datetime
 
-from PySide6.QtCore import QDate, QDateTime, QPoint, QSize, Qt, QTime
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QDate, QDateTime, QPoint, Qt, QTime
 from PySide6.QtWidgets import QDialog
 
-from mktsk.gui.icons import _draw_bell, _draw_bell_plus, _stroked_icon
 from mktsk.gui.reminders_scheduler import ReminderScheduler
 from mktsk.gui.reminders_ui import (
     AddReminderDialog,
@@ -87,14 +85,6 @@ class _RejectDialog(_AcceptDialog):
 
     def exec(self):
         return QDialog.DialogCode.Rejected
-
-
-def test_both_bell_icons_draw_at_several_sizes(qapp):
-    for draw in (_draw_bell, _draw_bell_plus):
-        icon = _stroked_icon(QColor("#000000"), draw)
-        assert icon.isNull() is False
-        for size in (12, 16, 18, 24):
-            assert icon.pixmap(QSize(size, size)).isNull() is False
 
 
 def test_the_row_bar_offers_the_reminders_button_for_an_open_task(

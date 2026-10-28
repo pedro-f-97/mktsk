@@ -165,15 +165,13 @@ def _draw_reopen(painter: QPainter, box: QRectF) -> None:
     painter.drawLine(QPointF(14, 9), QPointF(16.1, 11.1))
 
 
-def _draw_bell(painter: QPainter, box: QRectF, badge: bool = False) -> None:
+def _draw_bell(painter: QPainter, box: QRectF) -> None:
     """Draws a bell with a clapper, for the reminders of a task.
 
     Args:
         painter: painter over the icon, given the pen the icons are drawn with.
         box: rectangle the icon is drawn in, unused because the strokes sit on
             the shared grid.
-        badge: whether a small plus is added at the lower right, which tells
-            adding a reminder apart from showing them.
     """
     path = QPainterPath()
     path.moveTo(9, 3)
@@ -186,15 +184,6 @@ def _draw_bell(painter: QPainter, box: QRectF, badge: bool = False) -> None:
     path.cubicTo(13.2, 5.4, 11.6, 3, 9, 3)
     painter.drawPath(path)
     painter.drawArc(QRectF(7.6, 12, 2.8, 2.8), 180 * 16, 180 * 16)
-
-    if badge:
-        painter.drawLine(QPointF(14.6, 12.8), QPointF(14.6, 16.4))
-        painter.drawLine(QPointF(12.8, 14.6), QPointF(16.4, 14.6))
-
-
-def _draw_bell_plus(painter: QPainter, box: QRectF) -> None:
-    """Draws the bell with a plus badge, for adding a reminder."""
-    _draw_bell(painter, box, badge=True)
 
 
 def _draw_choose(painter: QPainter, box: QRectF) -> None:
