@@ -97,7 +97,7 @@ def test_both_bell_icons_draw_at_several_sizes(qapp):
             assert icon.pixmap(QSize(size, size)).isNull() is False
 
 
-def test_the_row_bar_offers_the_reminder_buttons_for_an_open_task(
+def test_the_row_bar_offers_the_reminders_button_for_an_open_task(
     window, tmp_path, make_task
 ):
     file = make_task(tmp_path, "261027", "Teste")
@@ -106,15 +106,16 @@ def test_the_row_bar_offers_the_reminder_buttons_for_an_open_task(
 
     bar = action_bar(window, file)
 
-    assert [button.toolTip() for button in bar.reminder_buttons()] == [
-        "Add reminder",
-        "Reminders",
-    ]
-    for button in bar.reminder_buttons():
-        assert button.text() == ""
-        assert button.isVisible() is True
-        assert button.iconSize() == bar.open_button.iconSize()
-        assert button.autoRaise() is True
+    reminders = bar.reminder_buttons()
+    assert len(reminders) == 1
+    assert reminders[0] is bar.reminders_button
+    assert bar.reminders_button.toolTip() == "Reminders"
+    assert bar.reminders_button.text() == ""
+    assert bar.reminders_button.isVisible() is True
+    assert bar.reminders_button.iconSize() == bar.open_button.iconSize()
+    assert bar.reminders_button.autoRaise() is True
+    actions = bar.reminders_menu.actions()
+    assert [action.text() for action in actions] == ["Add reminder...", "Reminders..."]
 
 
 def test_the_row_bar_offers_no_reminders_without_a_scheduler(
@@ -125,7 +126,7 @@ def test_the_row_bar_offers_no_reminders_without_a_scheduler(
 
     bar = action_bar(window, file)
 
-    assert [button.isVisible() for button in bar.reminder_buttons()] == [False, False]
+    assert [button.isVisible() for button in bar.reminder_buttons()] == [False]
 
 
 def test_the_closed_tab_offers_no_reminder_buttons(window, tmp_path, make_task):
@@ -137,7 +138,7 @@ def test_the_closed_tab_offers_no_reminder_buttons(window, tmp_path, make_task):
     select_tab(window, "Closed")
     bar = action_bar(window, tmp_path / "261027 - Teste.zip", "Closed")
 
-    assert [button.isVisible() for button in bar.reminder_buttons()] == [False, False]
+    assert [button.isVisible() for button in bar.reminder_buttons()] == [False]
 
 
 def test_the_add_dialog_opens_at_the_next_whole_hour(qapp, monkeypatch):
@@ -182,7 +183,7 @@ def test_accepting_the_add_dialog_stores_the_reminder(
     window.reminder_scheduler = scheduler
     monkeypatch.setattr("mktsk.gui.tasklist.AddReminderDialog", _AcceptDialog)
 
-    action_bar(window, file).add_reminder_button.click()
+    action_bar(window, file).reminders_menu.actions()[0].trigger()
 
     [stored] = scheduler.reminders()
     assert stored.task == "261027 - MyTask"
@@ -200,7 +201,7 @@ def test_cancelling_the_add_dialog_adds_nothing(
     window.reminder_scheduler = scheduler
     monkeypatch.setattr("mktsk.gui.tasklist.AddReminderDialog", _RejectDialog)
 
-    action_bar(window, file).add_reminder_button.click()
+    action_bar(window, file).reminders_menu.actions()[0].trigger()
 
     assert scheduler.reminders() == []
 
@@ -223,7 +224,7 @@ def test_the_reminders_button_opens_the_popup_for_the_selected_task(
 
     monkeypatch.setattr("mktsk.gui.tasklist.RemindersDialog", _Dialog)
 
-    action_bar(window, file).reminders_button.click()
+    action_bar(window, file).reminders_menu.actions()[1].trigger()
 
     assert seen[0][:3] == (scheduler, "261027 - MyTask", "My Task")
 

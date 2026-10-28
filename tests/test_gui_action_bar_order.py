@@ -40,7 +40,6 @@ def test_the_archive_button_is_last_with_a_scheduler(window, tmp_path, make_task
         bar.resume_button,
         bar.rename_button,
         bar.state_button,
-        bar.add_reminder_button,
         bar.reminders_button,
         bar.close_button,
     )
@@ -56,7 +55,7 @@ def test_the_archive_button_is_last_without_a_scheduler(window, tmp_path, make_t
 
     bar = action_bar(window, file)
 
-    assert [button.isVisible() for button in bar.reminder_buttons()] == [False, False]
+    assert [button.isVisible() for button in bar.reminder_buttons()] == [False]
     ordered = tuple(
         button for button in _bar_buttons(bar) if button.isVisible()
     )
@@ -86,15 +85,13 @@ def test_the_other_buttons_keep_their_order(window, tmp_path, make_task):
             bar.resume_button,
             bar.rename_button,
             bar.state_button,
-            bar.add_reminder_button,
             bar.reminders_button,
         )
     }
     assert positions[bar.open_button] < positions[bar.resume_button]
     assert positions[bar.resume_button] < positions[bar.rename_button]
     assert positions[bar.rename_button] < positions[bar.state_button]
-    assert positions[bar.state_button] < positions[bar.add_reminder_button]
-    assert positions[bar.add_reminder_button] < positions[bar.reminders_button]
+    assert positions[bar.state_button] < positions[bar.reminders_button]
 
 
 def test_the_closed_tab_still_offers_only_reopen(window, tmp_path, make_task):
@@ -113,7 +110,6 @@ def test_the_closed_tab_still_offers_only_reopen(window, tmp_path, make_task):
             bar.rename_button,
             bar.state_button,
             bar.close_button,
-            bar.add_reminder_button,
             bar.reminders_button,
         )
         if button.isVisible()
