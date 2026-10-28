@@ -125,6 +125,50 @@ _MAX_SKIPPED_NAMED = 10
 _GEOMETRY_KEY = "window/geometry"
 
 
+class _SearchResults(QTreeWidget):
+    """The search results list, with an optional empty-state message.
+
+    The message is painted on the viewport, never added as an item, so it is
+    never selected and never counted. It only shows when there are no
+    top-level items and a message is set.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._empty_message = ""
+
+    def set_empty_message(self, text: str) -> None:
+        """Sets the empty-state message, repainting the viewport when it changes.
+
+        Args:
+            text: the message to show when the results list is empty.
+        """
+        if self._empty_message == text:
+            return
+        self._empty_message = text
+        self.viewport().update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        if self.topLevelItemCount() == 0 and self._empty_message:
+            painter = QPainter(self.viewport())
+            rect = self.viewport().rect()
+            metrics = self.fontMetrics()
+            text = metrics.elidedText(
+                self._empty_message,
+                Qt.TextElideMode.ElideRight,
+                rect.width(),
+            )
+            painter.setPen(
+                self.palette().color(QPalette.ColorRole.PlaceholderText)
+            )
+            painter.drawText(
+                rect,
+                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
+                text,
+            )
+
+
 def _task_text(file: Path) -> str:
     """Reads the raw text of a task .md for the preview.
 
@@ -421,7 +465,7 @@ class MainWindow(QMainWindow):
         # the search panel under the tree: its header shares the single model
         # of the results, so it carries the `Search` title the way the tree's
         # own header carries `Directory`, with the other two sections hidden
-        self.search_results = QTreeWidget()
+        self.search_results = _SearchResults()
         self.search_results.setColumnCount(4)
         self.search_results.setHeaderLabels(["Date", "Title", "Excerpt", "Category"])
         self.search_results.setHeaderHidden(True)
@@ -1104,6 +1148,7 @@ class MainWindow(QMainWindow):
         if self.search_content_checkbox.isChecked():
             self.search_results.clear()
             self._content_search_results = None
+            self._refresh_content_message()
             return
         self._filter_search()
 
@@ -1116,12 +1161,30 @@ class MainWindow(QMainWindow):
         else:
             self.search_input.setPlaceholderText("Search tasks")
         # Toggling the checkbox clears the results list.
+        self._refresh_content_message()
         if not checked:
             # Toggling back to OFF re-runs the live title search for the current text.
             self._filter_search()
         else:
             # In content mode, empty list until Enter pressed
             pass
+
+    def _refresh_content_message(self) -> None:
+        """Sets the empty-state message for content mode, or clears it.
+
+        Nothing searched yet (or the text changed since the last Enter) shows
+        the hint, an empty hit list shows "No results", and a hit list with
+        hits shows no message. Off mode never shows a message.
+        """
+        if not self.search_content_checkbox.isChecked():
+            self.search_results.set_empty_message("")
+            return
+        if self._content_search_results is None:
+            self.search_results.set_empty_message("Press Enter to search content")
+        elif not self._content_search_results:
+            self.search_results.set_empty_message("No results")
+        else:
+            self.search_results.set_empty_message("")
 
     def _on_search_return_pressed(self) -> None:
         if self.search_content_checkbox.isChecked():
@@ -1134,12 +1197,14 @@ class MainWindow(QMainWindow):
         if query.strip() == "":
             self.search_results.clear()
             self._content_search_results = None
+            self._refresh_content_message()
             return
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             hits = listing.search_task_contents(self.current_directory, query)
             self._content_search_results = hits
             self._show_content_results(hits)
+            self._refresh_content_message()
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -1186,6 +1251,8 @@ class MainWindow(QMainWindow):
             self.search_results.clear()
             self._content_search_results = None
             return
+        # OFF mode: no empty-state message, the live title search speaks for itself.
+        self.search_results.set_empty_message("")
         # Hide excerpt column when OFF
         try:
             self.search_results.setColumnHidden(2, True)

@@ -74,6 +74,12 @@
   Default OFF; the checked state reuses the pressed look of the header buttons.
   Toggling it clears the results list. The panel sits inside the pane and it
   collapses with the pane
+- In Content mode the results list shows an empty-state message, painted on the
+  viewport and never an item: `Press Enter to search content` when nothing has
+  been searched yet or the text changed since the last Enter, `No results` after
+  an Enter with zero hits, and no message when there are hits. Switching the
+  toggle off clears the message and the live title search behaves exactly as
+  today.
 - The results hold the tasks the listings hold, closed ones included, and the query runs
   again over them on every reload, so a task created or closed since is reached the way
   the table now lists it; the result that was highlighted is highlighted again when it
