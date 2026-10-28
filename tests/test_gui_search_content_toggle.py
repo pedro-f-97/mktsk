@@ -18,6 +18,19 @@ def test_toggle_is_a_checkable_tool_button_off_by_default(window):
     assert toggle.toolTip() == "Search in content"
 
 
+def test_toggle_matches_the_directory_header_buttons(window):
+    toggle = _toggle(window)
+    header_buttons = (
+        window.choose_button,
+        window.up_button,
+        window.directory_tree.header_button,
+        window.directory_tree.bell_button,
+    )
+    for button in header_buttons:
+        assert toggle.iconSize() == button.iconSize()
+        assert toggle.sizeHint() == button.sizeHint()
+
+
 def test_toggle_on_with_nothing_searched_shows_the_hint(window, tmp_path, make_task):
     make_task(tmp_path, "260918", "SocietyLaunch")
     window.navigate_to(tmp_path)

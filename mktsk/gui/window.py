@@ -90,7 +90,12 @@ from .tasklist import (
     _UnifiedSelectionDelegate,
 )
 from .tray import TrayController
-from .tree import _HEADER_BUTTON_MARGIN, _PATH_ROLE, _CategoryTree
+from .tree import (
+    _HEADER_BUTTON_MARGIN,
+    _HEADER_ICON_SIZE,
+    _PATH_ROLE,
+    _CategoryTree,
+)
 
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
@@ -509,6 +514,11 @@ class MainWindow(QMainWindow):
         self.search_content_checkbox.setCheckable(True)
         self.search_content_checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.search_content_checkbox.setChecked(False)
+        # the same icon size as the Directory header buttons, so the glyph
+        # reads at their size and stroke weight
+        self.search_content_checkbox.setIconSize(
+            QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE)
+        )
         self.search_header.geometriesChanged.connect(
             self._place_search_header_toggle
         )
@@ -797,14 +807,14 @@ class MainWindow(QMainWindow):
     def _place_search_header_toggle(self) -> None:
         """Places the Content toggle at the right end of the Search header.
 
-        The toggle is sized to its hint and its right edge stays inside the
-        header, a margin away from the border, so nothing is painted beside it.
+        Squared off to the header height and kept a margin inside the right
+        edge, exactly like the Directory header buttons, so none of them
+        overflows the row and the gaps between them are all the same.
         """
         header = self.search_header
         side = min(self.search_content_checkbox.sizeHint().height(), header.height())
-        width = self.search_content_checkbox.sizeHint().width()
-        x = header.width() - _HEADER_BUTTON_MARGIN - width
-        self.search_content_checkbox.resize(width, side)
+        self.search_content_checkbox.resize(side, side)
+        x = header.width() - _HEADER_BUTTON_MARGIN - side
         self.search_content_checkbox.move(x, (header.height() - side) // 2)
 
     def _update_path_label(self) -> None:
