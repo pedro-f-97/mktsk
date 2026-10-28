@@ -1656,10 +1656,12 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         # with a tray active and no real quit in progress, closing hides the
         # window to the tray instead of quitting; a session save always quits
+        app = QGuiApplication.instance()
+        saving = isinstance(app, QGuiApplication) and app.isSavingSession()
         if (
             self.tray_controller is not None
             and not self._quitting
-            and not QGuiApplication.instance().isSavingSession()
+            and not saving
         ):
             self._save_state()
             self.hide()
