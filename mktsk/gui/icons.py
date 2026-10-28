@@ -208,6 +208,19 @@ def _draw_refresh(painter: QPainter, box: QRectF) -> None:
     painter.drawLine(QPointF(4, 9), QPointF(1.9, 11.1))
 
 
+def _draw_content(painter: QPainter, box: QRectF) -> None:
+    """Draws a document with text lines, for searching inside tasks."""
+    painter.drawLine(QPointF(2, 2), QPointF(14, 2))
+    painter.drawLine(QPointF(14, 2), QPointF(14, 10))
+    painter.drawLine(QPointF(2, 2), QPointF(2, 16))
+    painter.drawLine(QPointF(2, 16), QPointF(16, 16))
+    painter.drawLine(QPointF(14, 2), QPointF(16, 4))
+    painter.drawLine(QPointF(16, 4), QPointF(16, 16))
+    painter.drawLine(QPointF(4, 6), QPointF(14, 6))
+    painter.drawLine(QPointF(4, 9), QPointF(11, 9))
+    painter.drawLine(QPointF(4, 12), QPointF(13, 12))
+
+
 def _draw_chevron(
     painter: QPainter, box: QRectF, points_right: bool, color: QColor
 ) -> None:

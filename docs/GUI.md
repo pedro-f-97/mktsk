@@ -67,9 +67,13 @@
   Content is ON) and a clear button, and a results list below. The header is a standalone
   `QHeaderView` over the results' model, the way the `Directory` header sits over the
   tree's, with the other three sections hidden; both headers take the height of the tab
-  bar, so they read as one set. A `QCheckBox` labelled `Content` sits in the header row,
-  right-aligned like the Directory header buttons. Default OFF. The panel sits inside the
-  pane and it collapses with the pane
+  bar, so they read as one set. A checkable icon toggle button labelled
+  `Search in content` sits in the header row, right-aligned like the Directory
+  header buttons. Its icon is a small document with text lines drawn in code in
+  `gui/icons.py`, reusing the helper, size and stroke of the other header icons.
+  Default OFF; the checked state reuses the pressed look of the header buttons.
+  Toggling it clears the results list. The panel sits inside the pane and it
+  collapses with the pane
 - The results hold the tasks the listings hold, closed ones included, and the query runs
   again over them on every reload, so a task created or closed since is reached the way
   the table now lists it; the result that was highlighted is highlighted again when it
@@ -86,7 +90,7 @@
   was
 - OFF: exactly the previous behaviour (live title search as you type). Column order: Date, Title, Category. The Excerpt column is hidden.
 - ON: typing does NOT search. The search runs only when the user presses Enter in the field. Show a wait cursor while it runs. The results list shows columns: Date, Title, Excerpt, Category (category last, after the excerpt). The Excerpt column title appears only in ON mode. The Title and Excerpt columns are resizable by dragging their header edges; the other columns keep their current behaviour. Content search scans every task of every category under the base directory, open and closed (reading closed tasks from their `.zip` files without extracting), matches case- and accent-insensitively with all words in any order anywhere in the file text, returns one hit per task with an excerpt of up to 6 words before and after the first match using the original text and ellipsis at cut ends. Only the task's `.md` is searched; attachments are not. A corrupt or unreadable `.zip`/`.md` is skipped silently.
-- Toggling the checkbox clears the results list. Toggling back to OFF re-runs the live title search for the current text. Esc still clears the field.
+- Toggling the toggle clears the results list. Toggling back to OFF re-runs the live title search for the current text. Esc still clears the field.
 - Empty field means no results, in both modes. Choosing a result behaves exactly as today.
 - The right pane is a side rail beside the creation bar and the tabs: the rail is the
   first column, spans the full height of the pane and is as wide as the `Refresh` button

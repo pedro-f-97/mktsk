@@ -34,7 +34,6 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -69,6 +68,7 @@ from .icons import (
     _SMALL_ICON_SIZE,
     _draw_chevron,
     _draw_choose,
+    _draw_content,
     _draw_cross,
     _draw_refresh,
     _draw_up,
@@ -458,11 +458,16 @@ class MainWindow(QMainWindow):
         self.search_header.model().setHeaderData(
             0, Qt.Orientation.Horizontal, "Search", Qt.ItemDataRole.DisplayRole
         )
-        # Content checkbox placed in the header row, right-aligned like Directory header buttons
-        self.search_content_checkbox = QCheckBox("Content")
+        # Content toggle placed in the header row, right-aligned like Directory header buttons
+        self.search_content_checkbox = _icon_button(
+            self.search_header, "Search in content", _draw_content, "ContentToggle"
+        )
+        self.search_content_checkbox.setCheckable(True)
         self.search_content_checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.search_content_checkbox.setParent(self.search_header)
-        self.search_header.geometriesChanged.connect(self._place_search_header_checkbox)
+        self.search_content_checkbox.setChecked(False)
+        self.search_header.geometriesChanged.connect(
+            self._place_search_header_toggle
+        )
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search tasks")
         self.search_input.setClearButtonEnabled(True)
@@ -745,10 +750,10 @@ class MainWindow(QMainWindow):
         self.preview_text_header.setFixedHeight(height)
         self.preview_list_header.setFixedHeight(height)
 
-    def _place_search_header_checkbox(self) -> None:
-        """Places the Content checkbox at the right end of the Search header.
+    def _place_search_header_toggle(self) -> None:
+        """Places the Content toggle at the right end of the Search header.
 
-        The checkbox is sized to its hint and its right edge stays inside the
+        The toggle is sized to its hint and its right edge stays inside the
         header, a margin away from the border, so nothing is painted beside it.
         """
         header = self.search_header
