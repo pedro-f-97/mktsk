@@ -6,6 +6,7 @@ from typing import cast
 
 from PySide6.QtCore import (
     QByteArray,
+    QLockFile,
     QMimeData,
     QPointF,
     QRectF,
@@ -88,6 +89,7 @@ from .tasklist import (
     _relative_age,
     _UnifiedSelectionDelegate,
 )
+from .tray import TrayController
 from .tree import _HEADER_BUTTON_MARGIN, _PATH_ROLE, _CategoryTree
 
 _ALL_TAB = "All"
@@ -256,6 +258,12 @@ class _PaneToggle(QToolButton):
 class MainWindow(QMainWindow):
     """Desktop interface over the CLI task logic."""
 
+    # the tray controller, when the platform offers a tray; set from the
+    # entry point once the window exists
+    tray_controller: TrayController | None = None
+    # the instance lock, kept alive for the whole run and released on quit
+    _instance_lock: QLockFile | None = None
+
     def __init__(
         self, settings: QSettings | None = None, base_folder: Path | None = None
     ) -> None:
@@ -277,17 +285,12 @@ class MainWindow(QMainWindow):
         # whether a real quit has been requested, so a close event that comes
         # after it is accepted instead of hiding the window to the tray
         self._quitting = False
-        # the tray controller, when the platform offers a tray; set from the
-        # entry point once the window exists
-        self.tray_controller = None
         # the reminder scheduler, created with the tray; set from the entry
         # point once the window exists
         self.reminder_scheduler: ReminderScheduler | None = None
         # the reminders panel and its list, built when a scheduler is attached
         self.reminders_panel: QWidget | None = None
         self.reminders_list: RemindersList | None = None
-        # the instance lock, kept alive for the whole run and released on quit
-        self._instance_lock = None
         # the folder the first-run flow resolved lives in the shared config
         # file, so it is handed in rather than read from QSettings
         self.current_directory = base_folder or Path.cwd()
