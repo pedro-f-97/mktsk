@@ -1,8 +1,10 @@
 """The single reminders dropdown button of the action bar."""
 
+from typing import ClassVar
+
 from mktsk.gui.reminders_scheduler import ReminderScheduler
 from mktsk.tasks import close_task
-from tests.gui_helpers import action_bar, select_tab
+from tests.gui_helpers import action_bar, select_tab, task_listing
 
 
 class _FakeTray:
@@ -147,3 +149,70 @@ def test_reminders_opens_the_popup_for_the_selected_task(
     action_bar(window, file).reminders_menu.actions()[1].trigger()
 
     assert seen[0][:3] == (scheduler, "261027 - MyTask", "My Task")
+
+
+class _NeverOpenedDialog:
+    """Stands in for a dialog and records that it was asked for."""
+
+    calls: ClassVar[list] = []
+
+    def __init__(self, *args):
+        _NeverOpenedDialog.calls.append(args)
+
+    def exec(self):
+        from PySide6.QtWidgets import QDialog
+
+        return QDialog.DialogCode.Rejected
+
+
+def _clear_dialog_spy():
+    _NeverOpenedDialog.calls = []
+
+
+def test_no_reminder_without_a_scheduler(window, tmp_path, make_task, monkeypatch):
+    """With no scheduler on the window, neither reminder action does anything.
+
+    The menu actions are still connected to the handlers, so both run straight
+    into the early return of `_reminder_target`: no dialog opens and nothing
+    is stored.
+    """
+    file = make_task(tmp_path, "261027", "MyTask")
+    window.navigate_to(tmp_path)
+
+    _clear_dialog_spy()
+    monkeypatch.setattr("mktsk.gui.tasklist.AddReminderDialog", _NeverOpenedDialog)
+    monkeypatch.setattr("mktsk.gui.tasklist.RemindersDialog", _NeverOpenedDialog)
+
+    bar = action_bar(window, file)
+
+    bar.reminders_menu.actions()[0].trigger()
+    bar.reminders_menu.actions()[1].trigger()
+
+    assert _NeverOpenedDialog.calls == []
+
+
+def test_no_reminder_without_a_selected_task(
+    window, tmp_path, make_task, monkeypatch
+):
+    """With a scheduler but no task selected, neither reminder action does anything.
+
+    Clearing the selection makes `_reminder_target` return None, so no reminder
+    is stored and no dialog opens.
+    """
+    file = make_task(tmp_path, "261027", "MyTask")
+    window.navigate_to(tmp_path)
+    scheduler = _scheduler(tmp_path)
+    window.reminder_scheduler = scheduler
+
+    _clear_dialog_spy()
+    monkeypatch.setattr("mktsk.gui.tasklist.AddReminderDialog", _NeverOpenedDialog)
+    monkeypatch.setattr("mktsk.gui.tasklist.RemindersDialog", _NeverOpenedDialog)
+
+    bar = action_bar(window, file)
+    task_listing(window).setCurrentItem(None)
+
+    bar.reminders_menu.actions()[0].trigger()
+    bar.reminders_menu.actions()[1].trigger()
+
+    assert scheduler.reminders() == []
+    assert _NeverOpenedDialog.calls == []
