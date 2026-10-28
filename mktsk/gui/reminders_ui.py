@@ -8,6 +8,7 @@ the file itself where they are.
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import cast
 
 from PySide6.QtCore import QDate, QDateTime, Qt, QTime, Signal
 from PySide6.QtGui import QBrush, QPalette
@@ -209,7 +210,7 @@ class AddReminderDialog(QDialog):
 
     def due(self) -> datetime:
         """The chosen due time, naive and to the minute."""
-        chosen = self.date_edit.dateTime().toPython()
+        chosen = cast(datetime, self.date_edit.dateTime().toPython())
         return chosen.replace(tzinfo=None, second=0, microsecond=0)
 
     def message(self) -> str:
