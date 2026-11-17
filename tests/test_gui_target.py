@@ -1,5 +1,12 @@
 import shutil
+from pathlib import Path
 
+from PySide6.QtCore import QSettings
+from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QApplication
+
+from mktsk.config import BaseFolder, BaseFolderState
+from mktsk.gui import MainWindow
 from tests.gui_helpers import select_directory, select_tab, tab_titles, tree_root
 
 
@@ -56,6 +63,43 @@ def test_target_line_names_the_selected_category(window, tmp_path):
     assert window.target_label.text() == "New tasks in Veritas"
     assert window.target_label.toolTip() == str(category)
     assert window.target_label.isVisible() is True
+
+
+def test_the_target_hint_stays_readable_in_dark_mode(tmp_path, qapp, qtbot, monkeypatch):
+    monkeypatch.setattr(
+        "mktsk.config.resolve_base_folder",
+        lambda: BaseFolder(BaseFolderState.OK, Path.cwd()),
+    )
+
+    original = qapp.palette()
+    try:
+        dark = QPalette()
+        dark.setColor(QPalette.ColorRole.Base, QColor("#101010"))
+        dark.setColor(QPalette.ColorRole.Window, QColor("#202020"))
+        dark.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
+        dark.setColor(QPalette.ColorRole.Text, QColor("#ffffff"))
+        qapp.setPalette(dark)
+        QApplication.processEvents()
+
+        settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+        win = MainWindow(settings=settings)
+        win.show()
+        qtbot.addWidget(win)
+
+        category = tmp_path / "Veritas"
+        category.mkdir()
+        win.navigate_to(tmp_path)
+        select_directory(win, category.resolve())
+
+        assert win.target_label.isVisible() is True
+        assert win.target_label.text() == "New tasks in Veritas"
+
+        # In dark mode PlaceholderText is black, which disappears on the dark
+        # base; the hint must keep the readable text colour instead.
+        colour = win.target_label.palette().color(QPalette.ColorRole.WindowText)
+        assert colour == dark.color(QPalette.ColorRole.Text)
+    finally:
+        qapp.setPalette(original)
 
 
 def test_target_line_stays_on_one_line(window, tmp_path):

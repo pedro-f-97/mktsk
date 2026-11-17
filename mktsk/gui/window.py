@@ -461,7 +461,7 @@ class MainWindow(QMainWindow):
         hint = self.target_label.palette()
         hint.setColor(
             QPalette.ColorRole.WindowText,
-            hint.color(QPalette.ColorRole.PlaceholderText),
+            hint.color(QPalette.ColorRole.Text),
         )
         self.target_label.setPalette(hint)
         self.target_label.hide()
