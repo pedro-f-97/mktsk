@@ -8,14 +8,8 @@ from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QApplication, QListWidgetItem
 
 from mktsk import helpers, listing
-from mktsk.gui.tasklist import (
-    _COLUMN_PADDING,
-    _COUNT_ROLE,
-    _ENTRY_ROLE,
-    _TASK_MAX_WIDTH,
-    TaskListing,
-    _column_widths,
-)
+from mktsk.gui.tasklist import _TASK_MAX_WIDTH, TaskListing
+from mktsk.gui.taskrow import _COLUMN_PADDING, _COUNT_ROLE, _ENTRY_ROLE, _column_widths
 from tests.gui_helpers import painted_texts, row_texts
 
 

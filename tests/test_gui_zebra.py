@@ -9,16 +9,14 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from mktsk.gui.tasklist import (
-    _ENTRY_ROLE,
+from mktsk.gui.selection import (
     _SELECTION_TINT_WEIGHT,
-    _SEPARATOR_WEIGHT,
-    _ZEBRA_WEIGHT,
     _blend,
     _colour_group,
     _contrast_ratio,
     _relative_luminance,
 )
+from mktsk.gui.taskrow import _ENTRY_ROLE, _SEPARATOR_WEIGHT, _ZEBRA_WEIGHT
 from tests.gui_helpers import (
     click_heading,
     render_row,

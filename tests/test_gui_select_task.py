@@ -3,7 +3,8 @@
 from PySide6.QtCore import QPoint, QRect
 from PySide6.QtWidgets import QApplication
 
-from mktsk.gui.tasklist import _ENTRY_ROLE, TaskListing
+from mktsk.gui.tasklist import TaskListing
+from mktsk.gui.taskrow import _ENTRY_ROLE
 from tests.gui_helpers import (
     find_directory,
     find_task,
@@ -134,7 +135,8 @@ def test_scroll_to_path_on_cleared_listing_does_nothing(qapp):
     from pathlib import Path
 
     from mktsk import listing
-    from mktsk.gui.tasklist import _ENTRY_ROLE, TaskListing
+    from mktsk.gui.tasklist import TaskListing
+    from mktsk.gui.taskrow import _ENTRY_ROLE
 
     task_list = TaskListing()
     entry = listing.TaskEntry(

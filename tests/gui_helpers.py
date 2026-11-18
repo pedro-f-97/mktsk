@@ -10,7 +10,7 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QStyleOptionViewItem
 
-from mktsk.gui.tasklist import _ENTRY_ROLE
+from mktsk.gui.taskrow import _ENTRY_ROLE
 from mktsk.gui.tree import _PATH_ROLE
 
 

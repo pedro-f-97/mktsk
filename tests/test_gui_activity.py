@@ -6,7 +6,7 @@ from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QStyle, QStyleOptionViewItem
 
 from mktsk import listing
-from mktsk.gui.tasklist import (
+from mktsk.gui.taskrow import (
     _AGE_ROLE,
     _COUNT_ROLE,
     _ENTRY_ROLE,
@@ -137,7 +137,7 @@ def test_a_heading_fits_the_column_it_sits_over(qtbot):
 
 def _header(qtbot, width):
     """A header of its own, over a row as wide as the test asks for."""
-    from mktsk.gui.tasklist import _ColumnHeader
+    from mktsk.gui.taskrow import _ColumnHeader
 
     header = _ColumnHeader(25)
     qtbot.addWidget(header)

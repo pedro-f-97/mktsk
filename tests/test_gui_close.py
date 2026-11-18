@@ -1,4 +1,4 @@
-from mktsk.gui.tasklist import _STATE_ROLE
+from mktsk.gui.taskrow import _STATE_ROLE
 from tests.gui_helpers import (
     action_bar,
     select_tab,

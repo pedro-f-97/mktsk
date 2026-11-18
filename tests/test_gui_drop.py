@@ -5,7 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
-from mktsk.gui.tasklist import _ENTRY_ROLE
+from mktsk.gui.taskrow import _ENTRY_ROLE
 from mktsk.gui.window import _skipped_message
 from mktsk.tasks import close_task
 from tests.gui_helpers import find_task, select_tab, select_task

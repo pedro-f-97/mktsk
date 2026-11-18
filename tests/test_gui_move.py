@@ -14,7 +14,8 @@ from PySide6.QtGui import (
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from mktsk.gui.tasklist import _COUNT_ROLE, _MIME_TYPE
+from mktsk.gui.tasklist import _MIME_TYPE
+from mktsk.gui.taskrow import _COUNT_ROLE
 from mktsk.tasks import close_task
 from tests.gui_helpers import find_task, select_tab, task_listing
 

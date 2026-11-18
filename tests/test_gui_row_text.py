@@ -11,14 +11,10 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from mktsk.gui import tasklist
-from mktsk.gui.tasklist import (
-    _AGE_ROLE,
-    _SELECTION_INDICATOR_GAP,
-    TaskPanel,
-    _cell_pen,
-    _contrast_ratio,
-)
+from mktsk.gui import selection, taskrow
+from mktsk.gui.selection import _SELECTION_INDICATOR_GAP, _cell_pen, _contrast_ratio
+from mktsk.gui.tasklist import TaskPanel
+from mktsk.gui.taskrow import _AGE_ROLE
 from tests.gui_helpers import (
     find_directory,
     find_task,
@@ -257,7 +253,7 @@ def _ink_contrast(view, item, state):
     ink = max(
         (
             image.pixelColor(x, y)
-            for x in range(tasklist._SELECTION_INDICATOR_WIDTH, image.width())
+            for x in range(selection._SELECTION_INDICATOR_WIDTH, image.width())
             for y in range(image.height())
         ),
         key=lambda colour: _contrast_ratio(colour, background),
@@ -521,7 +517,7 @@ def test_a_selected_row_is_tinted_even_when_the_style_paints_no_selection(
     # the selection is the delegate's, so it reaches the pixels whether the
     # style paints one of its own or paints nothing at all
     for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
-        tint = tasklist._selection_tint(_row_option(listing, item, state))
+        tint = selection._selection_tint(_row_option(listing, item, state))
         assert _background_pixel(_render_row(listing, item, state, base)) == tint
 
 
@@ -554,7 +550,7 @@ def test_the_auxiliary_band_of_a_selected_row_carries_the_selection(
     base = listing.viewport().palette().color(QPalette.ColorRole.Base)
     selected = _render_row(listing, item, _SELECTED_ACTIVE, base)
     option = _row_option(listing, item, _SELECTED_ACTIVE)
-    tint = tasklist._selection_tint(option)
+    tint = selection._selection_tint(option)
     highlight = option.palette.color(QPalette.ColorRole.Highlight)
 
     # the delegate paints its own selection over the style's, so the band
@@ -564,8 +560,8 @@ def test_the_auxiliary_band_of_a_selected_row_carries_the_selection(
     # row hold the bottom line instead: the accent over the arm of the line
     # and the tint past it
     band_top = listing.delegate.min_height
-    line_height = tasklist._SELECTION_INDICATOR_WIDTH
-    arm = line_height + tasklist._ROW_LINE_REACH
+    line_height = selection._SELECTION_INDICATOR_WIDTH
+    arm = line_height + selection._ROW_LINE_REACH
     assert selected.height() > band_top
     for y in range(band_top, selected.height() - line_height):
         assert {selected.pixelColor(x, y).rgb() for x in range(line_height, selected.width())} == {tint.rgb()}
@@ -628,7 +624,7 @@ def test_a_disabled_cell_reads_its_pen_from_the_disabled_group():
 
     highlighted = QColor("#000000")
     plain = QColor("#fefefe")
-    tint = tasklist._selection_tint(option)
+    tint = selection._selection_tint(option)
     expected = (
         plain
         if _contrast_ratio(plain, tint) > _contrast_ratio(highlighted, tint)
@@ -671,18 +667,18 @@ def test_a_selected_row_shifts_its_cells_and_leaves_the_others(
     selected = row_texts(painted, selected_row)
     other = row_texts(painted, other_row)
 
-    from mktsk.gui import tasklist
+    from mktsk.gui import taskrow
     assert (
         selected[0][0].left()
-        == listing.column_rect(selected_row, 0).left() + max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+        == listing.column_rect(selected_row, 0).left() + max(padding, taskrow._DATE_TEXT_LEFT_PADDING)
     )
     for column in range(1, 6):
         assert (
             selected[column][0].left()
             == listing.column_rect(selected_row, column).left()
         )
-    from mktsk.gui import tasklist
-    assert other[0][0].left() == listing.column_rect(other_row, 0).left() + max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+    from mktsk.gui import taskrow
+    assert other[0][0].left() == listing.column_rect(other_row, 0).left() + max(padding, taskrow._DATE_TEXT_LEFT_PADDING)
     for column in range(1, 6):
         assert (
             other[column][0].left() == listing.column_rect(other_row, column).left()
@@ -780,7 +776,7 @@ def _rail_columns(image, colour):
     rows hold the colour across the arm of the lines rather than only at the
     rail.
     """
-    thickness = tasklist._SELECTION_INDICATOR_WIDTH
+    thickness = selection._SELECTION_INDICATOR_WIDTH
     rows = range(thickness, image.height() - thickness)
     return _columns_of_colour(image, colour, rows)
 
@@ -829,8 +825,8 @@ def test_a_selected_row_keeps_the_indicator_at_the_left_edge(
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
     indicator = _rail_columns(image, highlight)
 
-    assert indicator == list(range(tasklist._SELECTION_INDICATOR_WIDTH))
-    expected = max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+    assert indicator == list(range(selection._SELECTION_INDICATOR_WIDTH))
+    expected = max(padding, taskrow._DATE_TEXT_LEFT_PADDING)
     first_ink = _first_ink_x(image, _background_pixel(image))
     # the text starts on the padding the date is drawn from, give or take
     # the left bearing of its first glyph, which the smoothing may extend
@@ -860,7 +856,7 @@ def test_a_selected_row_keeps_the_indicator_clear_of_the_action_bar(
     assert bar_left > max(indicator)
     assert bar_left >= _SELECTION_INDICATOR_GAP
     first_glyph = _first_glyph_x(image, _cell_pen(option), 0)
-    assert first_glyph >= max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+    assert first_glyph >= max(padding, taskrow._DATE_TEXT_LEFT_PADDING)
 
 
 def test_the_indicator_of_a_selected_row_is_rounded_at_both_ends(
@@ -880,7 +876,7 @@ def test_the_indicator_of_a_selected_row_is_rounded_at_both_ends(
     image = QImage(option.rect.size(), QImage.Format.Format_RGB32)
     image.fill(base)
     painter = QPainter(image)
-    tasklist._paint_selection(painter, option)
+    selection._paint_selection(painter, option)
     painter.end()
 
     # the rail runs at full height between its ends, and a rounded corner
@@ -900,7 +896,7 @@ def test_the_selected_area_is_tinted_from_the_task_row_to_the_bottom_of_the_band
     palette = listing.viewport().palette()
     base = palette.color(QPalette.ColorRole.Base)
     highlight = palette.color(QPalette.ColorRole.Highlight)
-    tint = tasklist._blend(base, highlight, tasklist._SELECTION_TINT_WEIGHT)
+    tint = selection._blend(base, highlight, selection._SELECTION_TINT_WEIGHT)
     band_top = listing.delegate.min_height
 
     image = _render_row(listing, item, _SELECTED_ACTIVE, base)
@@ -909,12 +905,12 @@ def test_the_selected_area_is_tinted_from_the_task_row_to_the_bottom_of_the_band
     # and the faint tint across the rest, under the action bar included
     assert image.height() > band_top
     for y in (band_top // 2, band_top + 2):
-        rail = {image.pixelColor(x, y).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH)}
+        rail = {image.pixelColor(x, y).rgb() for x in range(selection._SELECTION_INDICATOR_WIDTH)}
         assert rail == {highlight.rgb()}
     # the tint crosses the task row just past the rail, and fills the band,
     # where no cell is painted, from the rail to the right edge
-    assert image.pixelColor(tasklist._SELECTION_INDICATOR_WIDTH, band_top // 2) == tint
-    assert {image.pixelColor(x, band_top + 2).rgb() for x in range(tasklist._SELECTION_INDICATOR_WIDTH, image.width())} == {tint.rgb()}
+    assert image.pixelColor(selection._SELECTION_INDICATOR_WIDTH, band_top // 2) == tint
+    assert {image.pixelColor(x, band_top + 2).rgb() for x in range(selection._SELECTION_INDICATOR_WIDTH, image.width())} == {tint.rgb()}
     # the tint reads apart from the plain background and from the full rail
     assert tint != base
     assert tint != highlight

@@ -4,7 +4,7 @@ from PySide6.QtCore import QRect
 from PySide6.QtGui import QColor, QImage, QPainter, QPalette
 from PySide6.QtWidgets import QListWidget, QListWidgetItem, QStyle, QStyleOptionViewItem
 
-from mktsk.gui.tasklist import _UnifiedSelectionDelegate
+from mktsk.gui.selection import _UnifiedSelectionDelegate
 
 
 def _render_row(view, item, state, background):

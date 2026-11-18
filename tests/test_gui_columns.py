@@ -4,13 +4,9 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QApplication, QHeaderView
 
-from mktsk.gui.tasklist import (
-    _COLUMN_PADDING,
-    _SELECTION_INDICATOR_GAP,
-    TaskListing,
-    TaskPanel,
-    _column_widths,
-)
+from mktsk.gui.selection import _SELECTION_INDICATOR_GAP
+from mktsk.gui.tasklist import TaskListing, TaskPanel
+from mktsk.gui.taskrow import _COLUMN_PADDING, _column_widths
 
 
 def _panel(qtbot):

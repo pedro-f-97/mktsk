@@ -4,12 +4,8 @@ from PySide6.QtCore import QRect
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QApplication, QStyle
 
-from mktsk.gui.tasklist import (
-    _COLUMN_PADDING,
-    _ENTRY_ROLE,
-    _ICON_SIZE,
-    _column_widths,
-)
+from mktsk.gui.icons import _ICON_SIZE
+from mktsk.gui.taskrow import _COLUMN_PADDING, _ENTRY_ROLE, _column_widths
 from tests.gui_helpers import (
     click_heading,
     find_task,

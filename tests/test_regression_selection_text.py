@@ -14,10 +14,7 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from mktsk.gui.tasklist import (
-    _SELECTION_INDICATOR_WIDTH,
-    _selection_tint,
-)
+from mktsk.gui.selection import _SELECTION_INDICATOR_WIDTH, _selection_tint
 from tests.gui_helpers import (
     find_directory,
     render_row,

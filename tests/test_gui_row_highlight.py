@@ -3,8 +3,8 @@
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QStyle
 
-from mktsk.gui import tasklist
-from mktsk.gui.tasklist import _COUNT_ROLE
+from mktsk.gui import selection
+from mktsk.gui.taskrow import _COUNT_ROLE
 from tests.gui_helpers import find_task, render_row, select_task, task_listing
 
 SHORT_TITLE = "Fix"
@@ -35,16 +35,16 @@ def _highlight(listing):
 def _tint(listing):
     """The faint colour a selected row is filled with."""
     palette = listing.viewport().palette()
-    return tasklist._blend(
+    return selection._blend(
         palette.color(QPalette.ColorRole.Base),
         palette.color(QPalette.ColorRole.Highlight),
-        tasklist._SELECTION_TINT_WEIGHT,
+        selection._SELECTION_TINT_WEIGHT,
     )
 
 
 def _arm(listing):
     """The whole width a line paints: the rail's thickness plus its reach."""
-    return tasklist._SELECTION_INDICATOR_WIDTH + tasklist._ROW_LINE_REACH
+    return selection._SELECTION_INDICATOR_WIDTH + selection._ROW_LINE_REACH
 
 
 def _assert_bracket(listing, image):
@@ -56,7 +56,7 @@ def _assert_bracket(listing, image):
     """
     highlight = _highlight(listing)
     tint = _tint(listing)
-    thickness = tasklist._SELECTION_INDICATOR_WIDTH
+    thickness = selection._SELECTION_INDICATOR_WIDTH
     reach = _arm(listing)
     rows = range(thickness)
     bottom = range(image.height() - thickness, image.height())
@@ -79,7 +79,7 @@ def test_the_lines_of_a_selected_row_carry_the_indicator_colour_and_thickness(
     listing, image = _selected_row(window, tmp_path, make_task)
     highlight = _highlight(listing)
     tint = _tint(listing)
-    thickness = tasklist._SELECTION_INDICATOR_WIDTH
+    thickness = selection._SELECTION_INDICATOR_WIDTH
     probe = _arm(listing) - 1
 
     # the indicator keeps its colour at the middle of the left edge
@@ -178,7 +178,7 @@ def test_the_indicator_of_a_selected_row_keeps_its_colour_and_its_width(
     listing, image = _selected_row(window, tmp_path, make_task)
     highlight = _highlight(listing)
     tint = _tint(listing)
-    thickness = tasklist._SELECTION_INDICATOR_WIDTH
+    thickness = selection._SELECTION_INDICATOR_WIDTH
 
     # the rail fills the left edge down the whole row, the lines inking the
     # corners its rounding leaves open...

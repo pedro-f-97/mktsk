@@ -76,18 +76,16 @@ from .icons import (
 )
 from .reminders_scheduler import ReminderScheduler
 from .reminders_ui import RemindersList
-from .tasklist import (
+from .selection import _DirectorySelectionStyle, _UnifiedSelectionDelegate
+from .tasklist import TaskListing, TaskPanel
+from .taskrow import (
     _AGE_ROLE,
     _CATEGORY_ROLE,
     _COUNT_ROLE,
     _ENTRY_ROLE,
     _STATE_ROLE,
-    TaskListing,
-    TaskPanel,
     _date_cell,
-    _DirectorySelectionStyle,
     _relative_age,
-    _UnifiedSelectionDelegate,
 )
 from .tray import TrayController
 from .tree import (

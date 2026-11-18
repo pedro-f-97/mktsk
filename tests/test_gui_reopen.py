@@ -1,7 +1,7 @@
 from PySide6.QtCore import QSize
 
 from mktsk.gui.icons import _ICON_SIZE
-from mktsk.gui.tasklist import _STATE_ROLE
+from mktsk.gui.taskrow import _STATE_ROLE
 from mktsk.tasks import close_task
 from tests.gui_helpers import action_bar, select_tab, tab_titles, task_listing
 

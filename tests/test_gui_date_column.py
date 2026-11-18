@@ -6,7 +6,7 @@ from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QStyle
 
 from mktsk import listing
-from mktsk.gui.tasklist import _COUNT_ROLE, _date_cell
+from mktsk.gui.taskrow import _COUNT_ROLE, _date_cell
 from tests.gui_helpers import (
     find_task,
     painted_texts,
@@ -105,12 +105,12 @@ def test_the_date_heading_and_the_date_value_share_one_padding(
     item = find_task(window, file)
     row = QRect(rows.visualItemRect(item))
     padding = header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
-    from mktsk.gui import tasklist
+    from mktsk.gui import taskrow
 
     texts = row_texts(painted_texts(monkeypatch, rows), row)
-    expected = rows.column_rect(row, 0).left() + max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+    expected = rows.column_rect(row, 0).left() + max(padding, taskrow._DATE_TEXT_LEFT_PADDING)
     assert texts[0][0].left() == expected
-    assert header.sectionPosition(0) + max(padding, tasklist._DATE_TEXT_LEFT_PADDING) == texts[0][0].left()
+    assert header.sectionPosition(0) + max(padding, taskrow._DATE_TEXT_LEFT_PADDING) == texts[0][0].left()
 
 
 def test_an_unselected_row_paints_nothing_left_of_the_date_text(
@@ -122,12 +122,12 @@ def test_an_unselected_row_paints_nothing_left_of_the_date_text(
     item = find_task(window, file)
     row = QRect(rows.visualItemRect(item))
     padding = rows.header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
-    from mktsk.gui import tasklist
+    from mktsk.gui import taskrow
 
     texts = row_texts(painted_texts(monkeypatch, rows), row)
 
     assert texts
     assert (
         min(rect.left() for rect, *_ in texts)
-        == rows.column_rect(row, 0).left() + max(padding, tasklist._DATE_TEXT_LEFT_PADDING)
+        == rows.column_rect(row, 0).left() + max(padding, taskrow._DATE_TEXT_LEFT_PADDING)
     )
