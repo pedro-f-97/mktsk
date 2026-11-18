@@ -87,6 +87,20 @@ class _Columns(NamedTuple):
     activity: int
 
 
+def _heading_width(column: int) -> int:
+    """Measures a heading in the bold application font, with its padding.
+
+    Args:
+        column: the index of the column, from the date on the left.
+
+    Returns:
+        The width the heading needs.
+    """
+    font = QFont(QApplication.font())
+    font.setBold(True)
+    return QFontMetrics(font).horizontalAdvance(_HEADINGS[column]) + 2 * _COLUMN_PADDING
+
+
 def _column_widths() -> _Columns:
     """Measures the fixed columns from the font in use.
 
@@ -98,21 +112,15 @@ def _column_widths() -> _Columns:
         The width of the date column, of the clip one, of the state one, of the
         interventions one and of the last activity one.
     """
-    heading_font = QFont(QApplication.font())
-    heading_font.setBold(True)
-    headings = QFontMetrics(heading_font)
     body = QFontMetrics(QApplication.font())
+    widest_state = max(body.horizontalAdvance(state) for state in parsing.STATES)
 
     return _Columns(
         body.horizontalAdvance("dd/mm/yyyy") + 2 * _COLUMN_PADDING,
         _ICON_SIZE + body.horizontalAdvance("44") + 2 * _COLUMN_PADDING,
-        max(
-            headings.horizontalAdvance(_HEADINGS[3]),
-            *(body.horizontalAdvance(state) for state in parsing.STATES),
-        )
-        + 2 * _COLUMN_PADDING,
-        headings.horizontalAdvance(_HEADINGS[4]) + 2 * _COLUMN_PADDING,
-        headings.horizontalAdvance(_HEADINGS[5]) + 2 * _COLUMN_PADDING,
+        max(_heading_width(3), widest_state + 2 * _COLUMN_PADDING),
+        _heading_width(4),
+        _heading_width(5),
     )
 
 
@@ -233,9 +241,11 @@ class _ColumnHeader(QHeaderView):
         )
         cols = _column_widths()
         self.setMinimumSectionSize(min(cols))
-        total = cols.clip + cols.state + cols.interventions + cols.activity
         # the task column starts as the rest of the room a row has; auto-width
-        # grows it from here up to the cap and never below it
+        # grows it from here up to the cap and never below it. The state counts
+        # with its heading, not its widest state, so a wider state column never
+        # pushes this start past the cap
+        total = cols.clip + _heading_width(3) + cols.interventions + cols.activity
         self.default_task_width = max(total, 100)
         self.resizeSection(0, cols.date)
         self.resizeSection(1, self.default_task_width)
