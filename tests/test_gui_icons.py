@@ -599,12 +599,11 @@ def _switch_theme(window: MainWindow, palette: QPalette) -> None:
     application palette, the same way a real theme change re-polishes the
     window. Widgets that kept an explicit colour keep it; the rest follow.
     """
-    app = QApplication.instance()
-    app.setPalette(palette)
+    QApplication.setPalette(palette)
     style = window.style()
     style.unpolish(window)
     style.polish(window)
-    app.processEvents()
+    QApplication.processEvents()
 
 
 def test_the_hint_follows_the_palette(window, qapp):
