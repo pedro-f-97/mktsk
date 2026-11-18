@@ -140,15 +140,9 @@ class _ActionBar(QWidget):
         self.reminders_button.setVisible(visible)
 
     def set_reopening(self, reopening: bool) -> None:
-        """Offers reopen alone for a row that holds a closed task.
+        """Shows only the reopen action for a closed task.
 
-        The other four actions all speak to a folder, and only reopening
-        makes the folder stand again, so they are left out until then. The
-        button that carries resume carries the reopen icon and tooltip while
-        it stands for reopening, because reopening an archived task is not
-        adding a note for today; putting it back restores both. The reminder
-        buttons go with the rest, because a closed task has neither a folder
-        to remind about nor a place in the open tabs.
+        The resume button turns into reopen; the actions that need a folder hide.
 
         Args:
             reopening: True when the selected row holds a closed task.

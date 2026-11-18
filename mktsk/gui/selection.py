@@ -22,25 +22,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-# the selection of a task row is the delegate's own, because the platform
-# styles paint one in a shape of their own: a faint tint of the palette
-# covers the whole selected area, the task row and the band it opens, so the
-# two read as one, and a rail of the full Highlight sits at its left edge,
-# wide enough to read and rounded at both ends. The gap is the rail plus a
-# small margin, which indents the action bar of the auxiliary row, so the
-# rail stays visible at the left edge of the row and the bar never covers it
+# the selection is painted by the delegates rather than the style, so it looks
+# the same on every platform: a faint tint and a rounded Highlight rail on the
+# left. The gap is the rail plus a margin, which keeps content clear of it
 _SELECTION_INDICATOR_WIDTH = 4
 _SELECTION_INDICATOR_RADIUS = 2.0
 _SELECTION_INDICATOR_GAP = _SELECTION_INDICATOR_WIDTH + 2
 
-# how far the top and bottom lines of a selected row reach past the rail, in
-# logical pixels like the rail's own metrics: the rail's thickness plus this
-# is the whole arm of a line, a short bracket that stays inside the first
-# cell, so tuning how far the lines reach is one edit
+# how far the top and bottom bracket lines reach past the rail
 _ROW_LINE_REACH = 8
 
-# how far the tint of a selection moves from the Base towards the Highlight,
-# subtle enough to keep the row close to the plain background it sits on
+# how far the selection tint blends from Base towards Highlight
 _SELECTION_TINT_WEIGHT = 0.25
 
 
@@ -84,12 +76,7 @@ def _contrast_ratio(first: QColor, second: QColor) -> float:
 
 
 def _blend(base: QColor, text: QColor, weight: float) -> QColor:
-    """Blends two colours by a weight, from the base towards the text one.
-
-    Both colours come from the same palette group, so a stripe stays a shade of
-    the background it is drawn on rather than a colour written down. A weight
-    of 0 gives the base, 1 gives the text, and anything between the colour that
-    far along; no channel leaves the 0-255 range.
+    """Blends two colours, from `base` at weight 0 to `text` at weight 1.
 
     Args:
         base: the colour the blend starts from.
@@ -108,11 +95,7 @@ def _blend(base: QColor, text: QColor, weight: float) -> QColor:
 
 
 def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
-    """Returns the palette group the style paints a row of a state from.
-
-    The style picks the group from the state itself, so the text has to pick
-    the same one or it would read a colour from a group the background was not
-    painted with.
+    """Returns the palette group the style paints a row of this state from.
 
     Args:
         state: the state of the row being painted.
@@ -130,15 +113,9 @@ def _colour_group(state: QStyle.StateFlag) -> QPalette.ColorGroup:
 
 
 def _selection_tint(option: QStyleOption) -> QColor:
-    """Returns the colour the delegate fills a selected row with.
+    """Returns the selection fill: `Base` blended a little towards `Highlight`.
 
-    The tint is the `Base` of the palette group the state belongs to, blended
-    a little towards its `Highlight`, so a selected area reads apart from the
-    rows around it with no colour written down: a light or dark mode and a
-    new accent are followed through the palette alone. It is what both lines
-    of a selected row are made of, the task row and the band it opens, and it
-    is also what the text is measured against, so the pen stays paired with
-    the background it is drawn on.
+    Read from the palette, so it follows light and dark themes.
 
     Args:
         option: what the row is painted from, holding its palette and its state.
@@ -156,15 +133,7 @@ def _selection_tint(option: QStyleOption) -> QColor:
 
 
 def _paint_selection(painter: QPainter, option: QStyleOptionViewItem) -> None:
-    """Paints the selection of a task row over the one the style painted.
-
-    The style paints its own selection first and this covers it, so the look
-    is the delegate's and stays the same under every style: a faint tint
-    across the whole selected area, task row and band alike, and a rail of
-    the full `Highlight` at its left edge, wide enough to read and rounded at
-    both ends. Both colours come from the palette of the group the state
-    belongs to, so the selection follows the theme without a colour written
-    down here.
+    """Paints the selection tint and the rail over the style's own selection.
 
     Args:
         painter: the painter the row is being drawn with.
@@ -192,11 +161,7 @@ def _paint_selection(painter: QPainter, option: QStyleOptionViewItem) -> None:
 def _paint_selection_lines(
     painter: QPainter, option: QStyleOptionViewItem, left: int | None = None
 ) -> None:
-    """Paints the rail and bracket lines for a selected row.
-
-    This is the `[` outline treatment shared by all three lists: a rounded rail
-    of the full Highlight at the left edge, and short lines along the top and
-    bottom edges reaching past the rail.
+    """Paints the rail and the bracket lines of a selected row.
 
     Args:
         painter: the painter the row is being drawn with.
@@ -231,13 +196,9 @@ def _paint_selection_lines(
 
 
 class _DirectorySelectionStyle(QProxyStyle):
-    """Leaves the selection of a directory row to the delegate.
+    """Paints the tree's selected row band with the selection tint.
 
-    `QTreeView` paints the part of a selected row that lies before its items
-    itself, through `PE_PanelItemViewRow`, before the item delegate sees the
-    row. Clearing `State_Selected` in the delegate therefore never removed that
-    native fill. The tree paints the band with the tint the delegate uses
-    instead, so the custom rail at the left edge is the only indicator.
+    `QTreeView` paints that band before the item, out of the delegate's reach.
     """
 
     def drawPrimitive(
@@ -257,12 +218,7 @@ class _DirectorySelectionStyle(QProxyStyle):
 
 
 class _UnifiedSelectionDelegate(QStyledItemDelegate):
-    """A delegate that paints the unified selection appearance.
-
-    Used by the attachment list and directory tree to match the task list's
-    selection: a tinted background (Base blended toward Highlight), a rounded
-    rail of full Highlight at the left edge, and bracket lines at the top and
-    bottom.
+    """Paints the shared selection look in the attachment list and the tree.
 
     Args:
         parent: the object that owns the delegate.
@@ -289,18 +245,13 @@ class _UnifiedSelectionDelegate(QStyledItemDelegate):
     ) -> None:
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
 
-        # For selected rows, we need to paint text on top of the selection tint.
-        # Clear option.text so the style doesn't paint it, then we'll paint it
-        # ourselves after the selection background.
+        # the text of a selected row is painted after the tint, not by the style
         text = ""
         if selected:
             text = index.data(Qt.ItemDataRole.DisplayRole) or ""
             option.text = ""
 
-        # Suppress the native selection indicator by clearing State_Selected
-        # before the base class paints. The base class would otherwise paint
-        # its own indicator (a vertical bar) which we replace with our custom
-        # '[' outline (rounded rail + bracket lines).
+        # hide the selection from the style, which would paint its own indicator
         state = option.state
         if selected:
             option.state &= ~QStyle.StateFlag.State_Selected
@@ -335,13 +286,10 @@ class _UnifiedSelectionDelegate(QStyledItemDelegate):
 
 
 def _cell_pen(option: QStyleOptionViewItem) -> QColor:
-    """Returns the colour of the text of a cell, paired with its background.
+    """Returns the text colour of a cell.
 
-    An unselected row keeps the Text of the group its state belongs to. A
-    selected one is drawn on the tint the delegate fills it with, so the text
-    is the HighlightedText or the Text of that group, whichever holds better
-    against that tint: both come from the palette and the better contrast
-    wins, so no colour is written down here.
+    On a selected row, `HighlightedText` or `Text`, whichever contrasts better
+    with the tint.
 
     Args:
         option: what the row is painted from, holding its palette and its state.

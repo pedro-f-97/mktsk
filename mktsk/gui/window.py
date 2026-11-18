@@ -106,11 +106,9 @@ _GEOMETRY_KEY = "window/geometry"
 
 
 def _skipped_message(skipped: list[tuple[Path, str]]) -> str:
-    """Builds the text of the warning about the files a drop did not move.
+    """Builds the warning about the files a drop did not move.
 
-    At most ten of them are named, each with the reason it was left out, and
-    the rest are counted in a line of their own, so a long list never fills
-    the warning.
+    Names at most `_MAX_SKIPPED_NAMED` of them and counts the rest.
 
     Args:
         skipped: each file that was not moved, with the reason why.
@@ -398,10 +396,9 @@ class MainWindow(QMainWindow):
             self.settings.setValue(key, splitter.saveState())
 
     def attach_reminder_scheduler(self, scheduler: ReminderScheduler) -> None:
-        """Takes the scheduler and offers the reminders panel behind a bell.
+        """Takes the scheduler and adds the reminders panel behind the bell.
 
-        The panel is built here rather than with the rest of the window, so a
-        run without a scheduler never holds one and the bell stays hidden.
+        Without a scheduler there is no panel and the bell stays hidden.
 
         Args:
             scheduler: the scheduler the reminders are read from and removed
@@ -426,9 +423,7 @@ class MainWindow(QMainWindow):
     def _toggle_reminders(self, checked: bool) -> None:
         """Swaps the left panel between the directory tree and the reminders.
 
-        The header stays where it is: only its title and the buttons that act
-        on the tree change, while the tree itself is left standing with its
-        selection and the destination of a new task untouched.
+        Only the header title and buttons change; the tree keeps its selection.
 
         Args:
             checked: whether the reminders panel takes the place of the tree.
@@ -458,11 +453,10 @@ class MainWindow(QMainWindow):
             self.reminders_list.refresh()
 
     def _resolve_reminder_task(self, task: str) -> Path | None:
-        """Finds the task a reminder names among the entries the search holds.
+        """Finds the task a reminder names among the entries of the last reload.
 
-        The reminder carries the folder name of its task, which is the name of
-        the folder for a task that stands and the stem of the archive for a
-        closed one. Several tasks of a name keep the first the entries hold.
+        The name is the folder name, or the archive stem for a closed task. With
+        duplicates the first wins.
 
         Args:
             task: the task folder name the reminder carries.
@@ -492,11 +486,8 @@ class MainWindow(QMainWindow):
             self._select_task(path)
 
     def _align_header(self) -> None:
-        """Squares the headers of the window off to the tab bar height.
-
-        The Directory and the Search header read as one set over the left
-        pane, and the two titles of the preview take the same height, so
-        every title the window carries reads as one set.
+        """Gives every panel title the height of the tab bar, so they read as one
+        set.
         """
         height = self.tabs.tabBar().sizeHint().height()
         self.directory_tree.header_view.setFixedHeight(height)
@@ -516,14 +507,10 @@ class MainWindow(QMainWindow):
         self.path_label.setToolTip(path)
 
     def toggle_left_pane(self) -> None:
-        """Collapses the left pane, or restores the width it had before.
+        """Collapses the left pane, or restores its previous width.
 
-        The pane is collapsed and restored through the same splitter sizes a
-        drag of the handle would set, and the width to come back to is the one
-        remembered at the last collapse, or the split the splitter opened with
-        when the collapse came from a drag. If neither is available (e.g. after
-        a restart with the panel collapsed), a sensible default based on the
-        stretch factor ratio is used.
+        Falls back to the initial split, then to a third of the window, when no
+        width was remembered.
         """
         sizes = self.splitter.sizes()
         total = sum(sizes)
@@ -613,11 +600,8 @@ class MainWindow(QMainWindow):
         return Path(path) if path else None
 
     def creation_directory(self) -> Path:
-        """Returns the directory a new task is created in.
-
-        A subdirectory selected in the tree is the target, so a task lands in a
-        category without having to enter it. With the root, or nothing,
-        selected the current directory is the target.
+        """Returns the directory a new task is created in: the selected category,
+        or the current directory.
 
         Returns:
             The directory to create the task in.
@@ -625,14 +609,9 @@ class MainWindow(QMainWindow):
         return self._selected_directory() or self.current_directory
 
     def select_destination(self, category: str) -> None:
-        """Selects a category in the tree, making it the creation target.
+        """Makes a category the creation target, as clicking it in the tree would.
 
-        A category heading carries the folder it stands for, so clicking one
-        does what clicking that folder in the tree does: the tree keeps the
-        selection, the label names it and the next task lands in it. The base
-        folder heading carries the directory itself, and clicking it clears
-        the tree through the same handler as the label's `x`, because no
-        selection is what stands for the base folder.
+        The heading of the base folder clears the selection instead.
 
         Args:
             category: the path the heading carries.
@@ -741,12 +720,8 @@ class MainWindow(QMainWindow):
         self.search_panel.set_entries(entries, self.current_directory, self._base_title())
 
     def _select_task(self, path: Path) -> None:
-        """Selects a task in the tab of the window that holds it.
-
-        The tab that holds the row is switched to when the task is not in
-        the one on show, so the selection, the action bar and the preview all
-        follow it. Nothing here picks a category, so the destination a new
-        task lands in is left where it was.
+        """Selects a task in whichever tab holds it, leaving the destination as it
+        is.
 
         Args:
             path: the .md of the task, or the archive that holds it.
@@ -758,11 +733,9 @@ class MainWindow(QMainWindow):
         panel.listing.select_task(path)
 
     def _sections(self) -> list[tuple[str, listing.TaskGroup]]:
-        """Pairs every task group with the title of its tab.
+        """Pairs every task group with its tab title.
 
-        A category without tasks, or one that holds nothing but closed tasks,
-        is a group all the same, so it stands in the `All` tab as a heading of
-        its own.
+        Empty categories are included so they still show as headings.
 
         Returns:
             The tasks of the current directory first, named after the directory
@@ -877,11 +850,10 @@ class MainWindow(QMainWindow):
             self.navigate_to(Path(path))
 
     def new_category(self) -> None:
-        """Asks for a name and creates the category in the current directory.
+        """Asks for a name and creates a category in the current directory.
 
-        A category that is already there is not created again, it is selected,
-        and a new one is left selected too, so it becomes the target of the next
-        task without having to enter it.
+        The category is selected afterwards, new or existing, so the next task
+        lands in it.
         """
         raw_name, accepted = QInputDialog.getText(
             self, "New category", "Name", QLineEdit.EchoMode.Normal
@@ -908,13 +880,8 @@ class MainWindow(QMainWindow):
         self.open_with_default_app(entry.file.parent)
 
     def resume_task(self, entry: listing.TaskEntry) -> None:
-        """Adds a dated section to a task and opens it, reopening it if closed.
-
-        The task is resumed where it is, which is not necessarily the current
-        directory. A row that holds an archive is reopened: the archive is
-        extracted, the task resumed and the archive deleted, and the listing
-        is refreshed either way, because the row now carries the count and the
-        age the new intervention has changed.
+        """Adds a dated section to a task and opens it, reopening it first when it
+        is archived.
 
         Args:
             entry: the selected task.
@@ -957,11 +924,7 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def change_state(self, entry: listing.TaskEntry, new_state: str) -> None:
-        """Sets the state of a task by hand, and refreshes the list.
-
-        The task is changed where it lives, which is not necessarily the
-        current directory, and nothing is opened: picking a state is not
-        working on the task.
+        """Sets the state of a task by hand. Nothing is opened.
 
         Args:
             entry: the selected task.
@@ -976,11 +939,7 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def close_task(self, entry: listing.TaskEntry) -> None:
-        """Archives a task folder into a zip.
-
-        The folder becomes a zip beside where it stood, and the .md inside the
-        zip carries the closed event. The folder is only gone once the archive
-        is verified, and nothing is opened: the task is over.
+        """Archives a task into a verified zip. Nothing is opened.
 
         Args:
             entry: the selected task.
@@ -1002,14 +961,10 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def move_task(self, folder: Path, category: Path) -> None:
-        """Moves a task folder into a category and keeps the task selected.
+        """Moves a task folder into a category and keeps it selected.
 
-        The folder moves whole, with the .md and every attachment it carries,
-        and the task keeps its place in the history. A category that already
-        holds a task of that title refuses the move, and a failure is shown in
-        a `QMessageBox` like every other action, leaving the list as it was.
-        Nothing is opened, and the destination a new task lands in is left
-        where it was.
+        A title clash or an I/O error is shown in a message box and leaves the
+        list as it was.
 
         Args:
             folder: the folder of the task to move.
@@ -1048,11 +1003,9 @@ class MainWindow(QMainWindow):
         self.title_input.clear()
 
     def _drop_entry(self) -> listing.TaskEntry | None:
-        """Returns the task a drop of files would land in.
+        """Returns the selected task when files can be dropped into it.
 
-        The files land in the folder of the selected task, so there is only a
-        task when one is selected and stands as one: a closed task is an
-        archive, which is never opened, so it takes nothing.
+        A closed task is an archive and takes nothing.
 
         Returns:
             The selected task, or None when no task is selected or the
@@ -1069,10 +1022,7 @@ class MainWindow(QMainWindow):
         return entry
 
     def _drop_paths(self, mime: QMimeData) -> list[Path]:
-        """Returns the files a drag carries.
-
-        A URL that names nothing on this machine, a page on the web say, is
-        left out, so only files that can be moved are kept.
+        """Returns the local files a drag carries; other URLs are ignored.
 
         Args:
             mime: the payload of the drag.
@@ -1086,11 +1036,9 @@ class MainWindow(QMainWindow):
         return [Path(url.toLocalFile()) for url in mime.urls() if url.toLocalFile()]
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        """Takes in a drag of files when an open task is selected.
+        """Accepts a drag of files when an open task is selected.
 
-        The files land in the folder of the selected task, so the drag is only
-        taken in when there is one to land in. A drag of anything else, of a
-        task of our own for one, is left to the widget it belongs to.
+        Other drags are left to the widget they belong to.
 
         Args:
             event: the drag that entered.
@@ -1102,12 +1050,7 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def dropEvent(self, event: QDropEvent) -> None:
-        """Moves the files of a drag into the folder of the selected task.
-
-        The task keeps its place in the list, and its attachments are read
-        again, so the row and the panel show what the drop brought. The
-        selection does not move: the files land in the task that was already
-        selected.
+        """Moves the dropped files into the selected task and keeps it selected.
 
         Args:
             event: the drop.

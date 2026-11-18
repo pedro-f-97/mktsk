@@ -1,10 +1,17 @@
 """The desktop interface, over the task logic the CLI uses.
 
-The modules below carry one responsibility each: `icons` draws the icons,
-`tree` lists the categories, `tasklist` lists the tasks of one of them,
-`first_run` settles the base folder before the window opens, `single_instance`
-keeps one running instance at a time, `tray` puts the window in the system
-tray, and `window` puts the rest together.
+One responsibility per module:
+
+- `window`: the main window, which puts the rest together
+- `tasklist`: the task list of a tab, with drag and drop and sorting
+- `taskrow`: the columns of a task row and the delegate that paints it
+- `actionbar`: the actions under the selected task
+- `selection`: the selection look shared by the lists and the tree
+- `search`: the title filter and the content search
+- `preview`: the notes and attachments of the selected task
+- `tree`: the categories; `panetoggle`: the bar that hides the left pane
+- `icons` and `app_icon`: icons drawn in code
+- `first_run`, `single_instance`, `tray`, `reminders_*`: startup, the tray and reminders
 """
 
 from PySide6.QtWidgets import QApplication, QMessageBox

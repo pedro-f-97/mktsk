@@ -62,19 +62,11 @@ _TASK_MAX_WIDTH = 480
 
 
 class TaskListing(QListWidget):
-    """A list of tasks with an action bar below the selected row.
+    """A list of tasks with an action bar under the selected row.
 
-    The bar follows the selected row in its own auxiliary row, and shows only
-    when a task is selected. Headings are not selectable, so they never get
-    one, and a closed task gets a single button, the reopen action, which still
-    reports resume: the other actions all speak to a folder. The listing only
-    reports which action was asked for, leaving the task logic to the window.
-
-    A task that stands as a folder can be dragged onto a category, which moves
-    the folder into it. The listing carries the drag and the drop, and reports
-    the folder and the category it was dropped on, leaving the move itself to
-    the window. A heading is not dragged: it stands for a category, and a
-    closed task is not either, because its archive is not a folder to move.
+    Headings are not selectable, and a closed task gets only the reopen button.
+    Tasks that stand as folders can be dragged onto a category. The listing
+    reports the requested action; the window carries it out.
     """
 
     open_requested = Signal(object)
@@ -160,13 +152,7 @@ class TaskListing(QListWidget):
         return item.data(_ENTRY_ROLE) if item else None
 
     def select_task(self, path: Path) -> bool:
-        """Selects the task row of a folder path and scrolls it into view.
-
-        The row may sit in another tab of the same window, which is switched
-        to before the row is selected, so the selection, the action bar and
-        the preview all follow the task as they would after a click. Selecting
-        a task never moves the destination a new task would land in: that only
-        changes when a category is picked, and nothing here picks one.
+        """Selects the row of a task, switching to the tab that holds it.
 
         Args:
             path: the .md of the task, or the archive that holds it, which is
@@ -212,10 +198,7 @@ class TaskListing(QListWidget):
         return False
 
     def _item_for(self, path: Path) -> QListWidgetItem | None:
-        """Returns the task row carrying a folder path, or None when none does.
-
-        A row that carries no entry, a heading say, is skipped, so only a task
-        or an archive can be the row a path reaches.
+        """Returns the task row carrying a path, or None. Headings are skipped.
 
         Args:
             path: the .md of the task, or the archive that holds it.
@@ -231,11 +214,8 @@ class TaskListing(QListWidget):
         return None
 
     def _scroll_to_path(self, path: Path) -> None:
-        """Scrolls to the row carrying a path, if it still exists.
-
-        The item is looked up by path at the time of the scroll, not captured
-        from the caller, so a refresh that replaced the row does not cause a
-        crash or scroll to the wrong row.
+        """Scrolls to the row of a path, looked up again in case a refresh
+        replaced it.
 
         Args:
             path: the .md of the task, or the archive that holds it.
@@ -254,12 +234,9 @@ class TaskListing(QListWidget):
         self.viewport().update()
 
     def set_category(self, category: Path | None) -> None:
-        """Points the listing at the category its tasks stand in.
+        """Sets the category the tasks of this listing live in.
 
-        A tab of a category holds no heading, so the folder its tasks live in
-        is told to the listing here, and a drop on one of its rows moves a
-        task into that category. The `All` tab holds a heading per category
-        and needs none of this.
+        A category tab has no heading to say it, so a drop on its rows needs this.
 
         Args:
             category: the folder the tasks of this listing live in, or None
@@ -268,10 +245,8 @@ class TaskListing(QListWidget):
         self._category = category
 
     def _dragged_entry(self) -> listing.TaskEntry | None:
-        """Returns the task a drag would carry, or None when there is none.
-
-        A heading carries no task, and a closed task stands as an archive,
-        which is not a folder to move, so neither of them is dragged.
+        """Returns the task a drag would carry. Headings and archives are not
+        dragged.
 
         Returns:
             The task of the row the drag starts from, or None.
@@ -287,10 +262,7 @@ class TaskListing(QListWidget):
         return entry
 
     def _drag_mime(self, entry: listing.TaskEntry) -> QMimeData:
-        """Builds the payload a drag of a task carries.
-
-        The payload holds the folder of the task, so a drop knows which task
-        it moves without reading anything.
+        """Builds the drag payload: the folder of the task.
 
         Args:
             entry: the task being dragged.
@@ -318,27 +290,16 @@ class TaskListing(QListWidget):
         drag.exec(Qt.DropAction.MoveAction)
 
     def _can_drag(self) -> bool:
-        """Says whether a row of the selection can start a drag.
-
-        A task that stands as a folder can be dragged onto a category, and a
-        closed task stands as an archive, which is not a folder to move, so
-        its row carries no drag. The selection holds the row the mouse was
-        pressed on, so this says whether the move that follows the press has
-        anything to carry.
-        """
+        """Says whether the selected row can start a drag."""
         return any(
             bool(item.flags() & Qt.ItemFlag.ItemIsDragEnabled)
             for item in self.selectedItems()
         )
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """Keeps the selection where the press put it.
+        """Keeps the selection on a pressed row that cannot be dragged.
 
-        A press on a row that cannot be dragged leaves Qt with nothing to
-        carry, so the move that follows it turns into a drag-selection, which
-        takes the selection to the row under the cursor, away from the row the
-        press chose. The move is ignored then, and the selection stays where
-        the press put it, with the action bar that belongs to it.
+        Otherwise Qt turns the move into a drag-selection that moves it.
         """
         if event.buttons() and not self._can_drag():
             return
@@ -378,11 +339,9 @@ class TaskListing(QListWidget):
         return -1
 
     def _category_of(self, row: int) -> tuple[Path | None, int]:
-        """Returns the category a task row stands in, and its heading.
+        """Returns the category a task row stands in, and the row of its heading.
 
-        A task row stands in the category of the heading above it, and a tab
-        of a category holds no heading, so there the category is the one the
-        listing was told about.
+        Without a heading, the category is the one set with `set_category`.
 
         Args:
             row: the row of the task.
@@ -404,9 +363,6 @@ class TaskListing(QListWidget):
 
     def _drop_target(self, pos: QPoint) -> tuple[Path | None, int]:
         """Returns the category a drop at a position would move a task into.
-
-        A heading stands for its own category, and a task row for the one it
-        stands under. The empty area below the rows stands for nothing.
 
         Args:
             pos: the position of the drop, in the viewport.
@@ -439,13 +395,8 @@ class TaskListing(QListWidget):
         self.viewport().update()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        """Takes in a drag that carries a task.
-
-        The drag is taken in wherever it enters, because a drag starts over
-        the task it carries, and the rule that keeps a task from landing in
-        the category it already stands in would refuse it there; the drag
-        would then never reach the category it is aimed at. What a drop lands
-        on is decided by the moves that follow.
+        """Accepts any drag that carries a task; `dragMoveEvent` decides where it
+        may land.
 
         Args:
             event: the drag that entered.
@@ -457,12 +408,7 @@ class TaskListing(QListWidget):
         event.ignore()
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
-        """Marks the category a drop would move a task into.
-
-        The heading of the category is marked, so the category the task would
-        land in reads as the one under the cursor. A drag over the category
-        the task already stands in, or over the empty area, is refused, so
-        the cursor says the task cannot go there.
+        """Marks the category under the cursor, refusing the task's own category.
 
         Args:
             event: the drag that moved over the listing.
@@ -521,11 +467,8 @@ class TaskListing(QListWidget):
         self.apply_sort(column, descending)
 
     def _click_section(self, column: int) -> None:
-        """Sorts by a clicked heading, flipping the order on a second click.
-
-        A first click on a heading, or a click on another one, starts
-        ascending; a second click on the same heading turns it around. The clip
-        heading carries no order, so clicking it does nothing.
+        """Sorts by a clicked heading; a second click reverses. The clip column
+        does not sort.
 
         Args:
             column: the index of the section that was clicked.
@@ -538,17 +481,10 @@ class TaskListing(QListWidget):
         self.order_changed.emit(column, descending)
 
     def apply_sort(self, column: int, descending: bool) -> None:
-        """Orders the categories and the task rows by a column and a direction.
+        """Orders the tasks of each category by a column, then the categories.
 
-        A category is a separator row and the task run under it. The tasks of
-        every category are ordered among themselves, and then the categories
-        themselves are ordered by the key of the first task of each, so the
-        category holding the globally first record comes first and the next
-        follows. A category with no task carries no key, so it goes last
-        keeping its place among the other empty ones, and two categories whose
-        first tasks tie keep the order they had. A task of a tab with no
-        separator is a category of its own, ordered the same way. The row that
-        was selected stays selected once the rows are back in place.
+        Categories follow the key of their first task; empty ones go last. The
+        selection is kept.
 
         Args:
             column: the index of the column to order by.
@@ -595,12 +531,10 @@ class TaskListing(QListWidget):
         self.fit_task_column()
 
     def fit_task_column(self) -> None:
-        """Widens the task column to hold the longest visible description.
+        """Widens the task column to the longest visible title, up to
+        `_TASK_MAX_WIDTH`.
 
-        The width is measured from the font of the rows and clamped between the
-        default task width and `_TASK_MAX_WIDTH`; a description past the cap
-        still elides. The user owns the width once the section is dragged by
-        hand, so this leaves a section they resized alone for the session.
+        Stops once the user resizes the column by hand.
         """
         if self._task_section_user_resized:
             return
@@ -730,12 +664,8 @@ class TaskListing(QListWidget):
         RemindersDialog(scheduler, task, title, self).exec()
 
     def _click_separator(self, item: QListWidgetItem) -> None:
-        """Reports a clicked category row, dropping the selected task with it.
-
-        A row that carries no category is a task or an archive heading, so it
-        says nothing about the destination and the click is left alone. A
-        category row is not a task, so the selection and its bar go through the
-        same path `Esc` takes before the destination is asked for.
+        """Makes a clicked category heading the destination and drops the selected
+        task.
 
         Args:
             item: the row that was clicked.
@@ -792,12 +722,7 @@ class TaskListing(QListWidget):
 
 
 class TaskPanel(QWidget):
-    """The column headings over the tasks of a category.
-
-    The panel is what a tab holds: the header, and the list under it. The
-    header sits in a band of its own above the list rather than over it, so the
-    list keeps every row it had, and it owns the geometry of the columns the
-    rows are painted with, so each heading sits over its own column.
+    """What a tab holds: the column header above the task list.
 
     Args:
         listing: the list of tasks the headings sit over.
