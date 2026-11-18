@@ -68,9 +68,11 @@ def header_labels(window, title="All"):
     """The names of the columns above a tab of tasks."""
     header = task_panel(window, title).header
     model = header.model()
+    if model is None:
+        return []
     return [
         model.headerData(i, header.orientation(), Qt.ItemDataRole.DisplayRole)
-        for i in range(model.columnCount() if model is not None else 0)
+        for i in range(model.columnCount())
     ]
 
 

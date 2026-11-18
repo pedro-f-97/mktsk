@@ -1,6 +1,7 @@
 """select_task: choosing a task row by path, and what it must not touch."""
 
-from PySide6.QtCore import QPoint, QRect
+import pytest
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtWidgets import QApplication
 
 from mktsk.gui.tasklist import TaskListing
@@ -10,6 +11,7 @@ from tests.gui_helpers import (
     find_task,
     select_directory,
     select_tab,
+    select_task,
     task_listing,
 )
 
@@ -159,3 +161,144 @@ def test_scroll_to_path_on_cleared_listing_does_nothing(qapp):
     # Call _scroll_to_path - should not raise, item is None so branch is not taken
     task_list._scroll_to_path(entry.file)
     # If we reach here without exception, the test passes
+
+
+# Escape in the task table deselects the current task.
+
+
+def test_escape_deselects_the_selected_task(qtbot, window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    listing.setFocus()
+
+    qtbot.keyClick(listing, Qt.Key.Key_Escape)
+
+    assert listing.currentItem() is None
+    assert listing.action_bar.isVisible() is False
+
+
+def test_escape_without_a_selection_changes_nothing(qtbot, window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    listing.setFocus()
+
+    qtbot.keyClick(listing, Qt.Key.Key_Escape)
+
+    assert listing.currentItem() is None
+    assert listing.action_bar.isVisible() is False
+
+
+def test_escape_in_the_title_field_keeps_the_selection(
+    qtbot, window, tmp_path, make_task
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    window.title_input.setFocus()
+
+    qtbot.keyClick(window.title_input, Qt.Key.Key_Escape)
+
+    assert listing.currentItem() is not None
+    assert listing.action_bar.isVisible() is True
+
+
+def test_escape_deselects_on_a_category_tab(qtbot, window, tmp_path, make_task):
+    file = make_task(tmp_path / "Veritas", "260925", "Bar")
+    window.navigate_to(tmp_path)
+    select_tab(window, "Veritas")
+    listing = select_task(window, file, "Veritas")
+    listing.setFocus()
+
+    qtbot.keyClick(listing, Qt.Key.Key_Escape)
+
+    assert listing.currentItem() is None
+    assert listing.action_bar.isVisible() is False
+
+
+# Focus on the task list alone never selects a task.
+
+
+def _list_tasks(window, tmp_path, make_task):
+    """Opens a category tab with two tasks and returns the leading file."""
+    file = make_task(tmp_path / "Veritas", "260918", "Foo")
+    make_task(tmp_path / "Veritas", "260917", "Bar")
+    window.navigate_to(tmp_path)
+    select_tab(window, "Veritas")
+    return file
+
+
+def _assert_nothing_selected(listing):
+    assert listing.selected_entry() is None
+    assert listing.action_bar.isVisible() is False
+    assert listing.delegate.inset_row == -1
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        Qt.FocusReason.ActiveWindowFocusReason,
+        Qt.FocusReason.TabFocusReason,
+        Qt.FocusReason.BacktabFocusReason,
+    ],
+)
+def test_focus_alone_selects_no_task(window, tmp_path, make_task, reason):
+    _list_tasks(window, tmp_path, make_task)
+    listing = task_listing(window, "Veritas")
+    window.title_input.setFocus()
+
+    listing.setFocus(reason)
+
+    _assert_nothing_selected(listing)
+
+
+def test_the_selection_survives_the_list_losing_and_regaining_focus(
+    window, tmp_path, make_task
+):
+    file = _list_tasks(window, tmp_path, make_task)
+    listing = select_task(window, file, "Veritas")
+
+    window.title_input.setFocus()
+    listing.setFocus()
+
+    assert listing.selected_entry().file == file
+    assert listing.action_bar.isVisible() is True
+    assert listing.delegate.inset_row == listing.row(find_task(window, file, "Veritas"))
+
+
+def test_clicking_a_row_selects_it(window, tmp_path, make_task, qtbot):
+    file = _list_tasks(window, tmp_path, make_task)
+    listing = task_listing(window, "Veritas")
+    item = find_task(window, file, "Veritas")
+
+    qtbot.mouseClick(
+        listing.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=listing.visualItemRect(item).center(),
+    )
+
+    assert listing.selected_entry().file == file
+    assert listing.action_bar.isVisible() is True
+    assert listing.delegate.inset_row == listing.row(item)
+
+
+def test_selecting_a_row_with_the_keyboard(window, tmp_path, make_task, qtbot):
+    _list_tasks(window, tmp_path, make_task)
+    listing = task_listing(window, "Veritas")
+    listing.setFocus(Qt.FocusReason.TabFocusReason)
+
+    qtbot.keyClick(listing, Qt.Key.Key_Down)
+
+    assert listing.selected_entry() is not None
+    assert listing.action_bar.isVisible() is True
+
+
+def test_minimizing_and_restoring_selects_no_task(window, tmp_path, make_task):
+    _list_tasks(window, tmp_path, make_task)
+    listing = task_listing(window, "Veritas")
+
+    window.showMinimized()
+    window.showNormal()
+
+    _assert_nothing_selected(listing)
