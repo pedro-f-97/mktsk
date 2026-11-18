@@ -24,6 +24,7 @@ from mktsk.gui.taskrow import (
     _ENTRY_ROLE,
     _column_widths,
     _date_cell,
+    _heading_width,
     _relative_age,
 )
 from tests.gui_helpers import (
@@ -326,6 +327,14 @@ def test_the_task_column_grows_to_fit_the_longest_description(qtbot):
 
     assert header.default_task_width < header.sectionSize(1) < _TASK_MAX_WIDTH
     assert header.sectionSize(1) == _title_width(item)
+
+
+def test_the_default_task_width_ignores_the_width_of_the_states(qtbot):
+    rows = _listing(qtbot, [])
+    columns = _column_widths()
+    total = columns.clip + _heading_width(3) + columns.interventions + columns.activity
+
+    assert rows.header.default_task_width == max(total, 100)
 
 
 def test_the_task_column_never_narrows_below_its_default(qtbot):
