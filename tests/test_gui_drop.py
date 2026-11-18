@@ -148,7 +148,7 @@ def test_a_drop_moves_the_files_and_counts_them(window, tmp_path, make_task):
     # the row counts the attachment the drop brought, and the panel names it
     row = find_task(window, foo, "All")
     assert row.data(_ENTRY_ROLE).attachments == 1
-    assert window.preview_list.item(0).text() == "note.txt"
+    assert window.preview_area.preview_list.item(0).text() == "note.txt"
 
 
 def test_a_drop_with_no_task_selected_moves_nothing(window, tmp_path, make_task):

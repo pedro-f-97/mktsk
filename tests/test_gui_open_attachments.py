@@ -18,11 +18,11 @@ def test_single_click_selects_attachment_without_opening(window, tmp_path, make_
     select_task(window, file)
 
     # Click the attachment item
-    item = window.preview_list.item(0)
-    window.preview_list.setCurrentItem(item)
+    item = window.preview_area.preview_list.item(0)
+    window.preview_area.preview_list.setCurrentItem(item)
 
     # The item should be selected but open_file should not be called
-    assert window.preview_list.currentItem() == item
+    assert window.preview_area.preview_list.currentItem() == item
 
 
 def test_double_click_opens_file(window, tmp_path, make_task, monkeypatch):
@@ -40,8 +40,8 @@ def test_double_click_opens_file(window, tmp_path, make_task, monkeypatch):
         return True
 
     with patch("PySide6.QtGui.QDesktopServices.openUrl", mock_open_url):
-        item = window.preview_list.item(0)
-        window.preview_list.itemDoubleClicked.emit(item)
+        item = window.preview_area.preview_list.item(0)
+        window.preview_area.preview_list.itemDoubleClicked.emit(item)
 
     assert len(opened) == 1
     assert Path(opened[0]) == attachment
@@ -62,8 +62,8 @@ def test_double_click_opens_folder(window, tmp_path, make_task, monkeypatch):
         return True
 
     with patch("PySide6.QtGui.QDesktopServices.openUrl", mock_open_url):
-        item = window.preview_list.item(0)  # "Attachments/"
-        window.preview_list.itemDoubleClicked.emit(item)
+        item = window.preview_area.preview_list.item(0)  # "Attachments/"
+        window.preview_area.preview_list.itemDoubleClicked.emit(item)
 
     assert len(opened) == 1
     assert Path(opened[0]) == folder
@@ -84,12 +84,12 @@ def test_enter_key_opens_selected_attachment(window, tmp_path, make_task, monkey
         return True
 
     with patch("PySide6.QtGui.QDesktopServices.openUrl", mock_open_url):
-        item = window.preview_list.item(0)
-        window.preview_list.setCurrentItem(item)
+        item = window.preview_area.preview_list.item(0)
+        window.preview_area.preview_list.setCurrentItem(item)
         # Simulate Enter key press
         from PySide6.QtGui import QKeyEvent
         event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)
-        window.preview_list.keyPressEvent(event)
+        window.preview_area.preview_list.keyPressEvent(event)
 
     assert len(opened) == 1
     assert Path(opened[0]) == attachment
@@ -110,13 +110,13 @@ def test_missing_file_triggers_warning_and_refresh(window, tmp_path, make_task, 
     attachment.unlink()
 
     # Try to open it
-    item = window.preview_list.item(0)
-    window.preview_list.itemDoubleClicked.emit(item)
+    item = window.preview_area.preview_list.item(0)
+    window.preview_area.preview_list.itemDoubleClicked.emit(item)
 
     assert len(warnings) == 1
     assert "no longer exists" in warnings[0]
     # The list should be refreshed (empty now)
-    assert window.preview_list.count() == 0
+    assert window.preview_area.preview_list.count() == 0
 
 
 def test_missing_folder_triggers_warning_and_refresh(window, tmp_path, make_task, monkeypatch):
@@ -135,13 +135,13 @@ def test_missing_folder_triggers_warning_and_refresh(window, tmp_path, make_task
     shutil.rmtree(folder)
 
     # Try to open it
-    item = window.preview_list.item(0)
-    window.preview_list.itemDoubleClicked.emit(item)
+    item = window.preview_area.preview_list.item(0)
+    window.preview_area.preview_list.itemDoubleClicked.emit(item)
 
     assert len(warnings) == 1
     assert "no longer exists" in warnings[0]
     # The list should be refreshed (empty now)
-    assert window.preview_list.count() == 0
+    assert window.preview_area.preview_list.count() == 0
 
 
 def test_failed_open_triggers_warning(window, tmp_path, make_task, monkeypatch):
@@ -159,8 +159,8 @@ def test_failed_open_triggers_warning(window, tmp_path, make_task, monkeypatch):
         return False  # Simulate failure
 
     with patch("PySide6.QtGui.QDesktopServices.openUrl", mock_open_url):
-        item = window.preview_list.item(0)
-        window.preview_list.itemDoubleClicked.emit(item)
+        item = window.preview_area.preview_list.item(0)
+        window.preview_area.preview_list.itemDoubleClicked.emit(item)
 
     assert len(warnings) == 1
     assert "Could not open" in warnings[0]
@@ -184,12 +184,12 @@ def test_paths_with_spaces_and_unicode_opened_correctly(window, tmp_path, make_t
 
     with patch("PySide6.QtGui.QDesktopServices.openUrl", mock_open_url):
         # Open the file with spaces
-        item = window.preview_list.findItems("file with spaces.pdf", Qt.MatchFlag.MatchExactly)[0]
-        window.preview_list.itemDoubleClicked.emit(item)
+        item = window.preview_area.preview_list.findItems("file with spaces.pdf", Qt.MatchFlag.MatchExactly)[0]
+        window.preview_area.preview_list.itemDoubleClicked.emit(item)
 
         # Open the unicode file
-        item = window.preview_list.findItems("café.txt", Qt.MatchFlag.MatchExactly)[0]
-        window.preview_list.itemDoubleClicked.emit(item)
+        item = window.preview_area.preview_list.findItems("café.txt", Qt.MatchFlag.MatchExactly)[0]
+        window.preview_area.preview_list.itemDoubleClicked.emit(item)
 
     assert len(opened) == 2
     assert Path(opened[0]) == attachment
@@ -205,11 +205,11 @@ def test_no_regression_on_attachment_list_display(window, tmp_path, make_task):
     select_task(window, file)
 
     names = [
-        window.preview_list.item(index).text()
-        for index in range(window.preview_list.count())
+        window.preview_area.preview_list.item(index).text()
+        for index in range(window.preview_area.preview_list.count())
     ]
     assert names == ["Attachments/", "one.pdf"]
-    assert window.preview_list.alternatingRowColors() is True
+    assert window.preview_area.preview_list.alternatingRowColors() is True
 
 
 def test_malformed_item_data_does_not_crash(window, tmp_path, make_task):
@@ -221,11 +221,11 @@ def test_malformed_item_data_does_not_crash(window, tmp_path, make_task):
     select_task(window, file)
 
     # Corrupt the item data
-    item = window.preview_list.item(0)
+    item = window.preview_area.preview_list.item(0)
     item.setData(Qt.ItemDataRole.UserRole, "not a path")
 
     # Should not raise, should just return early
-    window._open_attachment(item)
+    window.preview_area.open_attachment(item)
 
 
 def test_non_enter_key_passes_to_base_class(window, tmp_path, make_task):
@@ -237,17 +237,17 @@ def test_non_enter_key_passes_to_base_class(window, tmp_path, make_task):
     select_task(window, file)
 
     # Select first item
-    item0 = window.preview_list.item(0)
-    window.preview_list.setCurrentItem(item0)
-    assert window.preview_list.currentItem() == item0
+    item0 = window.preview_area.preview_list.item(0)
+    window.preview_area.preview_list.setCurrentItem(item0)
+    assert window.preview_area.preview_list.currentItem() == item0
 
     # Press Down arrow - should move selection to second item via base class
     from PySide6.QtGui import QKeyEvent
     event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_Down, Qt.KeyboardModifier.NoModifier)
-    window.preview_list.keyPressEvent(event)
+    window.preview_area.preview_list.keyPressEvent(event)
 
     # Selection should have moved to the second item
-    assert window.preview_list.currentItem() == window.preview_list.item(1)
+    assert window.preview_area.preview_list.currentItem() == window.preview_area.preview_list.item(1)
 
 
 def test_enter_with_no_selection_does_nothing(window, tmp_path, make_task):
@@ -258,13 +258,13 @@ def test_enter_with_no_selection_does_nothing(window, tmp_path, make_task):
     select_task(window, file)
 
     # Clear selection
-    window.preview_list.clearSelection()
-    window.preview_list.setCurrentItem(None)
-    assert window.preview_list.currentItem() is None
+    window.preview_area.preview_list.clearSelection()
+    window.preview_area.preview_list.setCurrentItem(None)
+    assert window.preview_area.preview_list.currentItem() is None
 
     # Press Enter - should not crash, should not call _open_attachment
     from PySide6.QtGui import QKeyEvent
     event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)
-    window.preview_list.keyPressEvent(event)
+    window.preview_area.preview_list.keyPressEvent(event)
 
     # No error, test passes if we reach here
