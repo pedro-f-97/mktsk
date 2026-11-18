@@ -210,7 +210,8 @@
   only source of column geometry: the delegate reads each column's position and size from it
   (`sectionPosition` and `sectionSize`), so a heading never sits over a value of another
   column and dragging a separator moves the cells with it. Every named column is measured
-  from the bold application font, the clip column from the paperclip and the two digits it
+  from the bold application font, the state column at least as wide as its widest state,
+  the clip column from the paperclip and the two digits it
   may hold at once, and the date column from a date; the clip column is held at that fixed
   width and cannot be dragged; the task starts as the rest of the room a row has and is then
   widened to fit the longest visible description, up to `_TASK_MAX_WIDTH`, never below that
