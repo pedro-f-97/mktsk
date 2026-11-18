@@ -714,3 +714,104 @@ def test_tied_categories_keep_the_order_they_had(window, tmp_path, make_task):
 
     click_heading(window, 0)
     assert _headings(window) == ["Alpha", "Beta"]
+
+
+def _visible_labels(window, title="All"):
+    listing = task_listing(window, title)
+    return [
+        listing.item(index).text()
+        for index in range(listing.count())
+        if not listing.item(index).isHidden()
+    ]
+
+
+def _states_fixture(tmp_path, make_task):
+    """A waiting task in the base folder and an open one in a category."""
+    day = datetime.date(2026, 9, 30)
+    fill_task(make_task(tmp_path, "260918", "Foo"), day, "waiting", 1)
+    (tmp_path / "Infra").mkdir()
+    fill_task(make_task(tmp_path / "Infra", "260919", "Bar"), day, "open", 1)
+
+
+def test_the_state_filter_hides_other_states_and_empty_headings(
+    window, tmp_path, make_task
+):
+    _states_fixture(tmp_path, make_task)
+    window.navigate_to(tmp_path)
+
+    window.set_state_filter("waiting")
+
+    assert _visible_labels(window) == [tmp_path.name, "18/09/2026  Foo"]
+    assert window.state_filter_button.isChecked() is True
+    assert window.state_filter_button.toolTip() == "Filter by state: waiting"
+
+
+def test_all_states_shows_every_task_again(window, tmp_path, make_task):
+    _states_fixture(tmp_path, make_task)
+    window.navigate_to(tmp_path)
+    before = _visible_labels(window)
+    window.set_state_filter("waiting")
+
+    window.set_state_filter(None)
+
+    assert _visible_labels(window) == before
+    assert window.state_filter_button.isChecked() is False
+
+
+def test_the_state_filter_survives_a_refresh_and_a_sort(window, tmp_path, make_task):
+    _states_fixture(tmp_path, make_task)
+    window.navigate_to(tmp_path)
+    window.set_state_filter("open")
+
+    window.refresh()
+    click_heading(window, 1)
+
+    assert _visible_labels(window) == ["Infra", "19/09/2026  Bar"]
+
+
+def test_the_state_filter_leaves_the_closed_tab_alone(window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    close_task(file.parent, "Foo")
+    window.navigate_to(tmp_path)
+
+    window.set_state_filter("waiting")
+
+    assert "18/09/2026  Foo" in _visible_labels(window, "Closed")
+
+
+def test_the_state_filter_deselects_a_task_it_hides(window, tmp_path, make_task):
+    _states_fixture(tmp_path, make_task)
+    window.navigate_to(tmp_path)
+    listing = select_task(window, tmp_path / "260918 - Foo" / "Foo.md")
+
+    window.set_state_filter("open")
+
+    assert listing.currentItem() is None
+    assert window.preview_area.isHidden() is True
+
+
+def test_the_state_filter_menu_offers_every_state_it_can_set(window):
+    texts = [action.text() for action in window.state_filter_menu.actions()]
+
+    assert texts == ["All states", "open", "in-progress", "waiting"]
+
+
+def test_picking_a_state_in_the_menu_filters_by_it(window, tmp_path, make_task):
+    _states_fixture(tmp_path, make_task)
+    window.navigate_to(tmp_path)
+
+    window.state_filter_menu.actions()[3].trigger()
+
+    assert _visible_labels(window) == [tmp_path.name, "18/09/2026  Foo"]
+
+
+def test_the_state_filter_sits_in_the_tab_bar_corner(window):
+    assert window.tabs.cornerWidget(Qt.Corner.TopRightCorner) is window.state_filter_button
+
+
+def test_clicking_the_filter_opens_its_menu_and_keeps_the_check_honest(window):
+    window.state_filter_button.click()
+
+    assert window.state_filter_menu.isVisible() is True
+    assert window.state_filter_button.isChecked() is False
+    window.state_filter_menu.close()

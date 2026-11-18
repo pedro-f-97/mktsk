@@ -54,6 +54,9 @@
   folder, names only: the content is never read and never written, because the title of a
   task is not inside the file any more. Renaming to the title the task already has does
   nothing
+- `rename_task` moves the reminders of the task to its new folder name and readable title
+  through `reminders.follow_rename`; a reminders file that cannot be written leaves the
+  rename in place and adds ` (reminders not updated)` to the message
 - `rename_task` undoes a step that fails, in reverse, so it never leaves the task as
   `260918 - OldTitle/NewTitle.md`
 - `rename_task` raises `TaskError` on an empty title, a reserved Windows name, a missing
@@ -283,4 +286,5 @@
   counts as due), removes them from the file before returning, and leaves the rest: each
   reminder fires at most once.
 - There is no scheduler and no reminder file is touched unless a system tray is available;
-  without a tray, reminders stay pending.
+  without a tray, reminders stay pending. The one exception is a rename, which rewrites the
+  folder name of reminders already in the file and never creates it.

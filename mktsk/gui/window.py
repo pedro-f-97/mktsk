@@ -13,12 +13,16 @@ from PySide6.QtCore import (
     Qt,
 )
 from PySide6.QtGui import (
+    QAction,
+    QActionGroup,
     QCloseEvent,
     QDragEnterEvent,
     QDropEvent,
     QGuiApplication,
+    QKeySequence,
     QPalette,
     QResizeEvent,
+    QShortcut,
     QShowEvent,
 )
 from PySide6.QtWidgets import (
@@ -33,6 +37,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSizePolicy,
@@ -47,11 +52,13 @@ from PySide6.QtWidgets import (
 
 from mktsk import config, files, helpers, listing, standards, state, tasks
 
+from .actionbar import _OFFERED_STATES
 from .app_icon import app_icon, set_app_identity
 from .icons import (
     _SMALL_ICON_SIZE,
     _draw_choose,
     _draw_cross,
+    _draw_filter,
     _draw_refresh,
     _draw_up,
     _icon_button,
@@ -202,6 +209,26 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
         self.tabs = QTabWidget()
+        # the state filter sits in the empty corner of the tab bar, so it takes
+        # no room of its own; it shows as checked while a state is filtered
+        self._state_filter: str | None = None
+        self.state_filter_button = _icon_button(
+            self.tabs, "Filter by state", _draw_filter, "StateFilter"
+        )
+        self.state_filter_button.setCheckable(True)
+        self.state_filter_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.state_filter_menu = QMenu(self.state_filter_button)
+        group = QActionGroup(self.state_filter_menu)
+        for offered in (None, *_OFFERED_STATES):
+            action = QAction(offered or "All states", group)
+            action.setCheckable(True)
+            action.setChecked(offered is None)
+            action.triggered.connect(
+                lambda _checked=False, chosen=offered: self.set_state_filter(chosen)
+            )
+            self.state_filter_menu.addAction(action)
+        self.state_filter_button.clicked.connect(self._open_state_filter_menu)
+        self.tabs.setCornerWidget(self.state_filter_button, Qt.Corner.TopRightCorner)
         self.preview_area = PreviewPanel()
         # the table over the preview, resizable between them, the table taking
         # the larger share
@@ -346,6 +373,11 @@ class MainWindow(QMainWindow):
         self.create_button.clicked.connect(self.create_task)
         self.search_panel.task_activated.connect(self._select_task)
         self.toggle_button.clicked.connect(self.toggle_left_pane)
+        # Ctrl+N starts a new task and Ctrl+F searches, wherever the focus is
+        self.new_task_shortcut = QShortcut(QKeySequence.StandardKey.New, self)
+        self.new_task_shortcut.activated.connect(self.title_input.setFocus)
+        self.find_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
+        self.find_shortcut.activated.connect(self._focus_search)
         self.splitter.splitterMoved.connect(self._update_path_label)
         self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
         # the preview follows the selection of the current tab, so a new tab
@@ -363,6 +395,36 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.search_panel.search_results, self.tabs)
         self.setTabOrder(self.tabs, self.title_input)
         self.setTabOrder(self.title_input, self.create_button)
+
+    def set_state_filter(self, wanted: str | None) -> None:
+        """Shows only the tasks in a state, in every tab but `Closed`.
+
+        Args:
+            wanted: the state to show, or None for every state.
+        """
+        self._state_filter = wanted
+        self.state_filter_button.setChecked(wanted is not None)
+        self.state_filter_button.setToolTip(
+            f"Filter by state: {wanted}" if wanted else "Filter by state"
+        )
+        for index in range(self.tabs.count()):
+            if self.tabs.tabText(index) != _CLOSED_TAB:
+                cast(TaskPanel, self.tabs.widget(index)).listing.set_state_filter(wanted)
+
+    def _open_state_filter_menu(self) -> None:
+        """Opens the state menu under the filter button.
+
+        A click toggles a checkable button, so its check is put back to what
+        the filter says before the menu opens.
+        """
+        self.state_filter_button.setChecked(self._state_filter is not None)
+        button = self.state_filter_button
+        self.state_filter_menu.popup(button.mapToGlobal(button.rect().bottomLeft()))
+
+    def _focus_search(self) -> None:
+        """Puts the focus in the search field, with its text selected."""
+        self.search_panel.search_input.setFocus()
+        self.search_panel.search_input.selectAll()
 
     def _splitters(self) -> dict[str, QSplitter]:
         """Returns every splitter of the window under the key it is saved with."""
@@ -786,6 +848,8 @@ class MainWindow(QMainWindow):
     def _add_tab(self, title: str, tab: TaskListing) -> None:
         if title in self._sorts:
             tab.set_sort(*self._sorts[title])
+        if title != _CLOSED_TAB:
+            tab.set_state_filter(self._state_filter)
         tab.fit_task_column()
         self.tabs.addTab(TaskPanel(tab), title)
 

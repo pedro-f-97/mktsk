@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from typing import NamedTuple
 
-from . import files, helpers, listing, standards, state
+from . import files, helpers, listing, reminders, standards, state
 
 
 class TaskResult(NamedTuple):
@@ -178,7 +178,8 @@ def resume_task(folder: Path, title: str) -> TaskResult:
 def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
     """Renames a task folder and its .md file, keeping the date of the task.
 
-    The date prefix stays put, so a renamed task keeps its place in the history.
+    The date prefix stays put, so a renamed task keeps its place in the history,
+    and the reminders of the task follow it to the new name.
     Only the names move: the title of a task lives in them, and the .md carries
     no heading naming it. The content is never read and never written, and
     renaming to the title the task already has does nothing.
@@ -252,7 +253,35 @@ def rename_task(folder: Path, title: str, raw_title: str) -> TaskResult:
 
     renamed_file = renamed_folder / f"{new_title}.md"
 
-    return TaskResult(renamed_file, f"Renamed: {renamed_folder.name}")
+    return TaskResult(
+        renamed_file,
+        f"Renamed: {renamed_folder.name}"
+        + _reminders_note(folder.name, renamed_folder.name, new_title),
+    )
+
+
+def _reminders_note(old_task: str, new_task: str, title: str) -> str:
+    """Moves the reminders of a renamed task to its new name, and words it.
+
+    The rename already happened, so a reminders file that cannot be written
+    never undoes it: the failure reaches the message instead.
+
+    Args:
+        old_task: the folder name the task had.
+        new_task: the folder name the task has now.
+        title: the standardized title of the renamed task.
+
+    Returns:
+        An empty string, or " (reminders not updated)" when writing failed.
+    """
+    try:
+        reminders.follow_rename(
+            reminders.reminders_path(), old_task, new_task, helpers.readable_title(title)
+        )
+    except OSError:
+        return " (reminders not updated)"
+
+    return ""
 
 
 def move_task(task_dir: Path, dest_category: Path) -> Path:

@@ -6,6 +6,7 @@ import pytest
 
 from mktsk.reminders import (
     add,
+    follow_rename,
     for_task,
     load,
     pop_due,
@@ -180,3 +181,21 @@ def test_parent_directory_is_created(tmp_path):
 def test_reminders_path_is_next_to_config(tmp_path, monkeypatch):
     monkeypatch.setattr("mktsk.config.config_path", lambda: tmp_path / "config.json")
     assert reminders_path() == tmp_path / "reminders.json"
+
+
+def test_follow_rename_moves_only_the_reminders_of_the_renamed_task(tmp_path):
+    path = tmp_path / "reminders.json"
+    add(path, _due(2026, 10, 1, 9, 0), "a", "260918 - Foo", "Foo")
+    add(path, _due(2026, 10, 2, 9, 0), "b", "260918 - Bar", "Bar")
+
+    assert follow_rename(path, "260918 - Foo", "260918 - Baz", "Baz") == 1
+
+    tasks = [(reminder.task, reminder.title) for reminder in load(path)]
+    assert tasks == [("260918 - Baz", "Baz"), ("260918 - Bar", "Bar")]
+
+
+def test_follow_rename_without_a_file_creates_none(tmp_path):
+    path = tmp_path / "reminders.json"
+
+    assert follow_rename(path, "260918 - Foo", "260918 - Baz", "Baz") == 0
+    assert not path.exists()

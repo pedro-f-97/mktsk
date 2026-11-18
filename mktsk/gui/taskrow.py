@@ -90,8 +90,9 @@ class _Columns(NamedTuple):
 def _column_widths() -> _Columns:
     """Measures the fixed columns from the font in use.
 
-    Each starts as wide as its heading; the clip column fits the icon and two
-    digits, and the date column fits a date.
+    Each starts as wide as its heading; the state column also fits the widest
+    state, the clip column fits the icon and two digits, and the date column
+    fits a date.
 
     Returns:
         The width of the date column, of the clip one, of the state one, of the
@@ -105,7 +106,11 @@ def _column_widths() -> _Columns:
     return _Columns(
         body.horizontalAdvance("dd/mm/yyyy") + 2 * _COLUMN_PADDING,
         _ICON_SIZE + body.horizontalAdvance("44") + 2 * _COLUMN_PADDING,
-        headings.horizontalAdvance(_HEADINGS[3]) + 2 * _COLUMN_PADDING,
+        max(
+            headings.horizontalAdvance(_HEADINGS[3]),
+            *(body.horizontalAdvance(state) for state in parsing.STATES),
+        )
+        + 2 * _COLUMN_PADDING,
         headings.horizontalAdvance(_HEADINGS[4]) + 2 * _COLUMN_PADDING,
         headings.horizontalAdvance(_HEADINGS[5]) + 2 * _COLUMN_PADDING,
     )

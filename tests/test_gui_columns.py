@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from mktsk import helpers, listing
+from mktsk import helpers, listing, parsing
 from mktsk.gui.selection import _SELECTION_INDICATOR_GAP
 from mktsk.gui.tasklist import _TASK_MAX_WIDTH, TaskListing, TaskPanel
 from mktsk.gui.taskrow import (
@@ -95,6 +95,14 @@ def test_the_date_column_starts_as_wide_as_a_date(qtbot):
     assert header.sectionSize(0) == columns.date
     assert text <= header.sectionSize(0) <= text + 2 * _COLUMN_PADDING
     assert header.sectionSize(0) < 1.5 * text + _SELECTION_INDICATOR_GAP
+
+
+def test_the_state_column_starts_wide_enough_for_every_state(qtbot):
+    panel = _panel(qtbot)
+    body = QFontMetrics(QApplication.font())
+    widest = max(body.horizontalAdvance(state) for state in parsing.STATES)
+
+    assert panel.header.sectionSize(3) >= widest + 2 * _COLUMN_PADDING
 
 
 def test_the_date_section_can_be_dragged_narrower_and_wider(qtbot):
