@@ -605,3 +605,27 @@ def test_ctrl_f_moves_the_focus_to_the_search_field_with_its_text_selected(qtbot
 def test_the_window_shortcuts_are_ctrl_n_and_ctrl_f(window):
     assert window.new_task_shortcut.key().toString() == "Ctrl+N"
     assert window.find_shortcut.key().toString() == "Ctrl+F"
+
+
+def test_ctrl_w_in_the_table_closes_the_selected_task(qtbot, window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    listing.setFocus()
+
+    qtbot.keyClick(listing, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)
+
+    assert (tmp_path / "260918 - Foo.zip").is_file()
+    assert not file.parent.exists()
+
+
+def test_ctrl_w_on_a_closed_task_closes_nothing(qtbot, window, tmp_path, make_task):
+    file = make_task(tmp_path, "260918", "Foo")
+    close_task(file.parent, "Foo")
+    window.navigate_to(tmp_path)
+    select_tab(window, "Closed")
+    listing = select_task(window, tmp_path / "260918 - Foo.zip", "Closed")
+    listing.setFocus()
+
+    with qtbot.assertNotEmitted(listing.close_requested):
+        qtbot.keyClick(listing, Qt.Key.Key_W, Qt.KeyboardModifier.ControlModifier)

@@ -92,6 +92,8 @@ class TaskListing(QListWidget):
             self.header,
         )
         self.sort_column: int | None = None
+        # the only state shown, or None to show every task
+        self._state_filter: str | None = None
         self.sort_descending = False
         self._task_section_user_resized = False
         self._fitting_task_column = False
@@ -149,6 +151,10 @@ class TaskListing(QListWidget):
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(lambda: self._request(self.resume_requested))
             self.resume_shortcuts.append(shortcut)
+        # Ctrl+W closes the selected task into its archive, like its archive button
+        self.close_shortcut = QShortcut(QKeySequence("Ctrl+W"), self)
+        self.close_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.close_shortcut.activated.connect(self._request_close)
 
     def selected_entry(self) -> listing.TaskEntry | None:
         """Returns the task of the selected row, or None when none is."""
@@ -535,7 +541,39 @@ class TaskListing(QListWidget):
         if selected is not None:
             self.setCurrentItem(selected)
             self._sync_action_bar()
+        # rows taken out and put back lose their hidden flag
+        self.set_state_filter(self._state_filter)
         self.fit_task_column()
+
+    def set_state_filter(self, state: str | None) -> None:
+        """Shows only the tasks in a state, or every task for None.
+
+        A heading left without a visible task hides with them, and a selected
+        task that hides is deselected.
+
+        Args:
+            state: the state to show, or None for every state.
+        """
+        self._state_filter = state
+        heading: QListWidgetItem | None = None
+        heading_visible = False
+        for index in range(self.count()):
+            item = self.item(index)
+            entry = item.data(_ENTRY_ROLE)
+            if entry is None:
+                if heading is not None:
+                    heading.setHidden(state is not None and not heading_visible)
+                heading, heading_visible = item, False
+                continue
+            hidden = state is not None and entry.state != state
+            item.setHidden(hidden)
+            heading_visible = heading_visible or not hidden
+        if heading is not None:
+            heading.setHidden(state is not None and not heading_visible)
+
+        current = self.currentItem()
+        if current is not None and current.isHidden():
+            self._deselect()
 
     def fit_task_column(self) -> None:
         """Widens the task column to the longest visible title, up to
@@ -619,6 +657,12 @@ class TaskListing(QListWidget):
         entry = self.selected_entry()
         if entry is not None:
             self.state_requested.emit(entry, new_state)
+
+    def _request_close(self) -> None:
+        """Reports a close of the selected task, unless it is already closed."""
+        entry = self.selected_entry()
+        if entry is not None and entry.state != "closed":
+            self.close_requested.emit(entry)
 
     def _deselect(self) -> None:
         """Clears the current row, which hides the action bar with it."""

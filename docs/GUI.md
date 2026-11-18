@@ -90,8 +90,8 @@
 - Empty field means no results, in both modes. Choosing a result behaves exactly as today.
 - The right pane is a side rail beside the creation bar and the tabs: the rail is the
   first column, spans the full height of the pane and is as wide as the `Refresh` button
-  it carries at its top, so the button no longer sits in the tab bar corner, which is
-  left empty. The title field, the hint and `Create` sit above the task table, in the
+  it carries at its top, so the button no longer sits in the tab bar corner, which now
+  carries the state filter. The title field, the hint and `Create` sit above the task table, in the
   pane and not across the window, to the right of the rail. The field takes the rest of
   the row and `Create` sits at its right end
 - Below `Refresh` the rail carries the pane toggle, a flat `QToolButton` that fills the
@@ -273,6 +273,15 @@
   the selection and disappears with it
 - `Return` or the keypad `Enter` in the task table resumes the selected task, the same
   request as its `+` button, and does nothing without a selection
+- `Ctrl+W` in the task table closes the selected task into its archive, the same request
+  as its archive button, and does nothing on a closed task
+- The state filter is a funnel button in the top-right corner of the tab bar
+  (`setCornerWidget`), so it takes no room of its own. Its menu offers `All states`,
+  `open`, `in-progress` and `waiting`; a state hides the task rows of every other state in
+  every tab but `Closed`, a heading left without a visible task hides with them, and a
+  selected task that hides is deselected. The button shows as checked, and its tooltip
+  names the state, while a state is filtered. The filter survives a refresh and a sort,
+  and is not kept between sessions
 - `Ctrl+N` (`QKeySequence.StandardKey.New`) puts the focus in the title field and `Ctrl+F`
   (`StandardKey.Find`) in the search field, with its text selected, from anywhere in the
   window

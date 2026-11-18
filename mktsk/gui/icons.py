@@ -220,6 +220,16 @@ def _draw_content(painter: QPainter, box: QRectF) -> None:
     painter.drawLine(QPointF(4, 11), QPointF(12, 11))
 
 
+def _draw_filter(painter: QPainter, box: QRectF) -> None:
+    """Draws a funnel, for filtering the tasks by state."""
+    painter.drawLine(QPointF(2, 3), QPointF(16, 3))
+    painter.drawLine(QPointF(2, 3), QPointF(7.5, 9.5))
+    painter.drawLine(QPointF(16, 3), QPointF(10.5, 9.5))
+    painter.drawLine(QPointF(7.5, 9.5), QPointF(7.5, 15.5))
+    painter.drawLine(QPointF(10.5, 9.5), QPointF(10.5, 13.5))
+    painter.drawLine(QPointF(7.5, 15.5), QPointF(10.5, 13.5))
+
+
 def _draw_chevron(
     painter: QPainter, box: QRectF, points_right: bool, color: QColor
 ) -> None:

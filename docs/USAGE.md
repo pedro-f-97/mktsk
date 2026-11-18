@@ -362,7 +362,11 @@ Opens a window where you can:
   left where it is and named in a warning, with the reason why.
 
 Keyboard shortcuts: `Ctrl+N` jumps to the title of a new task, `Ctrl+F` to the search
-field, `Enter` in the task list resumes the selected task, and `Esc` drops the selection.
+field, and in the task list `Enter` resumes the selected task, `Ctrl+W` closes it into its
+archive and `Esc` drops the selection.
+
+The funnel at the right end of the tabs filters the tasks by state, in every tab but
+`Closed`.
 
 The GUI and the CLI share one config file, so a base folder chosen in either is the
 folder both work in. The size and position of the window and the sizes of the panels
