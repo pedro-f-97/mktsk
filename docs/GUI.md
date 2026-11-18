@@ -271,6 +271,11 @@
 - Selecting a task shows an action bar over that row, aligned to the left, with the
   `Open`, `Resume` and `Rename` buttons, the change-state one and `Close`; it moves with
   the selection and disappears with it
+- `Return` or the keypad `Enter` in the task table resumes the selected task, the same
+  request as its `+` button, and does nothing without a selection
+- `Ctrl+N` (`QKeySequence.StandardKey.New`) puts the focus in the title field and `Ctrl+F`
+  (`StandardKey.Find`) in the search field, with its text selected, from anywhere in the
+  window
 - `Esc` in the task table deselects the current task, so the bar goes with the
   selection, and clears the destination through the same handler the label's `x` calls
 - `TaskListing.select_task(path)` selects the row whose entry carries `path` and scrolls it

@@ -361,6 +361,9 @@ Opens a window where you can:
   belong. Nothing is overwritten: a file whose name the task folder already carries is
   left where it is and named in a warning, with the reason why.
 
+Keyboard shortcuts: `Ctrl+N` jumps to the title of a new task, `Ctrl+F` to the search
+field, `Enter` in the task list resumes the selected task, and `Esc` drops the selection.
+
 The GUI and the CLI share one config file, so a base folder chosen in either is the
 folder both work in. The size and position of the window and the sizes of the panels
 inside it are remembered between sessions.

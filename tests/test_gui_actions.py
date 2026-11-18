@@ -555,3 +555,53 @@ def test_the_auxiliary_row_is_counted_by_the_content_height(qtbot):
 
     assert plain > 0
     assert rows.contentsSize().height() == plain + rows.delegate.accordion_height
+
+
+def test_return_in_the_table_resumes_the_selected_task(
+    qtbot, window, tmp_path, make_task, fake_open, fake_messages
+):
+    file = make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = select_task(window, file)
+    listing.setFocus()
+
+    with qtbot.waitSignal(listing.resume_requested) as signal:
+        qtbot.keyClick(listing, Qt.Key.Key_Return)
+
+    assert signal.args[0].file == file
+    assert fake_open == [file]
+
+
+def test_return_without_a_selection_resumes_nothing(qtbot, window, tmp_path, make_task):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+    listing = task_listing(window)
+    listing.setFocus()
+
+    with qtbot.assertNotEmitted(listing.resume_requested):
+        qtbot.keyClick(listing, Qt.Key.Key_Return)
+
+
+def test_ctrl_n_moves_the_focus_to_the_title_field(qtbot, window):
+    window.activateWindow()
+    window.search_panel.search_input.setFocus()
+
+    window.new_task_shortcut.activated.emit()
+
+    assert QApplication.focusWidget() is window.title_input
+
+
+def test_ctrl_f_moves_the_focus_to_the_search_field_with_its_text_selected(qtbot, window):
+    window.activateWindow()
+    window.search_panel.search_input.setText("foo")
+    window.title_input.setFocus()
+
+    window.find_shortcut.activated.emit()
+
+    assert QApplication.focusWidget() is window.search_panel.search_input
+    assert window.search_panel.search_input.selectedText() == "foo"
+
+
+def test_the_window_shortcuts_are_ctrl_n_and_ctrl_f(window):
+    assert window.new_task_shortcut.key().toString() == "Ctrl+N"
+    assert window.find_shortcut.key().toString() == "Ctrl+F"

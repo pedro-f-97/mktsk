@@ -17,8 +17,10 @@ from PySide6.QtGui import (
     QDragEnterEvent,
     QDropEvent,
     QGuiApplication,
+    QKeySequence,
     QPalette,
     QResizeEvent,
+    QShortcut,
     QShowEvent,
 )
 from PySide6.QtWidgets import (
@@ -346,6 +348,11 @@ class MainWindow(QMainWindow):
         self.create_button.clicked.connect(self.create_task)
         self.search_panel.task_activated.connect(self._select_task)
         self.toggle_button.clicked.connect(self.toggle_left_pane)
+        # Ctrl+N starts a new task and Ctrl+F searches, wherever the focus is
+        self.new_task_shortcut = QShortcut(QKeySequence.StandardKey.New, self)
+        self.new_task_shortcut.activated.connect(self.title_input.setFocus)
+        self.find_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
+        self.find_shortcut.activated.connect(self._focus_search)
         self.splitter.splitterMoved.connect(self._update_path_label)
         self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
         # the preview follows the selection of the current tab, so a new tab
@@ -363,6 +370,11 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.search_panel.search_results, self.tabs)
         self.setTabOrder(self.tabs, self.title_input)
         self.setTabOrder(self.title_input, self.create_button)
+
+    def _focus_search(self) -> None:
+        """Puts the focus in the search field, with its text selected."""
+        self.search_panel.search_input.setFocus()
+        self.search_panel.search_input.selectAll()
 
     def _splitters(self) -> dict[str, QSplitter]:
         """Returns every splitter of the window under the key it is saved with."""

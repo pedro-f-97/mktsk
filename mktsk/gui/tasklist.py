@@ -142,6 +142,13 @@ class TaskListing(QListWidget):
             Qt.ShortcutContext.WidgetWithChildrenShortcut
         )
         self.escape_shortcut.activated.connect(self._deselect)
+        # Return and the keypad Enter resume the selected task, like its `+` button
+        self.resume_shortcuts: list[QShortcut] = []
+        for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(lambda: self._request(self.resume_requested))
+            self.resume_shortcuts.append(shortcut)
 
     def selected_entry(self) -> listing.TaskEntry | None:
         """Returns the task of the selected row, or None when none is."""
