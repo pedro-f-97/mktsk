@@ -1,17 +1,7 @@
 ## GUI
 
 - Entry point `mktsk-gui`; PySide6 comes in the optional `gui` extra; tests in
-  `tests/test_gui_listing.py`, `tests/test_gui_target.py`, `tests/test_gui_header.py`,
-  `tests/test_gui_actions.py`, `tests/test_gui_create.py`,
-  `tests/test_gui_destination.py`, `tests/test_gui_icons.py`,
-  `tests/test_gui_activity.py`, `tests/test_gui_columns.py`, `tests/test_gui_attachments.py`,
-  `tests/test_gui_row_text.py`, `tests/test_gui_row_highlight.py`,
-  `tests/test_gui_date_column.py`,   `tests/test_gui_state.py`, `tests/test_gui_close.py`,
-  `tests/test_gui_reopen.py`, `tests/test_gui_layout.py`,
-  `tests/test_gui_search_panel.py`, `tests/test_gui_move.py`, `tests/test_gui_drop.py`,
-  `tests/test_gui_persistence.py`, `tests/test_gui_first_run.py`,
-  `tests/test_app_icon.py`, `tests/test_gui_reminders_ui.py`
-  and `tests/test_gui_window.py` with pytest-qt
+  `tests/test_gui_*.py`, one file per subject, with pytest-qt
 - No Qt imports in the CLI or the business logic
 - No Qt GUI objects at module level or in caches, so none outlives the `QApplication`
 - A QProxyStyle must wrap a style of its own (QStyleFactory.create), never widget.style() or QApplication.style()
