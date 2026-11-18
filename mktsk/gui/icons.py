@@ -7,7 +7,7 @@ collected for a frozen build.
 import math
 from collections.abc import Callable
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import (
     QColor,
     QIcon,
@@ -277,6 +277,54 @@ def _stroked_icon(color: QColor, draw: Callable[[QPainter, QRectF], None]) -> QI
     return QIcon(QPixmap.fromImage(image))
 
 
+class _IconButton(QToolButton):
+    """A tool button whose icon is redrawn whenever the palette changes.
+
+    The icon colour comes from the enabled `ButtonText` role, so a light or
+    dark mode is followed without writing any colour down. The disabled copy is
+    regenerated too, so a disabled button keeps fading with the interface.
+
+    Args:
+        parent: the widget the button belongs to.
+        tooltip: text shown on hover, and the accessible name.
+        draw: painting function of the icon.
+        name: role of the button, for the object name.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget,
+        tooltip: str,
+        draw: Callable[[QPainter, QRectF], None],
+        name: str,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName(f"{name}Button")
+        self._draw = draw
+        self.setToolTip(tooltip)
+        self.setAccessibleName(tooltip)
+        self.setAutoRaise(True)
+        self._apply_icon()
+
+    def _apply_icon(self) -> None:
+        """Renders the icon from the current palette and installs it."""
+        palette = self.palette()
+        icon = _stroked_icon(palette.color(QPalette.ColorRole.ButtonText), self._draw)
+        faded = _stroked_icon(
+            palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText),
+            self._draw,
+        )
+        icon.addPixmap(faded.pixmap(QSize(_ICON_SIZE, _ICON_SIZE)), QIcon.Mode.Disabled)
+        self.setIcon(icon)
+        self.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Redraws the icon when the palette changes (a theme switch)."""
+        if event.type() == QEvent.Type.PaletteChange:
+            self._apply_icon()
+        super().changeEvent(event)
+
+
 def _icon_button(
     parent: QWidget,
     tooltip: str,
@@ -285,10 +333,10 @@ def _icon_button(
 ) -> QToolButton:
     """Builds a button that carries an icon and a tooltip rather than a label.
 
-    The icon is drawn twice, once from the enabled palette and once from the
-    disabled group, so a disabled button fades with the rest of the interface
-    rather than keeping its full colour. The tooltip is also the accessible
-    name, so the button is found by what it does.
+    The icon is drawn from the enabled palette, so a disabled button fades with
+    the rest of the interface, and the icon is redrawn when the palette changes
+    so a light or dark mode is followed without writing any colour down. The
+    tooltip is also the accessible name, so the button is found by what it does.
 
     Args:
         parent: the widget the button belongs to.
@@ -299,18 +347,4 @@ def _icon_button(
     Returns:
         The button.
     """
-    button = QToolButton(parent)
-    button.setObjectName(f"{name}Button")
-    palette = button.palette()
-    icon = _stroked_icon(palette.color(QPalette.ColorRole.ButtonText), draw)
-    faded = _stroked_icon(
-        palette.color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText),
-        draw,
-    )
-    icon.addPixmap(faded.pixmap(QSize(_ICON_SIZE, _ICON_SIZE)), QIcon.Mode.Disabled)
-    button.setIcon(icon)
-    button.setIconSize(QSize(_ICON_SIZE, _ICON_SIZE))
-    button.setToolTip(tooltip)
-    button.setAccessibleName(tooltip)
-    button.setAutoRaise(True)
-    return button
+    return _IconButton(parent, tooltip, draw, name)

@@ -458,12 +458,8 @@ class MainWindow(QMainWindow):
         # the hint goes where the task is created, in the font it already uses,
         # so it adds no height of its own and only the colour tells it apart
         self.target_label.setWordWrap(False)
-        hint = self.target_label.palette()
-        hint.setColor(
-            QPalette.ColorRole.WindowText,
-            hint.color(QPalette.ColorRole.Text),
-        )
-        self.target_label.setPalette(hint)
+        # no colour is written down: the hint reads the palette, so it follows a
+        # light or dark mode like the rest of the interface
         self.target_label.hide()
         self.create_button = QPushButton("Create")
 
