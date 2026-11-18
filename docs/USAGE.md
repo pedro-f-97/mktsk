@@ -110,6 +110,8 @@ file inside the folder and the folder itself: the file is never read and never w
 because the title of a task is not inside it. The file is not opened either, because
 renaming is not working on the task.
 
+Reminders of the task follow it to the new name.
+
 The folder is named rather than looked up by title, so the task you name is the task you
 rename. A name that is not a task folder is refused, as is a new title that is empty, a
 Windows reserved name, or one another task already has.

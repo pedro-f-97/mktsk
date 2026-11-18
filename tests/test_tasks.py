@@ -1,8 +1,10 @@
+import datetime
 from pathlib import Path
 
 import pytest
 from freezegun import freeze_time
 
+from mktsk import reminders
 from mktsk.helpers import TaskError
 from mktsk.tasks import (
     close_task,
@@ -379,6 +381,31 @@ def test_rename_task_keeps_the_date(tmp_path, make_task):
 
     assert result.file == tmp_path / "260918 - FSocietyEverbind" / "FSocietyEverbind.md"
     assert result.message == "Renamed: 260918 - FSocietyEverbind"
+
+
+def test_rename_task_moves_the_reminders_of_the_task(tmp_path, make_task):
+    make_task(tmp_path, "260918", "FSociety")
+    path = reminders.reminders_path()
+    reminders.add(path, datetime.datetime(2026, 10, 1, 9, 0), "", "260918 - FSociety", "F Society")  # noqa: DTZ001
+
+    rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    [reminder] = reminders.load(path)
+    assert (reminder.task, reminder.title) == ("260918 - Everbind", "Everbind")
+
+
+def test_rename_task_reports_reminders_it_could_not_update(tmp_path, make_task, monkeypatch):
+    make_task(tmp_path, "260918", "FSociety")
+
+    def failing(*args):
+        raise OSError("read-only")
+
+    monkeypatch.setattr(reminders, "follow_rename", failing)
+
+    result = rename_task(tmp_path / "260918 - FSociety", "FSociety", "Everbind")
+
+    assert result.message == "Renamed: 260918 - Everbind (reminders not updated)"
+    assert (tmp_path / "260918 - Everbind" / "Everbind.md").is_file()
 
 
 def test_rename_task_does_not_touch_the_content(tmp_path, make_task):

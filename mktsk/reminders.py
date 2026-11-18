@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -122,6 +122,37 @@ def remove(path: Path, reminder_id: str) -> bool:
 def for_task(reminders: list[Reminder], task: str) -> list[Reminder]:
     """Returns the reminders whose task folder name is `task`."""
     return [reminder for reminder in reminders if reminder.task == task]
+
+
+def follow_rename(path: Path, old_task: str, new_task: str, title: str) -> int:
+    """Points the reminders of a renamed task at its new folder name.
+
+    The file is only written when a reminder names the old folder, so a rename
+    without reminders creates and touches nothing.
+
+    Args:
+        path: the reminders file.
+        old_task: the folder name the task had.
+        new_task: the folder name the task has now.
+        title: the readable title of the renamed task.
+
+    Returns:
+        How many reminders were updated.
+    """
+    if not path.exists():
+        return 0
+
+    reminders = load(path)
+    updated = [
+        replace(reminder, task=new_task, title=title)
+        if reminder.task == old_task
+        else reminder
+        for reminder in reminders
+    ]
+    count = sum(reminder.task == old_task for reminder in reminders)
+    if count:
+        _write(path, updated)
+    return count
 
 
 def pop_due(path: Path, now: datetime) -> list[Reminder]:
