@@ -3,11 +3,11 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QToolButton
 
-from mktsk.gui.window import _SearchResults
+from mktsk.gui.search import _SearchResults
 
 
 def _toggle(window):
-    return window.search_content_checkbox
+    return window.search_panel.search_content_checkbox
 
 
 def test_toggle_is_a_checkable_tool_button_off_by_default(window):
@@ -37,9 +37,9 @@ def test_toggle_on_with_nothing_searched_shows_the_hint(window, tmp_path, make_t
 
     _toggle(window).setChecked(True)
 
-    assert isinstance(window.search_results, _SearchResults)
-    assert window.search_results._empty_message == "Press Enter to search content"
-    assert window.search_results.topLevelItemCount() == 0
+    assert isinstance(window.search_panel.search_results, _SearchResults)
+    assert window.search_panel.search_results._empty_message == "Press Enter to search content"
+    assert window.search_panel.search_results.topLevelItemCount() == 0
 
 
 def test_enter_with_hits_leaves_no_message(window, tmp_path, make_task, qtbot):
@@ -48,11 +48,11 @@ def test_enter_with_hits_leaves_no_message(window, tmp_path, make_task, qtbot):
     window.navigate_to(tmp_path)
 
     _toggle(window).setChecked(True)
-    qtbot.keyClicks(window.search_input, "findsecret")
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    qtbot.keyClicks(window.search_panel.search_input, "findsecret")
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
 
-    assert window.search_results.topLevelItemCount() == 1
-    assert window.search_results._empty_message == ""
+    assert window.search_panel.search_results.topLevelItemCount() == 1
+    assert window.search_panel.search_results._empty_message == ""
 
 
 def test_enter_with_zero_hits_shows_no_results(window, tmp_path, make_task, qtbot):
@@ -60,11 +60,11 @@ def test_enter_with_zero_hits_shows_no_results(window, tmp_path, make_task, qtbo
     window.navigate_to(tmp_path)
 
     _toggle(window).setChecked(True)
-    qtbot.keyClicks(window.search_input, "findsecret")
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    qtbot.keyClicks(window.search_panel.search_input, "findsecret")
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
 
-    assert window.search_results.topLevelItemCount() == 0
-    assert window.search_results._empty_message == "No results"
+    assert window.search_panel.search_results.topLevelItemCount() == 0
+    assert window.search_panel.search_results._empty_message == "No results"
 
 
 def test_editing_the_text_after_a_search_restores_the_hint(
@@ -75,14 +75,14 @@ def test_editing_the_text_after_a_search_restores_the_hint(
     window.navigate_to(tmp_path)
 
     _toggle(window).setChecked(True)
-    qtbot.keyClicks(window.search_input, "findsecret")
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
-    assert window.search_results.topLevelItemCount() == 1
-    assert window.search_results._empty_message == ""
+    qtbot.keyClicks(window.search_panel.search_input, "findsecret")
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
+    assert window.search_panel.search_results.topLevelItemCount() == 1
+    assert window.search_panel.search_results._empty_message == ""
 
-    window.search_input.setText("findsecret other")
-    assert window.search_results.topLevelItemCount() == 0
-    assert window.search_results._empty_message == "Press Enter to search content"
+    window.search_panel.search_input.setText("findsecret other")
+    assert window.search_panel.search_results.topLevelItemCount() == 0
+    assert window.search_panel.search_results._empty_message == "Press Enter to search content"
 
 
 def test_toggle_off_no_message_and_title_search_while_typing(
@@ -93,11 +93,11 @@ def test_toggle_off_no_message_and_title_search_while_typing(
 
     _toggle(window).setChecked(True)
     _toggle(window).setChecked(False)
-    assert window.search_results._empty_message == ""
+    assert window.search_panel.search_results._empty_message == ""
 
     # live title search still returns hits while typing
-    window.search_input.setText("launch")
-    assert window.search_results.topLevelItemCount() == 1
+    window.search_panel.search_input.setText("launch")
+    assert window.search_panel.search_results.topLevelItemCount() == 1
 
 
 def test_repaint_with_a_message_raises_nothing(window, tmp_path, make_task):
@@ -105,6 +105,6 @@ def test_repaint_with_a_message_raises_nothing(window, tmp_path, make_task):
     window.navigate_to(tmp_path)
 
     _toggle(window).setChecked(True)
-    assert window.search_results._empty_message == "Press Enter to search content"
+    assert window.search_panel.search_results._empty_message == "Press Enter to search content"
 
-    window.search_results.repaint()  # must not raise, no images or grabs
+    window.search_panel.search_results.repaint()  # must not raise, no images or grabs

@@ -7,7 +7,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QStyle
 
-from mktsk.gui.tasklist import _ENTRY_ROLE
+from mktsk.gui.taskrow import _ENTRY_ROLE
 from tests.gui_helpers import (
     fill_task,
     find_directory,

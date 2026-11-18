@@ -1,7 +1,7 @@
 from freezegun import freeze_time
 from PySide6.QtCore import QRect, Qt
 
-from mktsk.gui.tasklist import _SELECTION_INDICATOR_GAP
+from mktsk.gui.selection import _SELECTION_INDICATOR_GAP
 from tests.gui_helpers import (
     action_bar,
     find_task,

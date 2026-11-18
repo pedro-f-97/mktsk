@@ -6,7 +6,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QListWidgetItem
 
 from mktsk import listing
-from mktsk.gui.tasklist import _COUNT_ROLE, _ENTRY_ROLE, TaskListing
+from mktsk.gui.tasklist import TaskListing
+from mktsk.gui.taskrow import _COUNT_ROLE, _ENTRY_ROLE
 from tests.gui_helpers import (
     click_heading,
     fill_task,

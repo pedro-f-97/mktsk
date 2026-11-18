@@ -27,8 +27,8 @@ def _bottom(widget, ancestor):
 def _results(window):
     """The rows the search panel shows, in order."""
     return [
-        window.search_results.topLevelItem(index)
-        for index in range(window.search_results.topLevelItemCount())
+        window.search_panel.search_results.topLevelItem(index)
+        for index in range(window.search_panel.search_results.topLevelItemCount())
     ]
 
 
@@ -40,9 +40,9 @@ def _result_files(window):
 def _click_result(window, qtbot, row):
     """Clicks a result row, which is what chooses a task."""
     qtbot.mouseClick(
-        window.search_results.viewport(),
+        window.search_panel.search_results.viewport(),
         Qt.MouseButton.LeftButton,
-        pos=window.search_results.visualItemRect(row).center(),
+        pos=window.search_panel.search_results.visualItemRect(row).center(),
     )
 
 
@@ -51,12 +51,12 @@ def test_typing_filters_the_results(window, tmp_path, make_task, qtbot):
     naive = make_task(tmp_path, "260917", "NaiveBjork")
     window.navigate_to(tmp_path)
 
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
 
     assert _result_files(window) == [str(launch)]
 
-    window.search_input.clear()
-    qtbot.keyClicks(window.search_input, "naive")
+    window.search_panel.search_input.clear()
+    qtbot.keyClicks(window.search_panel.search_input, "naive")
 
     assert _result_files(window) == [str(naive)]
 
@@ -67,7 +67,7 @@ def test_an_empty_query_shows_no_results(window, tmp_path, make_task):
 
     assert _results(window) == []
 
-    window.search_input.setText("   ")
+    window.search_panel.search_input.setText("   ")
 
     assert _results(window) == []
 
@@ -78,9 +78,9 @@ def test_a_result_row_shows_the_date_the_title_and_the_category(
     make_task(tmp_path, "260918", "SocietyLaunch")
     make_task(tmp_path / "Veritas", "260925", "SocietyEcho")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     rows = _results(window)
-    dim = window.search_results.palette().color(QPalette.ColorRole.PlaceholderText)
+    dim = window.search_panel.search_results.palette().color(QPalette.ColorRole.PlaceholderText)
 
     assert [row.text(0) for row in rows] == ["18/09/2026", "25/09/2026"]
     assert [row.text(1) for row in rows] == ["Society Launch", "Society Echo"]
@@ -94,7 +94,7 @@ def test_clicking_a_result_selects_it_in_the_table(window, tmp_path, make_task, 
     make_task(tmp_path / "Veritas", "260918", "NaiveBjork")
     window.navigate_to(tmp_path)
     select_tab(window, "Veritas")
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
 
     _click_result(window, qtbot, _results(window)[0])
 
@@ -109,7 +109,7 @@ def test_clicking_a_result_switches_to_the_tab_holding_it(
     make_task(tmp_path / "Veritas", "260925", "NaiveBjork")
     window.navigate_to(tmp_path)
     select_tab(window, "Veritas")
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
 
     _click_result(window, qtbot, _results(window)[0])
 
@@ -123,11 +123,11 @@ def test_enter_on_a_result_selects_it(window, tmp_path, make_task, qtbot):
     file = make_task(tmp_path, "260918", "SocietyLaunch")
     make_task(tmp_path, "260917", "NaiveBjork")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
-    window.search_results.setFocus()
-    window.search_results.setCurrentItem(_results(window)[0])
+    qtbot.keyClicks(window.search_panel.search_input, "society")
+    window.search_panel.search_results.setFocus()
+    window.search_panel.search_results.setCurrentItem(_results(window)[0])
 
-    qtbot.keyClick(window.search_results, Qt.Key.Key_Return)
+    qtbot.keyClick(window.search_panel.search_results, Qt.Key.Key_Return)
 
     assert task_listing(window).selected_entry().file == file
 
@@ -138,11 +138,11 @@ def test_return_in_the_search_field_selects_the_first_result(
     make_task(tmp_path, "260918", "SocietyLaunch")
     make_task(tmp_path, "260919", "SocietyEcho")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     assert len(_results(window)) == 2
     expected = _result_files(window)[0]
 
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
 
     assert str(task_listing(window).selected_entry().file) == expected
 
@@ -153,7 +153,7 @@ def test_return_in_an_empty_search_field_selects_nothing(
     make_task(tmp_path, "260918", "SocietyLaunch")
     window.navigate_to(tmp_path)
 
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
 
     assert task_listing(window).selected_entry() is None
 
@@ -161,13 +161,13 @@ def test_return_in_an_empty_search_field_selects_nothing(
 def test_escape_clears_the_field_and_the_results(window, tmp_path, make_task, qtbot):
     make_task(tmp_path, "260918", "SocietyLaunch")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     assert len(_results(window)) == 1
-    window.search_input.setFocus()
+    window.search_panel.search_input.setFocus()
 
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Escape)
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Escape)
 
-    assert window.search_input.text() == ""
+    assert window.search_panel.search_input.text() == ""
     assert _results(window) == []
     assert task_listing(window).selected_entry() is None
 
@@ -177,7 +177,7 @@ def test_a_task_created_later_appears_in_the_results_after_a_reload(
 ):
     make_task(tmp_path, "260918", "SocietyLaunch")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
 
     window.title_input.setText("Society Echo")
     window.create_task()
@@ -195,7 +195,7 @@ def test_choosing_a_result_keeps_the_new_task_destination(
     window.navigate_to(tmp_path)
     category = (tmp_path / "Veritas").resolve()
     select_directory(window, category)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
 
     _click_result(window, qtbot, _results(window)[0])
 
@@ -209,13 +209,13 @@ def test_the_highlighted_result_survives_a_reload(window, tmp_path, make_task, q
     make_task(tmp_path, "260918", "SocietyLaunch")
     make_task(tmp_path, "260917", "SocietyEcho")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     kept = _result_files(window)[1]
-    window.search_results.setCurrentItem(_results(window)[1])
+    window.search_panel.search_results.setCurrentItem(_results(window)[1])
 
     window.refresh()
 
-    current = window.search_results.currentItem()
+    current = window.search_panel.search_results.currentItem()
     assert current is not None
     assert current.data(0, _PATH_ROLE) == kept
 
@@ -226,14 +226,14 @@ def test_a_highlight_goes_when_the_query_leaves_the_result_out(
     make_task(tmp_path, "260918", "SocietyLaunch")
     make_task(tmp_path, "260917", "SocietyEcho")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     assert len(_results(window)) == 2
-    window.search_results.setCurrentItem(_results(window)[1])
+    window.search_panel.search_results.setCurrentItem(_results(window)[1])
 
-    window.search_input.setText("launch")
+    window.search_panel.search_input.setText("launch")
 
     assert _result_files(window) != []
-    assert window.search_results.currentItem() is None
+    assert window.search_panel.search_results.currentItem() is None
 
 
 def test_the_search_panel_sits_below_the_tree_inside_the_left_panel(window):
@@ -321,13 +321,13 @@ def test_the_search_panel_keeps_the_left_pane_margin_on_its_left_and_bottom(wind
 def test_the_search_panel_holds_the_header_the_field_and_the_results(window):
     panel = window.search_panel
 
-    assert window.search_header.parent() is panel
-    assert window.search_input.parent() is panel
-    assert window.search_results.parent() is panel
-    assert _bottom(window.search_header, panel) <= _top(window.search_input, panel)
-    assert _bottom(window.search_input, panel) <= _top(window.search_results, panel)
-    assert window.search_results.height() > 0
-    assert window.search_header.height() == directory_header(window).height()
+    assert window.search_panel.search_header.parent() is panel
+    assert window.search_panel.search_input.parent() is panel
+    assert window.search_panel.search_results.parent() is panel
+    assert _bottom(window.search_panel.search_header, panel) <= _top(window.search_panel.search_input, panel)
+    assert _bottom(window.search_panel.search_input, panel) <= _top(window.search_panel.search_results, panel)
+    assert window.search_panel.search_results.height() > 0
+    assert window.search_panel.search_header.height() == directory_header(window).height()
 
 
 def test_off_mode_searches_while_typing_and_excerpt_column_hidden(
@@ -337,11 +337,11 @@ def test_off_mode_searches_while_typing_and_excerpt_column_hidden(
     window.navigate_to(tmp_path)
 
     # OFF by default
-    assert window.search_content_checkbox.isChecked() is False
-    qtbot.keyClicks(window.search_input, "society")
+    assert window.search_panel.search_content_checkbox.isChecked() is False
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     assert len(_results(window)) == 1
     # excerpt column hidden in off mode
-    assert window.search_results.isColumnHidden(2) is True
+    assert window.search_panel.search_results.isColumnHidden(2) is True
 
 
 def test_on_mode_does_not_search_while_typing_enter_runs_and_shows_excerpt(
@@ -351,14 +351,14 @@ def test_on_mode_does_not_search_while_typing_enter_runs_and_shows_excerpt(
     file.write_text("# 18/09/2026\n\nfindsecret here\n\n", encoding="utf-8")
     window.navigate_to(tmp_path)
 
-    window.search_content_checkbox.setChecked(True)
-    qtbot.keyClicks(window.search_input, "findsecret")
+    window.search_panel.search_content_checkbox.setChecked(True)
+    qtbot.keyClicks(window.search_panel.search_input, "findsecret")
     # should not search while typing
     assert len(_results(window)) == 0
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
     # should show results and excerpt column visible
     assert len(_results(window)) == 1
-    assert window.search_results.isColumnHidden(2) is False
+    assert window.search_panel.search_results.isColumnHidden(2) is False
 
 
 def test_toggling_clears_results_toggling_back_to_off_reruns_title_search(
@@ -366,13 +366,13 @@ def test_toggling_clears_results_toggling_back_to_off_reruns_title_search(
 ):
     make_task(tmp_path, "260918", "SocietyLaunch")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     assert len(_results(window)) == 1
 
-    window.search_content_checkbox.setChecked(True)
+    window.search_panel.search_content_checkbox.setChecked(True)
     assert len(_results(window)) == 0
 
-    window.search_content_checkbox.setChecked(False)
+    window.search_panel.search_content_checkbox.setChecked(False)
     # toggling back to OFF re-runs the live title search for the current text
     assert len(_results(window)) == 1
 
@@ -384,20 +384,20 @@ def test_empty_field_gives_no_results_in_both_modes(
     window.navigate_to(tmp_path)
 
     # off mode empty
-    window.search_input.clear()
+    window.search_panel.search_input.clear()
     assert _results(window) == []
 
     # on mode empty
-    window.search_content_checkbox.setChecked(True)
-    window.search_input.clear()
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    window.search_panel.search_content_checkbox.setChecked(True)
+    window.search_panel.search_input.clear()
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
     assert _results(window) == []
 
 
 def test_content_checkbox_is_in_header_row(window):
     """The Content checkbox sits in the Search header row, right-aligned."""
     # Checkbox parent is the search header, not the search panel
-    assert window.search_content_checkbox.parent() is window.search_header
+    assert window.search_panel.search_content_checkbox.parent() is window.search_panel.search_header
     # Checkbox is not in the search panel layout as a separate widget
     panel_layout = window.search_panel.layout()
     # The layout has: header, input, results (no checkbox widget)
@@ -406,19 +406,19 @@ def test_content_checkbox_is_in_header_row(window):
 
 def test_no_excerpt_text_in_header_row(window):
     """The Search header shows only 'Search', not 'Excerpt'."""
-    model = window.search_header.model()
+    model = window.search_panel.search_header.model()
     assert model.headerData(0, Qt.Orientation.Horizontal, Qt.ItemDataRole.DisplayRole) == "Search"
     # Sections 1, 2, 3 are hidden in the header
-    assert window.search_header.isSectionHidden(1) is True
-    assert window.search_header.isSectionHidden(2) is True
-    assert window.search_header.isSectionHidden(3) is True
+    assert window.search_panel.search_header.isSectionHidden(1) is True
+    assert window.search_panel.search_header.isSectionHidden(2) is True
+    assert window.search_panel.search_header.isSectionHidden(3) is True
 
 
 def test_column_order_off_mode(window, tmp_path, make_task, qtbot):
     """OFF mode column order: Date, Title, Category (Excerpt hidden)."""
     make_task(tmp_path, "260918", "SocietyLaunch")
     window.navigate_to(tmp_path)
-    qtbot.keyClicks(window.search_input, "society")
+    qtbot.keyClicks(window.search_panel.search_input, "society")
     rows = _results(window)
 
     assert len(rows) == 1
@@ -432,9 +432,9 @@ def test_column_order_off_mode(window, tmp_path, make_task, qtbot):
     # Column 3: Category
     assert row.text(3) == tmp_path.name
     # Excerpt column is hidden
-    assert window.search_results.isColumnHidden(2) is True
+    assert window.search_panel.search_results.isColumnHidden(2) is True
     # Category column is visible
-    assert window.search_results.isColumnHidden(3) is False
+    assert window.search_panel.search_results.isColumnHidden(3) is False
 
 
 def test_column_order_on_mode(window, tmp_path, make_task, qtbot):
@@ -443,9 +443,9 @@ def test_column_order_on_mode(window, tmp_path, make_task, qtbot):
     file.write_text("# 18/09/2026\n\nfindsecret here\n\n", encoding="utf-8")
     window.navigate_to(tmp_path)
 
-    window.search_content_checkbox.setChecked(True)
-    qtbot.keyClicks(window.search_input, "findsecret")
-    qtbot.keyClick(window.search_input, Qt.Key.Key_Return)
+    window.search_panel.search_content_checkbox.setChecked(True)
+    qtbot.keyClicks(window.search_panel.search_input, "findsecret")
+    qtbot.keyClick(window.search_panel.search_input, Qt.Key.Key_Return)
 
     rows = _results(window)
     assert len(rows) == 1
@@ -459,28 +459,28 @@ def test_column_order_on_mode(window, tmp_path, make_task, qtbot):
     # Column 3: Category
     assert row.text(3) == tmp_path.name
     # Excerpt column is visible
-    assert window.search_results.isColumnHidden(2) is False
+    assert window.search_panel.search_results.isColumnHidden(2) is False
     # Category column is visible
-    assert window.search_results.isColumnHidden(3) is False
+    assert window.search_panel.search_results.isColumnHidden(3) is False
 
 
 def test_placeholder_changes_with_content_mode(window):
     """Placeholder changes to 'Type and press Enter to search content' when ON."""
     # Default OFF mode
-    assert window.search_input.placeholderText() == "Search tasks"
+    assert window.search_panel.search_input.placeholderText() == "Search tasks"
 
     # Switch to ON mode
-    window.search_content_checkbox.setChecked(True)
-    assert window.search_input.placeholderText() == "Type and press Enter to search content"
+    window.search_panel.search_content_checkbox.setChecked(True)
+    assert window.search_panel.search_input.placeholderText() == "Type and press Enter to search content"
 
     # Switch back to OFF mode
-    window.search_content_checkbox.setChecked(False)
-    assert window.search_input.placeholderText() == "Search tasks"
+    window.search_panel.search_content_checkbox.setChecked(False)
+    assert window.search_panel.search_input.placeholderText() == "Search tasks"
 
 
 def test_title_and_excerpt_columns_are_interactive(window):
     """Title and Excerpt columns resize interactively; others keep their mode."""
-    header = window.search_results.header()
+    header = window.search_panel.search_results.header()
     assert header.sectionResizeMode(0) == QHeaderView.ResizeMode.ResizeToContents
     assert header.sectionResizeMode(1) == QHeaderView.ResizeMode.Interactive
     assert header.sectionResizeMode(2) == QHeaderView.ResizeMode.Interactive
@@ -494,7 +494,7 @@ def test_resizing_a_column_changes_its_width_and_excerpt_stays_hidden_in_off(
 
     The Excerpt column stays hidden in OFF mode.
     """
-    header = window.search_results.header()
+    header = window.search_panel.search_results.header()
     header.resizeSection(1, 220)
     assert header.sectionSize(1) == 220
-    assert window.search_results.isColumnHidden(2) is True
+    assert window.search_panel.search_results.isColumnHidden(2) is True

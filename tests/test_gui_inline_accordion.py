@@ -7,12 +7,9 @@ from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QApplication, QListWidgetItem
 
 from mktsk import listing
-from mktsk.gui.tasklist import (
-    _COUNT_ROLE,
-    _ENTRY_ROLE,
-    _SELECTION_INDICATOR_GAP,
-    TaskListing,
-)
+from mktsk.gui.selection import _SELECTION_INDICATOR_GAP
+from mktsk.gui.tasklist import TaskListing
+from mktsk.gui.taskrow import _COUNT_ROLE, _ENTRY_ROLE
 from tests.gui_helpers import (
     find_task,
     painted_texts,

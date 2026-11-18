@@ -27,8 +27,8 @@ def test_selecting_a_task_shows_the_text_of_its_md(window, tmp_path, make_task):
     select_task(window, file)
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_text.isReadOnly() is True
-    assert window.preview_text.toPlainText() == "# 18/09/2026\n\nThe body\n"
+    assert window.preview_area.preview_text.isReadOnly() is True
+    assert window.preview_area.preview_text.toPlainText() == "# 18/09/2026\n\nThe body\n"
 
 
 def test_selecting_a_task_lists_the_names_of_its_attachments(
@@ -42,11 +42,11 @@ def test_selecting_a_task_lists_the_names_of_its_attachments(
     select_task(window, file)
 
     names = [
-        window.preview_list.item(index).text()
-        for index in range(window.preview_list.count())
+        window.preview_area.preview_list.item(index).text()
+        for index in range(window.preview_area.preview_list.count())
     ]
     assert names == ["Attachments/", "one.pdf"]
-    assert window.preview_list.isHidden() is False
+    assert window.preview_area.preview_list.isHidden() is False
 
 
 def test_the_attachment_list_supports_single_selection_and_focus(
@@ -58,16 +58,16 @@ def test_the_attachment_list_supports_single_selection_and_focus(
     window.navigate_to(tmp_path)
     select_task(window, file)
 
-    assert window.preview_list.selectionMode() == QListWidget.SelectionMode.SingleSelection
-    assert window.preview_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
-    assert window.preview_text.focusPolicy() == Qt.FocusPolicy.NoFocus
-    assert window.preview_list.contextMenuPolicy() == (
+    assert window.preview_area.preview_list.selectionMode() == QListWidget.SelectionMode.SingleSelection
+    assert window.preview_area.preview_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
+    assert window.preview_area.preview_text.focusPolicy() == Qt.FocusPolicy.NoFocus
+    assert window.preview_area.preview_list.contextMenuPolicy() == (
         Qt.ContextMenuPolicy.NoContextMenu
     )
-    assert window.preview_list.toolTip() == ""
+    assert window.preview_area.preview_list.toolTip() == ""
     assert all(
-        window.preview_list.item(index).toolTip() == ""
-        for index in range(window.preview_list.count())
+        window.preview_area.preview_list.item(index).toolTip() == ""
+        for index in range(window.preview_area.preview_list.count())
     )
 
 
@@ -78,9 +78,9 @@ def test_the_attachment_list_is_striped_and_selectable(window, tmp_path, make_ta
     window.navigate_to(tmp_path)
     select_task(window, file)
 
-    assert window.preview_list.alternatingRowColors() is True
-    assert window.preview_list.selectionMode() == QListWidget.SelectionMode.SingleSelection
-    assert window.preview_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
+    assert window.preview_area.preview_list.alternatingRowColors() is True
+    assert window.preview_area.preview_list.selectionMode() == QListWidget.SelectionMode.SingleSelection
+    assert window.preview_area.preview_list.focusPolicy() == Qt.FocusPolicy.StrongFocus
 
 
 def test_a_task_without_attachments_hides_the_attachment_list(
@@ -92,7 +92,7 @@ def test_a_task_without_attachments_hides_the_attachment_list(
     select_task(window, file)
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_list.isHidden() is True
+    assert window.preview_area.preview_list.isHidden() is True
 
 
 def test_selecting_a_category_separator_hides_the_preview(
@@ -132,7 +132,7 @@ def test_a_missing_md_shows_empty_text(window, tmp_path, make_task):
     select_task(window, foo)
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_text.toPlainText() == ""
+    assert window.preview_area.preview_text.toPlainText() == ""
 
 
 def test_a_closed_task_shows_the_archived_preview(window, tmp_path, make_task):
@@ -145,7 +145,7 @@ def test_a_closed_task_shows_the_archived_preview(window, tmp_path, make_task):
 
     # the folder is gone, so the text is read from inside the archive
     assert window.preview_area.isHidden() is False
-    assert "# 18/09/2026" in window.preview_text.toPlainText()
+    assert "# 18/09/2026" in window.preview_area.preview_text.toPlainText()
 
 
 def test_a_reload_re_renders_the_preview_of_the_selected_task(
@@ -160,7 +160,7 @@ def test_a_reload_re_renders_the_preview_of_the_selected_task(
     click_heading(window, 0)
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_text.toPlainText() == "# 18/09/2026\n\nChanged body\n"
+    assert window.preview_area.preview_text.toPlainText() == "# 18/09/2026\n\nChanged body\n"
 
 
 def test_refresh_hides_the_preview_with_the_selection_it_drops(

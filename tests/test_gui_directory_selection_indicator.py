@@ -13,7 +13,7 @@ import pytest
 from PySide6.QtGui import QColor, QImage, QPalette
 from PySide6.QtWidgets import QStyleFactory
 
-from mktsk.gui.tasklist import (
+from mktsk.gui.selection import (
     _ROW_LINE_REACH,
     _SELECTION_INDICATOR_GAP,
     _SELECTION_INDICATOR_WIDTH,

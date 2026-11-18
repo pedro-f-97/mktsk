@@ -30,10 +30,10 @@ def test_a_closed_task_shows_the_archived_preview(window, tmp_path, make_task):
     select_task(window, archive, "Closed")
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_text.isReadOnly() is True
-    assert "The body" in window.preview_text.toPlainText()
-    assert title_text(window.preview_text_header) == "Details (archived)"
-    assert title_text(window.preview_list_header) == "Attachments"
+    assert window.preview_area.preview_text.isReadOnly() is True
+    assert "The body" in window.preview_area.preview_text.toPlainText()
+    assert title_text(window.preview_area.preview_text_header) == "Details (archived)"
+    assert title_text(window.preview_area.preview_list_header) == "Attachments"
 
 
 def test_an_open_task_after_a_closed_one_restores_the_title(
@@ -48,7 +48,7 @@ def test_an_open_task_after_a_closed_one_restores_the_title(
     select_tab(window, "All")
     select_task(window, file)
 
-    assert title_text(window.preview_text_header) == "Details"
+    assert title_text(window.preview_area.preview_text_header) == "Details"
 
 
 def test_a_closed_task_without_attachments_hides_the_attachments(
@@ -63,8 +63,8 @@ def test_a_closed_task_without_attachments_hides_the_attachments(
     qtbot.wait(1)
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_list_panel.isHidden() is True
-    assert window.preview_list.isHidden() is True
+    assert window.preview_area.preview_list_panel.isHidden() is True
+    assert window.preview_area.preview_list.isHidden() is True
     assert window.preview_area.sizes()[1] == 0
 
 
@@ -87,8 +87,8 @@ def test_double_clicking_an_attachment_opens_the_archive(
     opened = []
     monkeypatch.setattr("mktsk.gui.window.helpers.open_file", opened.append)
 
-    assert window.preview_list.toolTip() == "Double-click opens the archive (.zip)"
-    window.preview_list.itemDoubleClicked.emit(window.preview_list.item(0))
+    assert window.preview_area.preview_list.toolTip() == "Double-click opens the archive (.zip)"
+    window.preview_area.preview_list.itemDoubleClicked.emit(window.preview_area.preview_list.item(0))
 
     assert opened == [archive]
 
@@ -104,10 +104,10 @@ def test_double_clicking_an_open_task_attachment_does_not_open_the_archive(
     opened = []
     monkeypatch.setattr("mktsk.gui.window.helpers.open_file", opened.append)
     monkeypatch.setattr(
-        "mktsk.gui.window.QDesktopServices.openUrl", lambda url: True
+        "mktsk.gui.preview.QDesktopServices.openUrl", lambda url: True
     )
 
-    window.preview_list.itemDoubleClicked.emit(window.preview_list.item(0))
+    window.preview_area.preview_list.itemDoubleClicked.emit(window.preview_area.preview_list.item(0))
 
     assert opened == []
 
@@ -131,7 +131,7 @@ def test_opening_archived_attachment_when_open_file_raises_oserror(
         "mktsk.gui.window.QMessageBox.warning", lambda *args: warnings.append(args[2])
     )
 
-    window.preview_list.itemDoubleClicked.emit(window.preview_list.item(0))
+    window.preview_area.preview_list.itemDoubleClicked.emit(window.preview_area.preview_list.item(0))
 
     assert len(warnings) == 1
     assert "permission denied" in warnings[0]
@@ -141,7 +141,7 @@ def test_set_panel_title_with_none_model(window):
     """_set_panel_title handles a header with no model gracefully."""
     from PySide6.QtWidgets import QHeaderView
 
-    from mktsk.gui.window import _set_panel_title
+    from mktsk.gui.preview import _set_panel_title
 
     # Create a header without a model
     header = QHeaderView(Qt.Orientation.Horizontal)
@@ -178,7 +178,7 @@ def test_archived_task_subfolders_show_with_trailing_slash(
     select_task(window, tmp_path / "260918 - Foo.zip", "Closed")
 
     names = [
-        window.preview_list.item(index).text()
-        for index in range(window.preview_list.count())
+        window.preview_area.preview_list.item(index).text()
+        for index in range(window.preview_area.preview_list.count())
     ]
     assert names == ["Attachments/"]

@@ -25,21 +25,21 @@ def test_the_titles_name_the_two_panels(window, tmp_path, make_task):
 
     select_task(window, file)
 
-    assert title_text(window.preview_text_header) == "Details"
-    assert title_text(window.preview_list_header) == "Attachments"
+    assert title_text(window.preview_area.preview_text_header) == "Details"
+    assert title_text(window.preview_area.preview_list_header) == "Attachments"
 
 
 def test_the_titles_appear_only_with_a_task_selected(window, tmp_path, make_task):
     file = with_attachment(tmp_path, make_task)
     window.navigate_to(tmp_path)
 
-    assert window.preview_text_header.isVisible() is False
-    assert window.preview_list_header.isVisible() is False
+    assert window.preview_area.preview_text_header.isVisible() is False
+    assert window.preview_area.preview_list_header.isVisible() is False
 
     select_task(window, file)
 
-    assert window.preview_text_header.isVisible() is True
-    assert window.preview_list_header.isVisible() is True
+    assert window.preview_area.preview_text_header.isVisible() is True
+    assert window.preview_area.preview_list_header.isVisible() is True
 
 
 def test_without_attachments_only_the_details_title_is_shown(
@@ -50,9 +50,9 @@ def test_without_attachments_only_the_details_title_is_shown(
 
     select_task(window, file)
 
-    assert window.preview_text_header.isVisible() is True
-    assert window.preview_list_header.isVisible() is False
-    assert window.preview_list_panel.isVisible() is False
+    assert window.preview_area.preview_text_header.isVisible() is True
+    assert window.preview_area.preview_list_header.isVisible() is False
+    assert window.preview_area.preview_list_panel.isVisible() is False
 
 
 def test_each_title_takes_the_height_of_the_directory_header(
@@ -64,8 +64,8 @@ def test_each_title_takes_the_height_of_the_directory_header(
     select_task(window, file)
 
     height = directory_header(window).height()
-    assert window.preview_text_header.height() == height
-    assert window.preview_list_header.height() == height
+    assert window.preview_area.preview_text_header.height() == height
+    assert window.preview_area.preview_list_header.height() == height
 
 
 def test_each_title_sits_at_the_top_of_its_panel_above_its_content(
@@ -78,8 +78,8 @@ def test_each_title_sits_at_the_top_of_its_panel_above_its_content(
     qtbot.wait(1)
 
     for header, content, panel in [
-        (window.preview_text_header, window.preview_text, window.preview_text_panel),
-        (window.preview_list_header, window.preview_list, window.preview_list_panel),
+        (window.preview_area.preview_text_header, window.preview_area.preview_text, window.preview_area.preview_text_panel),
+        (window.preview_area.preview_list_header, window.preview_area.preview_list, window.preview_area.preview_list_panel),
     ]:
         assert header.parent() is panel
         assert header.geometry().top() == 0

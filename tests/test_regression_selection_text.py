@@ -14,10 +14,7 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from mktsk.gui.tasklist import (
-    _SELECTION_INDICATOR_WIDTH,
-    _selection_tint,
-)
+from mktsk.gui.selection import _SELECTION_INDICATOR_WIDTH, _selection_tint
 from tests.gui_helpers import (
     find_directory,
     render_row,
@@ -187,7 +184,7 @@ def test_a_selected_preview_list_row_renders_readable_text(
     import time
     time.sleep(0.1)
 
-    preview_list = window.preview_list
+    preview_list = window.preview_area.preview_list
     if preview_list.count() > 0:
         item = preview_list.item(0)
         for state in (_SELECTED_ACTIVE, _SELECTED_INACTIVE):
@@ -225,7 +222,7 @@ def test_a_selected_row_is_tinted_in_preview_list(
     import time
     time.sleep(0.1)
 
-    preview_list = window.preview_list
+    preview_list = window.preview_area.preview_list
     if preview_list.count() > 0:
         item = preview_list.item(0)
         palette = preview_list.viewport().palette()

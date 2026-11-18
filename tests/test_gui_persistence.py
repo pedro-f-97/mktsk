@@ -122,9 +122,9 @@ def test_a_saved_preview_state_keeps_the_details_panel_full_width(
     select_task(window, without)
     QApplication.processEvents()
 
-    assert not window.preview_list_panel.isVisible()
+    assert not window.preview_area.preview_list_panel.isVisible()
     assert window.preview_area.sizes()[1] == 0
-    assert window.preview_text_panel.width() == window.preview_area.width()
+    assert window.preview_area.preview_text_panel.width() == window.preview_area.width()
 
 
 def test_a_collapsed_directory_panel_comes_back_with_the_rail(qtbot, tmp_path):

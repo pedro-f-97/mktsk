@@ -2,7 +2,7 @@
 
 import datetime
 
-from mktsk.gui.tasklist import _ENTRY_ROLE
+from mktsk.gui.taskrow import _ENTRY_ROLE
 from tests.gui_helpers import click_heading, fill_task, task_listing
 
 

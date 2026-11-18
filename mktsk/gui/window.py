@@ -8,29 +8,18 @@ from PySide6.QtCore import (
     QByteArray,
     QLockFile,
     QMimeData,
-    QPointF,
-    QRectF,
     QSettings,
     QSize,
     Qt,
-    QUrl,
 )
 from PySide6.QtGui import (
-    QBrush,
     QCloseEvent,
-    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QGuiApplication,
-    QKeySequence,
-    QPainter,
-    QPaintEvent,
     QPalette,
-    QPen,
     QResizeEvent,
-    QShortcut,
     QShowEvent,
-    QStandardItemModel,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -38,7 +27,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -46,15 +34,12 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QPlainTextEdit,
     QPushButton,
     QSizePolicy,
     QSplitter,
     QStackedLayout,
     QStyleFactory,
     QTabWidget,
-    QToolButton,
-    QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -64,35 +49,30 @@ from mktsk import config, files, helpers, listing, standards, state, tasks
 
 from .app_icon import app_icon, set_app_identity
 from .icons import (
-    _CHEVRON_HALF_HEIGHT,
     _SMALL_ICON_SIZE,
-    _draw_chevron,
     _draw_choose,
-    _draw_content,
     _draw_cross,
     _draw_refresh,
     _draw_up,
     _icon_button,
 )
+from .panetoggle import PaneToggle
+from .preview import PreviewPanel
 from .reminders_scheduler import ReminderScheduler
 from .reminders_ui import RemindersList
-from .tasklist import (
+from .search import SearchPanel
+from .selection import _DirectorySelectionStyle, _UnifiedSelectionDelegate
+from .tasklist import TaskListing, TaskPanel
+from .taskrow import (
     _AGE_ROLE,
     _CATEGORY_ROLE,
     _COUNT_ROLE,
     _ENTRY_ROLE,
     _STATE_ROLE,
-    TaskListing,
-    TaskPanel,
-    _date_cell,
-    _DirectorySelectionStyle,
     _relative_age,
-    _UnifiedSelectionDelegate,
 )
 from .tray import TrayController
 from .tree import (
-    _HEADER_BUTTON_MARGIN,
-    _HEADER_ICON_SIZE,
     _PATH_ROLE,
     _CategoryTree,
 )
@@ -116,11 +96,6 @@ _MARGIN = 6
 # so its width follows the style rather than a pixel figure of its own
 _RAIL_PADDING = 2
 
-# the separator line of the toggle bar: how far it stops short of the ends of
-# the bar, and of the chevron it is interrupted by, in logical pixels
-_TOGGLE_LINE_MARGIN = 6.0
-_TOGGLE_LINE_GAP = 4.0
-
 # how many files a drop that left some out names in the warning about it; the
 # rest are counted in a line of their own, so a long list never fills it
 _MAX_SKIPPED_NAMED = 10
@@ -130,118 +105,10 @@ _MAX_SKIPPED_NAMED = 10
 _GEOMETRY_KEY = "window/geometry"
 
 
-class _SearchResults(QTreeWidget):
-    """The search results list, with an optional empty-state message.
-
-    The message is painted on the viewport, never added as an item, so it is
-    never selected and never counted. It only shows when there are no
-    top-level items and a message is set.
-    """
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._empty_message = ""
-
-    def set_empty_message(self, text: str) -> None:
-        """Sets the empty-state message, repainting the viewport when it changes.
-
-        Args:
-            text: the message to show when the results list is empty.
-        """
-        if self._empty_message == text:
-            return
-        self._empty_message = text
-        self.viewport().update()
-
-    def paintEvent(self, event: QPaintEvent) -> None:
-        super().paintEvent(event)
-        if self.topLevelItemCount() == 0 and self._empty_message:
-            painter = QPainter(self.viewport())
-            rect = self.viewport().rect()
-            metrics = self.fontMetrics()
-            text = metrics.elidedText(
-                self._empty_message,
-                Qt.TextElideMode.ElideRight,
-                rect.width(),
-            )
-            painter.setPen(
-                self.palette().color(QPalette.ColorRole.PlaceholderText)
-            )
-            painter.drawText(
-                rect,
-                Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap,
-                text,
-            )
-
-
-def _task_text(file: Path) -> str:
-    """Reads the raw text of a task .md for the preview.
-
-    The text is shown as it stands, with no Markdown rendering, and a file
-    that cannot be read previews as empty rather than raising: one unreadable
-    file never brings the listing down, and it does not bring the preview down
-    either. A byte that is not valid utf-8 is replaced rather than failing the
-    read, so a file with one still shows everything around it.
-
-    Args:
-        file: the .md of the task.
-
-    Returns:
-        The text of the file, or nothing when it cannot be read.
-    """
-    try:
-        return file.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
-
-
-def _panel_title(text: str) -> QHeaderView:
-    """Builds the title of one panel of the preview.
-
-    The `Directory` and `Search` headers are standalone `QHeaderView`s over a
-    model that carries their title, so a panel title is built the same way: a
-    one-section model holding just the title gives the header the native
-    header look, its font and its colours from the palette, with nothing
-    written down. The header takes no click, no sort and no focus, so a title
-    is only ever read.
-
-    Args:
-        text: the title of the panel.
-
-    Returns:
-        The header showing the title, ready to sit above the panel content.
-    """
-    model = QStandardItemModel()
-    model.setColumnCount(1)
-    model.setHorizontalHeaderLabels([text])
-    header = QHeaderView(Qt.Orientation.Horizontal)
-    header.setModel(model)
-    header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-    header.setDefaultAlignment(
-        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-    )
-    return header
-
-
-def _set_panel_title(header: QHeaderView, text: str) -> None:
-    """Replaces the title a panel header carries.
-
-    Args:
-        header: the header built by `_panel_title`.
-        text: the title to show.
-    """
-    model = header.model()
-
-    if model is not None:
-        model.setHeaderData(0, Qt.Orientation.Horizontal, text)
-
-
 def _skipped_message(skipped: list[tuple[Path, str]]) -> str:
-    """Builds the text of the warning about the files a drop did not move.
+    """Builds the warning about the files a drop did not move.
 
-    At most ten of them are named, each with the reason it was left out, and
-    the rest are counted in a line of their own, so a long list never fills
-    the warning.
+    Names at most `_MAX_SKIPPED_NAMED` of them and counts the rest.
 
     Args:
         skipped: each file that was not moved, with the reason why.
@@ -261,49 +128,6 @@ def _skipped_message(skipped: list[tuple[Path, str]]) -> str:
     return "\n".join(lines)
 
 
-class _PaneToggle(QToolButton):
-    """The pane toggle, drawn as a line down its centre broken by a chevron.
-
-    The direction of the chevron is handed in by the window, from the same
-    state that words the tooltip, so the bar paints what it is told.
-    """
-
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self._points_right = False
-
-    def set_points_right(self, points_right: bool) -> None:
-        """Turns the chevron to the side the next click opens, and repaints.
-
-        Args:
-            points_right: True for a chevron pointing right.
-        """
-        self._points_right = points_right
-        self.update()
-
-    def paintEvent(self, event: QPaintEvent) -> None:
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        palette = self.palette()
-        chevron_colour = palette.color(QPalette.ColorRole.ButtonText)
-        idle = palette.color(QPalette.ColorRole.Mid)
-        line_colour = chevron_colour if self.underMouse() else idle
-        centre = self.rect().center()
-        x = centre.x()
-        painter.setPen(QPen(line_colour, 1))
-        painter.drawLine(
-            QPointF(x, _TOGGLE_LINE_MARGIN),
-            QPointF(x, centre.y() - _CHEVRON_HALF_HEIGHT - _TOGGLE_LINE_GAP),
-        )
-        painter.drawLine(
-            QPointF(x, centre.y() + _CHEVRON_HALF_HEIGHT + _TOGGLE_LINE_GAP),
-            QPointF(x, self.height() - _TOGGLE_LINE_MARGIN),
-        )
-        _draw_chevron(painter, QRectF(self.rect()), self._points_right, chevron_colour)
-        painter.end()
-
-
 class MainWindow(QMainWindow):
     """Desktop interface over the CLI task logic."""
 
@@ -319,18 +143,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings or QSettings("mktsk", "mktsk")
         self._sorts: dict[str, tuple[int, bool]] = {}
-        # the tasks the search panel filters over, each with the title of its
-        # category, kept until the next reload hands in new ones
-        self._search_entries: list[tuple[listing.TaskEntry, str]] = []
-        self._content_search_results: list[listing.ContentHit] | None = None
         # the width the left pane had before the toggle bar collapsed it, and
         # the split the splitter opened with, to fall back on when a collapse
         # came from dragging the handle rather than from the bar
         self._left_width: int | None = None
         self._initial_left_width: int | None = None
-        # whether the attachment list of the preview stands for a closed task,
-        # whose entries open the archive itself rather than a folder on disk
-        self._archived_preview = False
         # whether a real quit has been requested, so a close event that comes
         # after it is accepted instead of hiding the window to the tray
         self._quitting = False
@@ -385,43 +202,7 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
         self.tabs = QTabWidget()
-        # names of the other attachments, both read-only and neither in the
-        # tab order, so the tabs keep the order they had
-        self.preview_text = QPlainTextEdit()
-        self.preview_text.setReadOnly(True)
-        self.preview_text.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.preview_list = QListWidget()
-        self.preview_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        self.preview_list.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.preview_list.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self.preview_list.setAlternatingRowColors(True)
-        self.preview_list.setItemDelegate(_UnifiedSelectionDelegate(self.preview_list))
-        self.preview_list.itemDoubleClicked.connect(self._open_attachment)
-        self.preview_list.keyPressEvent = self._preview_list_key_press
-        # each panel opens with its title over the content, carried by the
-        # same standalone header as `Directory` and `Search`, so it reads as
-        # one set with them and adds nothing of its own
-        self.preview_text_header = _panel_title("Details")
-        self.preview_list_header = _panel_title("Attachments")
-        self.preview_text_panel = QWidget()
-        text_layout = QVBoxLayout(self.preview_text_panel)
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(0)
-        text_layout.addWidget(self.preview_text_header)
-        text_layout.addWidget(self.preview_text, 1)
-        self.preview_list_panel = QWidget()
-        list_layout = QVBoxLayout(self.preview_list_panel)
-        list_layout.setContentsMargins(0, 0, 0, 0)
-        list_layout.setSpacing(0)
-        list_layout.addWidget(self.preview_list_header)
-        list_layout.addWidget(self.preview_list, 1)
-        self.preview_area = QSplitter(Qt.Orientation.Horizontal)
-        self.preview_area.addWidget(self.preview_text_panel)
-        self.preview_area.addWidget(self.preview_list_panel)
-        self.preview_area.setStretchFactor(0, 3)
-        self.preview_area.setStretchFactor(1, 1)
-        # hidden until a task is selected, so the table keeps the full height
-        self.preview_area.hide()
+        self.preview_area = PreviewPanel()
         # the table over the preview, resizable between them, the table taking
         # the larger share
         self.table_splitter = QSplitter(Qt.Orientation.Vertical)
@@ -443,7 +224,7 @@ class MainWindow(QMainWindow):
         # fills the rest of its height below Refresh
         self.rail_width = self.refresh_button.sizeHint().width() + 2 * _RAIL_PADDING
         self.rail.setFixedWidth(self.rail_width)
-        self.toggle_button = _PaneToggle(self.rail)
+        self.toggle_button = PaneToggle(self.rail)
         self.toggle_button.setAutoRaise(True)
         self.toggle_button.setFixedWidth(self.rail_width)
         self.toggle_button.setSizePolicy(
@@ -463,65 +244,6 @@ class MainWindow(QMainWindow):
         self.target_label.hide()
         self.create_button = QPushButton("Create")
 
-        # the search panel under the tree: its header shares the single model
-        # of the results, so it carries the `Search` title the way the tree's
-        # own header carries `Directory`, with the other two sections hidden
-        self.search_results = _SearchResults()
-        self.search_results.setColumnCount(4)
-        self.search_results.setHeaderLabels(["Date", "Title", "Excerpt", "Category"])
-        self.search_results.setHeaderHidden(True)
-        self.search_results.setRootIsDecorated(False)
-        self.search_results.setFrameShape(QFrame.Shape.NoFrame)
-        results_header = self.search_results.header()
-        results_header.setStretchLastSection(False)
-        results_header.setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
-        results_header.setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Interactive
-        )
-        results_header.setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Interactive
-        )
-        results_header.setSectionResizeMode(
-            3, QHeaderView.ResizeMode.Fixed
-        )
-        self.search_results.setColumnWidth(1, 150)
-        self.search_results.setColumnWidth(2, 200)
-        self.search_results.setColumnWidth(3, 65)
-        results_header.setMinimumSectionSize(40)
-        self.search_header = QHeaderView(Qt.Orientation.Horizontal)
-        self.search_header.setModel(self.search_results.model())
-        self.search_header.setSectionHidden(1, True)
-        self.search_header.setSectionHidden(2, True)
-        self.search_header.setSectionHidden(3, True)
-        self.search_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.search_header.setDefaultAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        )
-        # Override the model's section 0 label to "Search" (like Directory header)
-        self.search_header.model().setHeaderData(
-            0, Qt.Orientation.Horizontal, "Search", Qt.ItemDataRole.DisplayRole
-        )
-        # Content toggle placed in the header row, right-aligned like Directory header buttons
-        self.search_content_checkbox = _icon_button(
-            self.search_header, "Search in content", _draw_content, "ContentToggle"
-        )
-        self.search_content_checkbox.setCheckable(True)
-        self.search_content_checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.search_content_checkbox.setChecked(False)
-        # the same icon size as the Directory header buttons, so the glyph
-        # reads at their size and stroke weight
-        self.search_content_checkbox.setIconSize(
-            QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE)
-        )
-        self.search_header.geometriesChanged.connect(
-            self._place_search_header_toggle
-        )
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search tasks")
-        self.search_input.setClearButtonEnabled(True)
-
         self.directory_tree.set_navigation_buttons(self.choose_button, self.up_button)
 
         self.path_row = QWidget()
@@ -529,14 +251,7 @@ class MainWindow(QMainWindow):
         path_layout.setContentsMargins(0, 0, 0, 0)
         path_layout.addWidget(self.path_label, 1)
 
-        self.search_panel = QWidget()
-        search_layout = QVBoxLayout(self.search_panel)
-        search_layout.setContentsMargins(_MARGIN, 0, 0, _MARGIN)
-        search_layout.setSpacing(0)
-        search_layout.addWidget(self.search_header)
-        self.search_input.setParent(self.search_panel)
-        search_layout.addWidget(self.search_input)
-        search_layout.addWidget(self.search_results, 1)
+        self.search_panel = SearchPanel(_MARGIN)
 
         self.left_panel = QWidget()
         left_layout = QVBoxLayout(self.left_panel)
@@ -629,20 +344,7 @@ class MainWindow(QMainWindow):
         self.directory_tree.bell_button.toggled.connect(self._toggle_reminders)
         self.title_input.returnPressed.connect(self.create_task)
         self.create_button.clicked.connect(self.create_task)
-        self.search_input.textChanged.connect(self._on_search_input_changed)
-        self.search_input.returnPressed.connect(self._on_search_return_pressed)
-        self.search_content_checkbox.toggled.connect(self._on_content_search_toggled)
-        # only a click or an activation on a result reaches the table, so
-        # typing and a refill of the results never move the selection
-        self.search_results.itemClicked.connect(self._activate_search_result)
-        self.search_results.itemActivated.connect(self._activate_search_result)
-        self.search_escape = QShortcut(
-            QKeySequence(Qt.Key.Key_Escape), self.search_input
-        )
-        self.search_escape.setContext(
-            Qt.ShortcutContext.WidgetWithChildrenShortcut
-        )
-        self.search_escape.activated.connect(self._on_search_escape)
+        self.search_panel.task_activated.connect(self._select_task)
         self.toggle_button.clicked.connect(self.toggle_left_pane)
         self.splitter.splitterMoved.connect(self._update_path_label)
         self.splitter.splitterMoved.connect(self._update_toggle_tooltip)
@@ -656,9 +358,9 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.choose_button, self.up_button)
         self.setTabOrder(self.up_button, self.refresh_button)
         self.setTabOrder(self.refresh_button, self.directory_tree)
-        self.setTabOrder(self.directory_tree, self.search_input)
-        self.setTabOrder(self.search_input, self.search_results)
-        self.setTabOrder(self.search_results, self.tabs)
+        self.setTabOrder(self.directory_tree, self.search_panel.search_input)
+        self.setTabOrder(self.search_panel.search_input, self.search_panel.search_results)
+        self.setTabOrder(self.search_panel.search_results, self.tabs)
         self.setTabOrder(self.tabs, self.title_input)
         self.setTabOrder(self.title_input, self.create_button)
 
@@ -694,10 +396,9 @@ class MainWindow(QMainWindow):
             self.settings.setValue(key, splitter.saveState())
 
     def attach_reminder_scheduler(self, scheduler: ReminderScheduler) -> None:
-        """Takes the scheduler and offers the reminders panel behind a bell.
+        """Takes the scheduler and adds the reminders panel behind the bell.
 
-        The panel is built here rather than with the rest of the window, so a
-        run without a scheduler never holds one and the bell stays hidden.
+        Without a scheduler there is no panel and the bell stays hidden.
 
         Args:
             scheduler: the scheduler the reminders are read from and removed
@@ -722,9 +423,7 @@ class MainWindow(QMainWindow):
     def _toggle_reminders(self, checked: bool) -> None:
         """Swaps the left panel between the directory tree and the reminders.
 
-        The header stays where it is: only its title and the buttons that act
-        on the tree change, while the tree itself is left standing with its
-        selection and the destination of a new task untouched.
+        Only the header title and buttons change; the tree keeps its selection.
 
         Args:
             checked: whether the reminders panel takes the place of the tree.
@@ -754,11 +453,10 @@ class MainWindow(QMainWindow):
             self.reminders_list.refresh()
 
     def _resolve_reminder_task(self, task: str) -> Path | None:
-        """Finds the task a reminder names among the entries the search holds.
+        """Finds the task a reminder names among the entries of the last reload.
 
-        The reminder carries the folder name of its task, which is the name of
-        the folder for a task that stands and the stem of the archive for a
-        closed one. Several tasks of a name keep the first the entries hold.
+        The name is the folder name, or the archive stem for a closed task. With
+        duplicates the first wins.
 
         Args:
             task: the task folder name the reminder carries.
@@ -767,7 +465,7 @@ class MainWindow(QMainWindow):
             The `.md` of the task or the archive that holds it, or None when no
             entry of the reload carries the name.
         """
-        for entry, _ in self._search_entries:
+        for entry, _ in self.search_panel.entries:
             name = (
                 entry.file.stem
                 if standards.is_task_archive(entry.file.name)
@@ -788,30 +486,14 @@ class MainWindow(QMainWindow):
             self._select_task(path)
 
     def _align_header(self) -> None:
-        """Squares the headers of the window off to the tab bar height.
-
-        The Directory and the Search header read as one set over the left
-        pane, and the two titles of the preview take the same height, so
-        every title the window carries reads as one set.
+        """Gives every panel title the height of the tab bar, so they read as one
+        set.
         """
         height = self.tabs.tabBar().sizeHint().height()
         self.directory_tree.header_view.setFixedHeight(height)
-        self.search_header.setFixedHeight(height)
-        self.preview_text_header.setFixedHeight(height)
-        self.preview_list_header.setFixedHeight(height)
-
-    def _place_search_header_toggle(self) -> None:
-        """Places the Content toggle at the right end of the Search header.
-
-        Squared off to the header height and kept a margin inside the right
-        edge, exactly like the Directory header buttons, so none of them
-        overflows the row and the gaps between them are all the same.
-        """
-        header = self.search_header
-        side = min(self.search_content_checkbox.sizeHint().height(), header.height())
-        self.search_content_checkbox.resize(side, side)
-        x = header.width() - _HEADER_BUTTON_MARGIN - side
-        self.search_content_checkbox.move(x, (header.height() - side) // 2)
+        self.search_panel.search_header.setFixedHeight(height)
+        self.preview_area.preview_text_header.setFixedHeight(height)
+        self.preview_area.preview_list_header.setFixedHeight(height)
 
     def _update_path_label(self) -> None:
         """Shows the current directory, elided to the room the row has."""
@@ -825,14 +507,10 @@ class MainWindow(QMainWindow):
         self.path_label.setToolTip(path)
 
     def toggle_left_pane(self) -> None:
-        """Collapses the left pane, or restores the width it had before.
+        """Collapses the left pane, or restores its previous width.
 
-        The pane is collapsed and restored through the same splitter sizes a
-        drag of the handle would set, and the width to come back to is the one
-        remembered at the last collapse, or the split the splitter opened with
-        when the collapse came from a drag. If neither is available (e.g. after
-        a restart with the panel collapsed), a sensible default based on the
-        stretch factor ratio is used.
+        Falls back to the initial split, then to a third of the window, when no
+        width was remembered.
         """
         sizes = self.splitter.sizes()
         total = sum(sizes)
@@ -922,11 +600,8 @@ class MainWindow(QMainWindow):
         return Path(path) if path else None
 
     def creation_directory(self) -> Path:
-        """Returns the directory a new task is created in.
-
-        A subdirectory selected in the tree is the target, so a task lands in a
-        category without having to enter it. With the root, or nothing,
-        selected the current directory is the target.
+        """Returns the directory a new task is created in: the selected category,
+        or the current directory.
 
         Returns:
             The directory to create the task in.
@@ -934,14 +609,9 @@ class MainWindow(QMainWindow):
         return self._selected_directory() or self.current_directory
 
     def select_destination(self, category: str) -> None:
-        """Selects a category in the tree, making it the creation target.
+        """Makes a category the creation target, as clicking it in the tree would.
 
-        A category heading carries the folder it stands for, so clicking one
-        does what clicking that folder in the tree does: the tree keeps the
-        selection, the label names it and the next task lands in it. The base
-        folder heading carries the directory itself, and clicking it clears
-        the tree through the same handler as the label's `x`, because no
-        selection is what stands for the base folder.
+        The heading of the base folder clears the selection instead.
 
         Args:
             category: the path the heading carries.
@@ -978,98 +648,10 @@ class MainWindow(QMainWindow):
         self.clear_target_button.show()
 
     def _sync_preview(self) -> None:
-        """Shows the preview of the selected task, or hides it with the selection.
-
-        The preview follows the selection of the current tab through the same
-        path the action bar takes, so a task row shows it and a heading, `Esc`
-        or another tab hides it with no special case. Every rendering reads
-        the task again, so a reload re-renders the task that is still selected,
-        or hides the preview when it is gone. A closed task is read from inside
-        its archive, which is never extracted: its `.md` is shown as it stands
-        and the other entries are listed, while the details title says the task
-        is archived and the list opens the archive itself.
-        """
+        """Shows the task selected in the current tab, or hides the preview."""
         panel = self.tabs.currentWidget()
-        entry = (
-            cast(TaskPanel, panel).listing.selected_entry()
-            if panel is not None
-            else None
-        )
-
-        if entry is None:
-            self.preview_area.hide()
-            return
-
-        archived = standards.is_task_archive(entry.file.name)
-
-        if archived:
-            text, attachments = listing.read_archived_task(entry.file)
-            folder = entry.file
-        else:
-            text = _task_text(entry.file)
-            attachments = listing.list_attachments(entry.file.parent)
-            folder = entry.file.parent
-
-        self.preview_text.setPlainText(text)
-        _set_panel_title(
-            self.preview_text_header,
-            "Details (archived)" if archived else "Details",
-        )
-        self.preview_list.clear()
-        for name in attachments:
-            item = QListWidgetItem(name)
-            # store the full path for opening; subfolders have a trailing '/'
-            # and an archived task opens its whole archive instead
-            path = folder if archived else folder / name.rstrip("/")
-            item.setData(Qt.ItemDataRole.UserRole, path)
-            self.preview_list.addItem(item)
-        self._archived_preview = archived
-        self.preview_list.setToolTip(
-            "Double-click opens the archive (.zip)" if archived else ""
-        )
-        # without attachments the list hides with the panel and its title, so
-        # the text takes the full width
-        self.preview_list.setVisible(bool(attachments))
-        self.preview_list_panel.setVisible(bool(attachments))
-        self.preview_area.show()
-
-    def _open_attachment(self, item: QListWidgetItem) -> None:
-        """Opens the attachment represented by the item.
-
-        Checks that the path still exists on disk before opening. If it does
-        not, shows a warning and refreshes the attachment list. If opening
-        fails, shows a warning. An entry of a closed task opens the archive it
-        stands in, with the same helper the rest of the window uses, so nothing
-        is extracted and no temporary file is made.
-        """
-        path = item.data(Qt.ItemDataRole.UserRole)
-        if not isinstance(path, Path):
-            return
-        if not path.exists():
-            QMessageBox.warning(self, "mktsk", f"Attachment no longer exists: {path}")
-            self._sync_preview()
-            return
-        if self._archived_preview:
-            try:
-                helpers.open_file(path)
-            except OSError as error:
-                QMessageBox.warning(self, "mktsk", str(error))
-            return
-        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(path))):
-            QMessageBox.warning(self, "mktsk", f"Could not open: {path}")
-
-    def _preview_list_key_press(self, event) -> None:
-        """Handles key presses in the attachment list.
-
-        Enter opens the selected attachment. Other keys are passed to the
-        base implementation for normal navigation.
-        """
-        if event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return):
-            item = self.preview_list.currentItem()
-            if item is not None:
-                self._open_attachment(item)
-                return
-        QListWidget.keyPressEvent(self.preview_list, event)
+        entry = cast(TaskPanel, panel).listing.selected_entry() if panel is not None else None
+        self.preview_area.show_entry(entry)
 
     def _reload_tasks(self) -> None:
         # one day for the whole listing, so a refresh that runs as the date turns
@@ -1134,195 +716,12 @@ class MainWindow(QMainWindow):
         )
 
     def _reload_search(self, entries: list[tuple[listing.TaskEntry, str]]) -> None:
-        """Points the search panel at the tasks the listings hold.
-
-        The results are rebuilt from the entries of one reload, closed tasks
-        among them, and the query runs again over them, so a task created or
-        closed since is reached the way the table now lists it.
-
-        Args:
-            entries: each listed task with the title of its category.
-        """
-        self._search_entries = entries
-        self._content_search_results = None
-        self._filter_search()
-
-    def _on_search_escape(self) -> None:
-        self.search_input.clear()
-
-    def _on_search_input_changed(self, text: str) -> None:
-        if self.search_content_checkbox.isChecked():
-            self.search_results.clear()
-            self._content_search_results = None
-            self._refresh_content_message()
-            return
-        self._filter_search()
-
-    def _on_content_search_toggled(self, checked: bool) -> None:
-        self.search_results.clear()
-        self._content_search_results = None
-        # Update placeholder based on Content mode
-        if checked:
-            self.search_input.setPlaceholderText("Type and press Enter to search content")
-        else:
-            self.search_input.setPlaceholderText("Search tasks")
-        # Toggling the checkbox clears the results list.
-        self._refresh_content_message()
-        if not checked:
-            # Toggling back to OFF re-runs the live title search for the current text.
-            self._filter_search()
-        else:
-            # In content mode, empty list until Enter pressed
-            pass
-
-    def _refresh_content_message(self) -> None:
-        """Sets the empty-state message for content mode, or clears it.
-
-        Nothing searched yet (or the text changed since the last Enter) shows
-        the hint, an empty hit list shows "No results", and a hit list with
-        hits shows no message. Off mode never shows a message.
-        """
-        if not self.search_content_checkbox.isChecked():
-            self.search_results.set_empty_message("")
-            return
-        if self._content_search_results is None:
-            self.search_results.set_empty_message("Press Enter to search content")
-        elif not self._content_search_results:
-            self.search_results.set_empty_message("No results")
-        else:
-            self.search_results.set_empty_message("")
-
-    def _on_search_return_pressed(self) -> None:
-        if self.search_content_checkbox.isChecked():
-            self._run_content_search()
-            return
-        self._activate_first_search_result()
-
-    def _run_content_search(self) -> None:
-        query = self.search_input.text()
-        if query.strip() == "":
-            self.search_results.clear()
-            self._content_search_results = None
-            self._refresh_content_message()
-            return
-        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-        try:
-            hits = listing.search_task_contents(self.current_directory, query)
-            self._content_search_results = hits
-            self._show_content_results(hits)
-            self._refresh_content_message()
-        finally:
-            QApplication.restoreOverrideCursor()
-
-    def _show_content_results(self, hits: list[listing.ContentHit]) -> None:
-        self.search_results.clear()
-        dim = self.search_results.palette().color(QPalette.ColorRole.PlaceholderText)
-        # Show excerpt column (2) in content mode; category is column 3
-        try:
-            self.search_results.setHeaderHidden(False)
-            self.search_results.setColumnHidden(2, False)
-            results_header = self.search_results.header()
-            results_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-            results_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-            self.search_results.setColumnWidth(3, 65)
-        except (RuntimeError, AttributeError):
-            pass
-
-        for hit in hits:
-            category_name = hit.category.name if hit.category is not None else self._base_title()
-            try:
-                date_cell = hit.date.strftime(helpers.DATE_FORMAT)
-            except (AttributeError, ValueError):
-                date_cell = str(hit.date)
-            # Column order: Date (0), Title (1), Excerpt (2), Category (3)
-            row = QTreeWidgetItem(
-                [date_cell, helpers.readable_title(hit.title), hit.excerpt, category_name]
-            )
-            row.setData(0, _PATH_ROLE, str(hit.task_path))
-            row.setForeground(3, QBrush(dim))  # Category is now column 3
-            row.setTextAlignment(
-                3,
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            )
-            for column in range(4):
-                try:
-                    row.setToolTip(column, str(hit.task_path))
-                except (RuntimeError, AttributeError):
-                    pass
-            self.search_results.addTopLevelItem(row)
-
-    def _filter_search(self) -> None:
-        """Refills the results with the tasks the query reaches."""
-        if self.search_content_checkbox.isChecked():
-            self.search_results.clear()
-            self._content_search_results = None
-            return
-        # OFF mode: no empty-state message, the live title search speaks for itself.
-        self.search_results.set_empty_message("")
-        # Hide excerpt column when OFF
-        try:
-            self.search_results.setColumnHidden(2, True)
-            self.search_results.setHeaderHidden(True)
-        except (RuntimeError, AttributeError):
-            pass
-
-        entries = [entry for entry, _ in self._search_entries]
-        found = {
-            entry.file
-            for entry in listing.search_tasks(entries, self.search_input.text())
-        }
-        current = self.search_results.currentItem()
-        kept = str(current.data(0, _PATH_ROLE)) if current is not None else None
-        dim = self.search_results.palette().color(QPalette.ColorRole.PlaceholderText)
-
-        self.search_results.clear()
-        restored: QTreeWidgetItem | None = None
-
-        for entry, category in self._search_entries:
-            if entry.file not in found:
-                continue
-
-            row = QTreeWidgetItem(
-                [_date_cell(entry), helpers.readable_title(entry.title), "", category]
-            )
-            row.setData(0, _PATH_ROLE, str(entry.file))
-            row.setForeground(3, QBrush(dim))  # Category is column 3
-            row.setTextAlignment(
-                3,
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            )
-            for column in range(4):
-                row.setToolTip(column, str(entry.file))
-            self.search_results.addTopLevelItem(row)
-            if str(entry.file) == kept:
-                restored = row
-
-        if restored is not None:
-            self.search_results.setCurrentItem(restored)
-
-    def _activate_search_result(self, item: QTreeWidgetItem, _column: int) -> None:
-        """Selects the task a search result points at, in the task table.
-
-        The result carries the path of its task, and the table reaches the
-        row from it, switching to the tab that holds the row when it sits in
-        another one. Nothing here picks a category, so the destination a new
-        task lands in is left where it was. A result is only on the panel
-        while the listings hold the task, so the panel that holds the table
-        is always there to be asked.
-
-        Args:
-            item: the result row that was clicked or activated.
-            _column: the column of the row, which is never read.
-        """
-        self._select_task(Path(str(item.data(0, _PATH_ROLE))))
+        """Points the search panel at the tasks of a reload."""
+        self.search_panel.set_entries(entries, self.current_directory, self._base_title())
 
     def _select_task(self, path: Path) -> None:
-        """Selects a task in the tab of the window that holds it.
-
-        The tab that holds the row is switched to when the task is not in
-        the one on show, so the selection, the action bar and the preview all
-        follow it. Nothing here picks a category, so the destination a new
-        task lands in is left where it was.
+        """Selects a task in whichever tab holds it, leaving the destination as it
+        is.
 
         Args:
             path: the .md of the task, or the archive that holds it.
@@ -1333,18 +732,10 @@ class MainWindow(QMainWindow):
 
         panel.listing.select_task(path)
 
-    def _activate_first_search_result(self) -> None:
-        """Selects the first result of the search, as Return in the field asks."""
-        item = self.search_results.topLevelItem(0)
-        if item is not None:
-            self._activate_search_result(item, 0)
-
     def _sections(self) -> list[tuple[str, listing.TaskGroup]]:
-        """Pairs every task group with the title of its tab.
+        """Pairs every task group with its tab title.
 
-        A category without tasks, or one that holds nothing but closed tasks,
-        is a group all the same, so it stands in the `All` tab as a heading of
-        its own.
+        Empty categories are included so they still show as headings.
 
         Returns:
             The tasks of the current directory first, named after the directory
@@ -1459,11 +850,10 @@ class MainWindow(QMainWindow):
             self.navigate_to(Path(path))
 
     def new_category(self) -> None:
-        """Asks for a name and creates the category in the current directory.
+        """Asks for a name and creates a category in the current directory.
 
-        A category that is already there is not created again, it is selected,
-        and a new one is left selected too, so it becomes the target of the next
-        task without having to enter it.
+        The category is selected afterwards, new or existing, so the next task
+        lands in it.
         """
         raw_name, accepted = QInputDialog.getText(
             self, "New category", "Name", QLineEdit.EchoMode.Normal
@@ -1490,13 +880,8 @@ class MainWindow(QMainWindow):
         self.open_with_default_app(entry.file.parent)
 
     def resume_task(self, entry: listing.TaskEntry) -> None:
-        """Adds a dated section to a task and opens it, reopening it if closed.
-
-        The task is resumed where it is, which is not necessarily the current
-        directory. A row that holds an archive is reopened: the archive is
-        extracted, the task resumed and the archive deleted, and the listing
-        is refreshed either way, because the row now carries the count and the
-        age the new intervention has changed.
+        """Adds a dated section to a task and opens it, reopening it first when it
+        is archived.
 
         Args:
             entry: the selected task.
@@ -1539,11 +924,7 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def change_state(self, entry: listing.TaskEntry, new_state: str) -> None:
-        """Sets the state of a task by hand, and refreshes the list.
-
-        The task is changed where it lives, which is not necessarily the
-        current directory, and nothing is opened: picking a state is not
-        working on the task.
+        """Sets the state of a task by hand. Nothing is opened.
 
         Args:
             entry: the selected task.
@@ -1558,11 +939,7 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def close_task(self, entry: listing.TaskEntry) -> None:
-        """Archives a task folder into a zip.
-
-        The folder becomes a zip beside where it stood, and the .md inside the
-        zip carries the closed event. The folder is only gone once the archive
-        is verified, and nothing is opened: the task is over.
+        """Archives a task into a verified zip. Nothing is opened.
 
         Args:
             entry: the selected task.
@@ -1584,14 +961,10 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def move_task(self, folder: Path, category: Path) -> None:
-        """Moves a task folder into a category and keeps the task selected.
+        """Moves a task folder into a category and keeps it selected.
 
-        The folder moves whole, with the .md and every attachment it carries,
-        and the task keeps its place in the history. A category that already
-        holds a task of that title refuses the move, and a failure is shown in
-        a `QMessageBox` like every other action, leaving the list as it was.
-        Nothing is opened, and the destination a new task lands in is left
-        where it was.
+        A title clash or an I/O error is shown in a message box and leaves the
+        list as it was.
 
         Args:
             folder: the folder of the task to move.
@@ -1630,11 +1003,9 @@ class MainWindow(QMainWindow):
         self.title_input.clear()
 
     def _drop_entry(self) -> listing.TaskEntry | None:
-        """Returns the task a drop of files would land in.
+        """Returns the selected task when files can be dropped into it.
 
-        The files land in the folder of the selected task, so there is only a
-        task when one is selected and stands as one: a closed task is an
-        archive, which is never opened, so it takes nothing.
+        A closed task is an archive and takes nothing.
 
         Returns:
             The selected task, or None when no task is selected or the
@@ -1651,10 +1022,7 @@ class MainWindow(QMainWindow):
         return entry
 
     def _drop_paths(self, mime: QMimeData) -> list[Path]:
-        """Returns the files a drag carries.
-
-        A URL that names nothing on this machine, a page on the web say, is
-        left out, so only files that can be moved are kept.
+        """Returns the local files a drag carries; other URLs are ignored.
 
         Args:
             mime: the payload of the drag.
@@ -1668,11 +1036,9 @@ class MainWindow(QMainWindow):
         return [Path(url.toLocalFile()) for url in mime.urls() if url.toLocalFile()]
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        """Takes in a drag of files when an open task is selected.
+        """Accepts a drag of files when an open task is selected.
 
-        The files land in the folder of the selected task, so the drag is only
-        taken in when there is one to land in. A drag of anything else, of a
-        task of our own for one, is left to the widget it belongs to.
+        Other drags are left to the widget they belong to.
 
         Args:
             event: the drag that entered.
@@ -1684,12 +1050,7 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def dropEvent(self, event: QDropEvent) -> None:
-        """Moves the files of a drag into the folder of the selected task.
-
-        The task keeps its place in the list, and its attachments are read
-        again, so the row and the panel show what the drop brought. The
-        selection does not move: the files land in the task that was already
-        selected.
+        """Moves the dropped files into the selected task and keeps it selected.
 
         Args:
             event: the drop.

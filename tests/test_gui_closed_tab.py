@@ -13,11 +13,11 @@ def _left_in(window, button):
 
 def _click_result(window, qtbot, index):
     """Clicks a result of the search panel, which is what chooses a task."""
-    row = window.search_results.topLevelItem(index)
+    row = window.search_panel.search_results.topLevelItem(index)
     qtbot.mouseClick(
-        window.search_results.viewport(),
+        window.search_panel.search_results.viewport(),
         Qt.MouseButton.LeftButton,
-        pos=window.search_results.visualItemRect(row).center(),
+        pos=window.search_panel.search_results.visualItemRect(row).center(),
     )
 
 
@@ -63,10 +63,10 @@ def test_selecting_a_closed_task_shows_the_archived_preview(
     select_task(window, tmp_path / "260918 - Foo.zip", "Closed")
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_text.isReadOnly() is True
-    assert "The body" in window.preview_text.toPlainText()
-    assert window.preview_text_header.isVisible() is True
-    assert window.preview_list_header.isVisible() is False
+    assert window.preview_area.preview_text.isReadOnly() is True
+    assert "The body" in window.preview_area.preview_text.toPlainText()
+    assert window.preview_area.preview_text_header.isVisible() is True
+    assert window.preview_area.preview_list_header.isVisible() is False
 
 
 def test_switching_to_the_closed_tab_shows_the_archived_preview(
@@ -99,12 +99,12 @@ def test_a_closed_search_result_shows_the_archived_preview(
     select_task(window, active)
     assert window.preview_area.isHidden() is False
 
-    qtbot.keyClicks(window.search_input, "naive")
+    qtbot.keyClicks(window.search_panel.search_input, "naive")
     _click_result(window, qtbot, 0)
 
     assert window.preview_area.isHidden() is False
     # the archived .md carries the closed event
-    assert "closed" in window.preview_text.toPlainText()
+    assert "closed" in window.preview_area.preview_text.toPlainText()
 
 
 def test_selecting_an_active_task_restores_the_title(
@@ -123,7 +123,7 @@ def test_selecting_an_active_task_restores_the_title(
     select_task(window, active)
 
     assert window.preview_area.isHidden() is False
-    assert window.preview_text.toPlainText() == "# 18/09/2026\n\nThe body\n"
+    assert window.preview_area.preview_text.toPlainText() == "# 18/09/2026\n\nThe body\n"
 
 
 def test_selecting_a_closed_task_keeps_the_new_task_destination(
@@ -159,14 +159,14 @@ def test_search_result_selects_low_closed_task_and_shows_it(
     qtbot.wait(100)
 
     # Search for the low task
-    qtbot.keyClicks(window.search_input, "Low Closed")
-    qtbot.waitUntil(lambda: window.search_results.topLevelItemCount() > 0)
+    qtbot.keyClicks(window.search_panel.search_input, "Low Closed")
+    qtbot.waitUntil(lambda: window.search_panel.search_results.topLevelItemCount() > 0)
     from tests.gui_helpers import task_listing
     listing = task_listing(window, "Closed")
-    item = window.search_results.topLevelItem(0)
+    item = window.search_panel.search_results.topLevelItem(0)
     assert item is not None
-    window.search_results.setCurrentItem(item)
-    window._activate_search_result(item, 0)
+    window.search_panel.search_results.setCurrentItem(item)
+    window.search_panel.activate_result(item, 0)
 
     # The selected row should be fully visible in the table viewport (vertically)
     selected_item = listing.currentItem()
@@ -192,14 +192,14 @@ def test_search_result_selects_low_open_task_and_shows_it(
     select_task(window, active)
     qtbot.wait(100)
 
-    qtbot.keyClicks(window.search_input, "Low Open")
-    qtbot.waitUntil(lambda: window.search_results.topLevelItemCount() > 0)
+    qtbot.keyClicks(window.search_panel.search_input, "Low Open")
+    qtbot.waitUntil(lambda: window.search_panel.search_results.topLevelItemCount() > 0)
     from tests.gui_helpers import task_listing
     listing = task_listing(window, "All")
-    item = window.search_results.topLevelItem(0)
+    item = window.search_panel.search_results.topLevelItem(0)
     assert item is not None
-    window.search_results.setCurrentItem(item)
-    window._activate_search_result(item, 0)
+    window.search_panel.search_results.setCurrentItem(item)
+    window.search_panel.activate_result(item, 0)
 
     selected_item = listing.currentItem()
     assert selected_item is not None
