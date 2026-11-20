@@ -13,10 +13,12 @@ from PySide6.QtCore import (
     Qt,
 )
 from PySide6.QtGui import (
+    QColor,
     QFont,
     QFontMetrics,
     QPainter,
     QPalette,
+    QPixmap,
     QStandardItem,
     QStandardItemModel,
 )
@@ -59,6 +61,11 @@ _CATEGORY_ROLE = Qt.ItemDataRole.UserRole + 5
 _HEADINGS = ("Date", "Task", "", "State", "Interventions", "Last activity")
 
 _COLUMN_PADDING = 6
+
+# extra width reserved in the State column so the state text never overlaps
+# the funnel filter button, which sits at the column's right edge. The button
+# is wider than the drawn icon because of QToolButton padding.
+_STATE_FILTER_BUTTON_SPACE = _ICON_SIZE + _COLUMN_PADDING
 
 # how far a stripe and a category heading blend from Base towards Text
 _ZEBRA_WEIGHT = 0.03
@@ -118,10 +125,23 @@ def _column_widths() -> _Columns:
     return _Columns(
         body.horizontalAdvance("dd/mm/yyyy") + 2 * _COLUMN_PADDING,
         _ICON_SIZE + body.horizontalAdvance("44") + 2 * _COLUMN_PADDING,
-        max(_heading_width(3), widest_state + 2 * _COLUMN_PADDING),
+        max(
+            _heading_width(3),
+            widest_state + 2 * _COLUMN_PADDING + _STATE_FILTER_BUTTON_SPACE,
+        ),
         _heading_width(4),
         _heading_width(5),
     )
+
+
+def _state_column_min_width() -> int:
+    """Minimum width of the State column so its text never overlaps the
+    funnel filter button that sits at the column's right edge.
+
+    Fixed at 66px so the column cannot be dragged narrow enough for the state
+    text to collide with the button.
+    """
+    return 66
 
 
 def _relative_age(last_activity: datetime.date, today: datetime.date) -> str:
@@ -326,11 +346,11 @@ class _TaskDelegate(QStyledItemDelegate):
         The selected row opens the accordion band below, and its cells keep the
         room a plain row has, so they stay where every other row paints them.
         """
-        return QRect(row.left(), row.top(), row.width(), min(row.height(), self.min_height))
+        return QRect(
+            row.left(), row.top(), row.width(), min(row.height(), self.min_height)
+        )
 
-    def _paint_row_lines(
-        self, painter: QPainter, option: QStyleOptionViewItem
-    ) -> None:
+    def _paint_row_lines(self, painter: QPainter, option: QStyleOptionViewItem) -> None:
         """Paints the short top and bottom lines that bracket the selected row.
 
         Args:
@@ -411,9 +431,7 @@ class _TaskDelegate(QStyledItemDelegate):
                 painter.save()
                 painter.setRenderHint(QPainter.RenderHint.Antialiasing)
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(
-                    option.palette.color(QPalette.ColorRole.ButtonText)
-                )
+                painter.setBrush(option.palette.color(QPalette.ColorRole.ButtonText))
                 painter.drawEllipse(
                     QPointF(
                         option.rect.right() - _MARKER_INSET,
@@ -453,9 +471,7 @@ class _TaskDelegate(QStyledItemDelegate):
             _paint_selection(painter, option)
             self._paint_row_lines(painter, option)
 
-        padding = self.header.style().pixelMetric(
-            QStyle.PixelMetric.PM_HeaderMargin
-        )
+        padding = self.header.style().pixelMetric(QStyle.PixelMetric.PM_HeaderMargin)
         entry = index.data(_ENTRY_ROLE)
 
         painter.save()
@@ -490,24 +506,32 @@ class _TaskDelegate(QStyledItemDelegate):
         clip_cell = self.content_rect(cells, 2)
         attachments = entry.attachments
         if attachments:
-            icon = QRect(
-                clip_cell.left() + _COLUMN_PADDING,
-                clip_cell.top() + (clip_cell.height() - _ICON_SIZE) // 2,
-                _ICON_SIZE,
-                _ICON_SIZE,
-            )
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.translate(icon.left(), icon.top())
-            clip_pen = (
-                pen_colour
-                if selected
-                else option.palette.color(QPalette.ColorRole.ButtonText)
+            # rendered at 16 px and drawn in the 12 px cell, so it keeps the
+            # same style and stroke weight as the directory header icons
+            clip_pixmap = QPixmap(16, 16)
+            clip_pixmap.fill(QColor("transparent"))
+            cp = QPainter(clip_pixmap)
+            cp.setRenderHint(QPainter.RenderHint.Antialiasing)
+            cp.setPen(
+                _icon_pen(
+                    pen_colour
+                    if selected
+                    else option.palette.color(QPalette.ColorRole.ButtonText)
+                )
             )
-            painter.setPen(_icon_pen(clip_pen))
-            _draw_clip(painter, QRectF(0, 0, _ICON_SIZE, _ICON_SIZE))
+            _draw_clip(cp, QRectF(0, 0, 16, 16))
+            cp.end()
+            target = QRect(
+                clip_cell.left() + _COLUMN_PADDING,
+                clip_cell.top() + (clip_cell.height() - 16) // 2,
+                16,
+                16,
+            )
+            painter.drawPixmap(target, clip_pixmap)
             painter.restore()
-            clip_cell.setLeft(clip_cell.left() + _COLUMN_PADDING + _ICON_SIZE)
+            clip_cell.setLeft(clip_cell.left() + _COLUMN_PADDING + 16)
         clip_text = str(attachments) if attachments else ""
         painter.drawText(
             clip_cell,
@@ -558,7 +582,11 @@ class _TaskDelegate(QStyledItemDelegate):
         size = super().sizeHint(option, index)
         size.setWidth(self.header.length())
         height = max(size.height(), self.min_height)
-        if index.isValid() and index.row() == self.inset_row and index.data(_ENTRY_ROLE) is not None:
+        if (
+            index.isValid()
+            and index.row() == self.inset_row
+            and index.data(_ENTRY_ROLE) is not None
+        ):
             height += self.accordion_height
         size.setHeight(height)
         return size

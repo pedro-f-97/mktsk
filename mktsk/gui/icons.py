@@ -72,16 +72,14 @@ def _icon_pen(color: QColor) -> QPen:
 def _draw_folder(painter: QPainter, box: QRectF) -> None:
     """Draws a closed folder with a tab, for showing where a task lives."""
     painter.drawPolygon(
-        QPolygonF(
-            [
-                QPointF(2, 5),
-                QPointF(7, 5),
-                QPointF(8.5, 7),
-                QPointF(16, 7),
-                QPointF(16, 15),
-                QPointF(2, 15),
-            ]
-        )
+        QPolygonF([
+            QPointF(2, 5),
+            QPointF(7, 5),
+            QPointF(8.5, 7),
+            QPointF(16, 7),
+            QPointF(16, 15),
+            QPointF(2, 15),
+        ])
     )
 
 
@@ -100,15 +98,13 @@ def _draw_cross(painter: QPainter, box: QRectF) -> None:
 def _draw_pencil(painter: QPainter, box: QRectF) -> None:
     """Draws a pencil, for changing the title of a task."""
     painter.drawPolygon(
-        QPolygonF(
-            [
-                QPointF(3.5, 14.5),
-                QPointF(6.1, 14.1),
-                QPointF(14.1, 6.1),
-                QPointF(11.9, 3.9),
-                QPointF(3.9, 11.9),
-            ]
-        )
+        QPolygonF([
+            QPointF(3.5, 14.5),
+            QPointF(6.1, 14.1),
+            QPointF(14.1, 6.1),
+            QPointF(11.9, 3.9),
+            QPointF(3.9, 11.9),
+        ])
     )
     painter.drawLine(QPointF(10.4, 5.5), QPointF(12.5, 7.6))
 
