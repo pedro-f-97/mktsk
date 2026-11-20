@@ -13,10 +13,12 @@ from PySide6.QtCore import (
     Qt,
 )
 from PySide6.QtGui import (
+    QColor,
     QFont,
     QFontMetrics,
     QPainter,
     QPalette,
+    QPixmap,
     QStandardItem,
     QStandardItemModel,
 )
@@ -504,24 +506,32 @@ class _TaskDelegate(QStyledItemDelegate):
         clip_cell = self.content_rect(cells, 2)
         attachments = entry.attachments
         if attachments:
-            icon = QRect(
-                clip_cell.left() + _COLUMN_PADDING,
-                clip_cell.top() + (clip_cell.height() - _ICON_SIZE) // 2,
-                _ICON_SIZE,
-                _ICON_SIZE,
-            )
             painter.save()
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.translate(icon.left(), icon.top())
-            clip_pen = (
-                pen_colour
-                if selected
-                else option.palette.color(QPalette.ColorRole.ButtonText)
+            # rendered at 16 px and drawn in the 12 px cell, so it keeps the
+            # same style and stroke weight as the directory header icons
+            clip_pixmap = QPixmap(16, 16)
+            clip_pixmap.fill(QColor("transparent"))
+            cp = QPainter(clip_pixmap)
+            cp.setRenderHint(QPainter.RenderHint.Antialiasing)
+            cp.setPen(
+                _icon_pen(
+                    pen_colour
+                    if selected
+                    else option.palette.color(QPalette.ColorRole.ButtonText)
+                )
             )
-            painter.setPen(_icon_pen(clip_pen))
-            _draw_clip(painter, QRectF(0, 0, _ICON_SIZE, _ICON_SIZE))
+            _draw_clip(cp, QRectF(0, 0, 16, 16))
+            cp.end()
+            target = QRect(
+                clip_cell.left() + _COLUMN_PADDING,
+                clip_cell.top() + (clip_cell.height() - 16) // 2,
+                16,
+                16,
+            )
+            painter.drawPixmap(target, clip_pixmap)
             painter.restore()
-            clip_cell.setLeft(clip_cell.left() + _COLUMN_PADDING + _ICON_SIZE)
+            clip_cell.setLeft(clip_cell.left() + _COLUMN_PADDING + 16)
         clip_text = str(attachments) if attachments else ""
         painter.drawText(
             clip_cell,
