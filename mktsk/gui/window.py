@@ -8,6 +8,7 @@ from PySide6.QtCore import (
     QByteArray,
     QLockFile,
     QMimeData,
+    QPoint,
     QSettings,
     QSize,
     Qt,
@@ -77,15 +78,22 @@ from .taskrow import (
     _ENTRY_ROLE,
     _STATE_ROLE,
     _relative_age,
+    _state_column_min_width,
 )
 from .tray import TrayController
 from .tree import (
+    _HEADER_ICON_SIZE,
     _PATH_ROLE,
     _CategoryTree,
 )
 
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
+
+# column index of the State cell in the task row header (taskrow._HEADINGS)
+STATE_COLUMN = 3
+# room kept between the filter button and the State/Interventions resize handle
+_STATE_FILTER_MARGIN = 6
 
 # the title of the left Directory header, kept in one place so the tree can hide
 # it when the header is too narrow to hold it before the buttons
@@ -209,11 +217,18 @@ class MainWindow(QMainWindow):
             self.directory_tree.header_text_indent(), 0, 0, 0
         )
         self.tabs = QTabWidget()
-        # the state filter sits in the empty corner of the tab bar, so it takes
-        # no room of its own; it shows as checked while a state is filtered
+        # the state filter button is not a corner widget any more: it is placed
+        # over the State column of the active tab's header, aligned to the right
+        # of that column. It keeps a fixed parent so a closed tab cannot destroy
+        # it; it is only repositioned over whichever header is current.
         self._state_filter: str | None = None
         self.state_filter_button = _icon_button(
             self.tabs, "Filter by state", _draw_filter, "StateFilter"
+        )
+        # the directory header icons are small; match them so the filter button
+        # reads as part of the same icon set rather than standing out larger
+        self.state_filter_button.setIconSize(
+            QSize(_HEADER_ICON_SIZE, _HEADER_ICON_SIZE)
         )
         self.state_filter_button.setCheckable(True)
         self.state_filter_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -228,7 +243,10 @@ class MainWindow(QMainWindow):
             )
             self.state_filter_menu.addAction(action)
         self.state_filter_button.clicked.connect(self._open_state_filter_menu)
-        self.tabs.setCornerWidget(self.state_filter_button, Qt.Corner.TopRightCorner)
+        # the header of the active tab the button is currently positioned over;
+        # None while no tab holds a State column
+        self._state_filter_header = None
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         self.preview_area = PreviewPanel()
         # the table over the preview, resizable between them, the table taking
         # the larger share
@@ -391,7 +409,9 @@ class MainWindow(QMainWindow):
         self.setTabOrder(self.up_button, self.refresh_button)
         self.setTabOrder(self.refresh_button, self.directory_tree)
         self.setTabOrder(self.directory_tree, self.search_panel.search_input)
-        self.setTabOrder(self.search_panel.search_input, self.search_panel.search_results)
+        self.setTabOrder(
+            self.search_panel.search_input, self.search_panel.search_results
+        )
         self.setTabOrder(self.search_panel.search_results, self.tabs)
         self.setTabOrder(self.tabs, self.title_input)
         self.setTabOrder(self.title_input, self.create_button)
@@ -409,7 +429,9 @@ class MainWindow(QMainWindow):
         )
         for index in range(self.tabs.count()):
             if self.tabs.tabText(index) != _CLOSED_TAB:
-                cast(TaskPanel, self.tabs.widget(index)).listing.set_state_filter(wanted)
+                cast(TaskPanel, self.tabs.widget(index)).listing.set_state_filter(
+                    wanted
+                )
 
     def _open_state_filter_menu(self) -> None:
         """Opens the state menu under the filter button.
@@ -420,6 +442,98 @@ class MainWindow(QMainWindow):
         self.state_filter_button.setChecked(self._state_filter is not None)
         button = self.state_filter_button
         self.state_filter_menu.popup(button.mapToGlobal(button.rect().bottomLeft()))
+
+    def _place_state_filter_button(self, _index: int | None = None) -> None:
+        """Places the state filter button over the State column of the active tab.
+
+        The button keeps a fixed parent, so closing a tab never destroys it; it
+        is only repositioned over the header of whichever tab is current, aligned
+        to the right edge of the State column. It is hidden when no tab is active
+        or when the State column has no room for it.
+
+        The header's resize slot must already be connected before this runs;
+        connection is handled by `_connect_state_filter_header` at header
+        assignment time, never here, so a column resize cannot accumulate
+        duplicate connections.
+        """
+        # a menu opened over a tab that is about to change must be closed first,
+        # otherwise it keeps pointing at the old button position
+        self.state_filter_menu.hide()
+
+        button = self.state_filter_button
+        panel = self.tabs.currentWidget()
+        if panel is None:
+            button.hide()
+            return
+
+        header = cast(TaskPanel, panel).listing.header
+
+        state_size = header.sectionSize(STATE_COLUMN)
+        if state_size <= 0:
+            button.hide()
+            return
+
+        # keep the button from covering the resize handle between State and the
+        # next column
+        bhint = button.sizeHint()
+        available = state_size - _STATE_FILTER_MARGIN
+        if available < bhint.width():
+            button.hide()
+            return
+
+        x = (
+            header.sectionPosition(STATE_COLUMN)
+            + state_size
+            - bhint.width()
+            - _STATE_FILTER_MARGIN
+        )
+        y = (header.height() - bhint.height()) // 2
+        pt = self.tabs.mapFromGlobal(header.mapToGlobal(QPoint(x, y)))
+        button.move(pt.x(), pt.y())
+        button.resize(bhint.width(), bhint.height())
+        button.show()
+
+    def _connect_state_filter_header(self, header) -> None:
+        """Connects the resize slot to the header of the active tab, once.
+
+        Runs exactly once per header at header assignment time. The previous
+        header is disconnected only when the header actually changes, so a slot
+        never points at a header destroyed by a tab rebuild. `Qt.UniqueConnection`
+        guards against any duplicate connection regressions.
+        """
+        old = self._state_filter_header
+        if old is not None and old is not header:
+            try:
+                old.sectionResized.disconnect(self._on_state_section_resized)
+            except TypeError:
+                pass
+        if header is not None and header is not self._state_filter_header:
+            self._state_filter_header = header
+            header.sectionResized.connect(
+                self._on_state_section_resized, type=Qt.ConnectionType.UniqueConnection
+            )
+
+    def _on_state_section_resized(self, _logical: int, _old: int, _new: int) -> None:
+        """Replaces the filter button when the State column of the active tab
+        is resized, and keeps the column above its minimum width so the state
+        text never overlaps the funnel filter button."""
+        header = self._state_filter_header
+        if header is not None and _logical == STATE_COLUMN:
+            minimum = _state_column_min_width()
+            if _new < minimum:
+                # dragging the separator below the floor would make the state
+                # text overlap the button; push it back to the minimum.
+                header.resizeSection(STATE_COLUMN, minimum)
+                return
+        self._place_state_filter_button()
+
+    def _on_tab_changed(self, _index: int) -> None:
+        """Connects the new active tab's header exactly once, then positions
+        the filter button over its State column."""
+        panel = self.tabs.currentWidget()
+        if panel is not None:
+            self._connect_state_filter_header(cast(TaskPanel, panel).listing.header)
+        self._place_state_filter_button(_index)
 
     def _focus_search(self) -> None:
         """Puts the focus in the search field, with its text selected."""
@@ -609,6 +723,14 @@ class MainWindow(QMainWindow):
         self._align_header()
         self._update_path_label()
         self._update_toggle_tooltip()
+        # the button is positioned over the State column of the active tab's
+        # header; that only works once the window has been shown and the
+        # header holds real screen coordinates, so place it here rather than
+        # during construction (when mapToGlobal would still return zeros)
+        panel = self.tabs.currentWidget()
+        if panel is not None:
+            self._connect_state_filter_header(cast(TaskPanel, panel).listing.header)
+        self._place_state_filter_button()
 
     def navigate_to(self, directory: Path) -> None:
         directory = directory.resolve()
@@ -712,7 +834,11 @@ class MainWindow(QMainWindow):
     def _sync_preview(self) -> None:
         """Shows the task selected in the current tab, or hides the preview."""
         panel = self.tabs.currentWidget()
-        entry = cast(TaskPanel, panel).listing.selected_entry() if panel is not None else None
+        entry = (
+            cast(TaskPanel, panel).listing.selected_entry()
+            if panel is not None
+            else None
+        )
         self.preview_area.show_entry(entry)
 
     def _reload_tasks(self) -> None:
@@ -720,7 +846,9 @@ class MainWindow(QMainWindow):
         # does not date half of the tasks to yesterday
         today = datetime.datetime.now().astimezone().date()
         sections = self._sections()
-        active = self.tabs.tabText(self.tabs.currentIndex()) if self.tabs.count() else ""
+        active = (
+            self.tabs.tabText(self.tabs.currentIndex()) if self.tabs.count() else ""
+        )
 
         self.tabs.clear()
 
@@ -773,13 +901,19 @@ class MainWindow(QMainWindow):
             self._add_tab(_CLOSED_TAB, shut)
 
         self._select_tab(active)
-        self._reload_search(
-            [(entry, title) for title, group in sections for entry in group.entries]
-        )
+        panel = self.tabs.currentWidget()
+        if panel is not None:
+            self._connect_state_filter_header(cast(TaskPanel, panel).listing.header)
+        self._place_state_filter_button()
+        self._reload_search([
+            (entry, title) for title, group in sections for entry in group.entries
+        ])
 
     def _reload_search(self, entries: list[tuple[listing.TaskEntry, str]]) -> None:
         """Points the search panel at the tasks of a reload."""
-        self.search_panel.set_entries(entries, self.current_directory, self._base_title())
+        self.search_panel.set_entries(
+            entries, self.current_directory, self._base_title()
+        )
 
     def _select_task(self, path: Path) -> None:
         """Selects a task in whichever tab holds it, leaving the destination as it
@@ -836,9 +970,7 @@ class MainWindow(QMainWindow):
         tab.itemSelectionChanged.connect(self._sync_preview)
         # escape in the table drops the task and, with it, the destination: it
         # clears the tree through the same handler the label's 'x' calls
-        tab.escape_shortcut.activated.connect(
-            self.directory_tree.clear_subdirectory
-        )
+        tab.escape_shortcut.activated.connect(self.directory_tree.clear_subdirectory)
         return tab
 
     def _remember_sort(self, title: str, column: int, descending: bool) -> None:
@@ -1161,11 +1293,7 @@ class MainWindow(QMainWindow):
         # window to the tray instead of quitting; a session save always quits
         app = QGuiApplication.instance()
         saving = isinstance(app, QGuiApplication) and app.isSavingSession()
-        if (
-            self.tray_controller is not None
-            and not self._quitting
-            and not saving
-        ):
+        if self.tray_controller is not None and not self._quitting and not saving:
             self._save_state()
             self.hide()
             event.ignore()

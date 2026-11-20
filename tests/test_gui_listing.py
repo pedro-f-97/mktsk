@@ -1,12 +1,13 @@
 import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QListWidgetItem
 
 from mktsk import listing
 from mktsk.gui.tasklist import TaskListing
 from mktsk.gui.taskrow import _COUNT_ROLE, _ENTRY_ROLE
+from mktsk.gui.window import _STATE_FILTER_MARGIN, STATE_COLUMN
 from mktsk.tasks import close_task
 from tests.gui_helpers import (
     click_heading,
@@ -40,7 +41,9 @@ def test_navigate_to_without_tasks_leaves_one_tab(window, tmp_path):
     assert tree_child_labels(window) == ["Veritas"]
 
 
-def test_navigate_to_lists_a_root_task_under_the_base_heading(window, tmp_path, make_task):
+def test_navigate_to_lists_a_root_task_under_the_base_heading(
+    window, tmp_path, make_task
+):
     make_task(tmp_path, "260918", "ItsAlive")
 
     window.navigate_to(tmp_path)
@@ -425,7 +428,9 @@ def test_date_with_an_invalid_prefix_sorts_last(qtbot, tmp_path):
 
     rows.set_sort(0, False)
 
-    assert [rows.item(index).data(_ENTRY_ROLE).title for index in range(rows.count())] == [
+    assert [
+        rows.item(index).data(_ENTRY_ROLE).title for index in range(rows.count())
+    ] == [
         "Foo",
         "Bar",
     ]
@@ -443,8 +448,12 @@ def test_task_is_case_insensitive(window, tmp_path, make_task):
 
 
 def test_interventions_is_numeric(window, tmp_path, make_task):
-    fill_task(make_task(tmp_path, "260901", "Nine"), datetime.date(2026, 9, 1), "open", 9)
-    fill_task(make_task(tmp_path, "260902", "Ten"), datetime.date(2026, 9, 2), "open", 10)
+    fill_task(
+        make_task(tmp_path, "260901", "Nine"), datetime.date(2026, 9, 1), "open", 9
+    )
+    fill_task(
+        make_task(tmp_path, "260902", "Ten"), datetime.date(2026, 9, 2), "open", 10
+    )
     window.navigate_to(tmp_path)
     title = tmp_path.name
 
@@ -543,8 +552,12 @@ def test_the_selected_task_stays_selected_after_a_resort(window, tmp_path, make_
 
 
 def test_two_tabs_keep_independent_sorting(window, tmp_path, make_task):
-    fill_task(make_task(tmp_path, "260901", "Zulu"), datetime.date(2026, 9, 1), "open", 1)
-    fill_task(make_task(tmp_path, "260902", "Alpha"), datetime.date(2026, 9, 2), "open", 1)
+    fill_task(
+        make_task(tmp_path, "260901", "Zulu"), datetime.date(2026, 9, 1), "open", 1
+    )
+    fill_task(
+        make_task(tmp_path, "260902", "Alpha"), datetime.date(2026, 9, 2), "open", 1
+    )
     make_task(tmp_path / "Veritas", "260903", "Charlie")
     make_task(tmp_path / "Veritas", "260904", "Delta")
     window.navigate_to(tmp_path)
@@ -805,8 +818,32 @@ def test_picking_a_state_in_the_menu_filters_by_it(window, tmp_path, make_task):
     assert _visible_labels(window) == [tmp_path.name, "18/09/2026  Foo"]
 
 
-def test_the_state_filter_sits_in_the_tab_bar_corner(window):
-    assert window.tabs.cornerWidget(Qt.Corner.TopRightCorner) is window.state_filter_button
+def test_the_state_filter_is_no_longer_a_tab_bar_corner_widget(window):
+    assert window.tabs.cornerWidget(Qt.Corner.TopRightCorner) is None
+
+
+def test_the_state_filter_sits_over_the_state_column_aligned_right(
+    window, tmp_path, make_task
+):
+    make_task(tmp_path, "260918", "Foo")
+    window.navigate_to(tmp_path)
+
+    panel = window.tabs.currentWidget()
+    header = panel.listing.header
+    button = window.state_filter_button
+    assert not button.isHidden()
+
+    state_right = header.sectionPosition(STATE_COLUMN) + header.sectionSize(
+        STATE_COLUMN
+    )
+    expected_x = state_right - button.width() - _STATE_FILTER_MARGIN
+    expected_y = (header.height() - button.height()) // 2
+    expected_pt = window.tabs.mapFromGlobal(
+        header.mapToGlobal(QPoint(expected_x, expected_y))
+    )
+
+    assert button.geometry().x() == expected_pt.x()
+    assert button.geometry().y() == expected_pt.y()
 
 
 def test_clicking_the_filter_opens_its_menu_and_keeps_the_check_honest(window):
