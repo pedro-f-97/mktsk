@@ -100,6 +100,7 @@ def test_titlebar_three_buttons(qapp, qtbot):
     qtbot.addWidget(bar)
 
     layout = bar.layout()
+    assert layout is not None
     assert layout.spacing() == 0
     assert layout.contentsMargins() == QMargins(4, 0, 0, 0)
 
