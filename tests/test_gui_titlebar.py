@@ -203,3 +203,51 @@ def test_maximize_button_follows_outside_state_change(qapp, qtbot):
     qapp.sendEvent(window, QWindowStateChangeEvent(Qt.WindowState.WindowMaximized))
     assert bar.maximize_button.toolTip() == "Maximize"
     assert _icon_image(bar.maximize_button) == normal_image
+
+
+def test_titlebar_title_follows_window_title(qapp, qtbot):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    title_label = bar.findChild(QLabel, "titlebar-title")
+    assert title_label is not None
+    assert title_label.text() == "Example task"
+
+    window.setWindowTitle("Another task")
+    assert title_label.text() == "Another task"
+
+
+def test_titlebar_title_keeps_last_of_two_changes(qapp, qtbot):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    title_label = bar.findChild(QLabel, "titlebar-title")
+    assert title_label is not None
+
+    window.setWindowTitle("First title")
+    assert title_label.text() == "First title"
+    window.setWindowTitle("Second title")
+    assert title_label.text() == "Second title"
+
+
+def test_titlebar_title_can_be_empty(qapp, qtbot):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    title_label = bar.findChild(QLabel, "titlebar-title")
+    assert title_label is not None
+
+    window.setWindowTitle("")
+    assert title_label.text() == ""

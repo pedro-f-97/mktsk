@@ -60,6 +60,8 @@ class TitleBar(QWidget):
         layout.addStretch()
 
         self._window = window
+        window.windowTitleChanged.connect(self._on_window_title_changed)
+        window.installEventFilter(self)
 
         self.minimize_button = _icon_button(
             self, "Minimize", _draw_minimize, "titlebar-minimize"
@@ -84,7 +86,6 @@ class TitleBar(QWidget):
         layout.addWidget(self.close_button)
 
         self._sync_maximize_button()
-        window.installEventFilter(self)
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         """React to window state changes without swallowing any event."""
@@ -98,6 +99,10 @@ class TitleBar(QWidget):
             self._window.showNormal()
         else:
             self._window.showMaximized()
+
+    def _on_window_title_changed(self, title: str) -> None:
+        """Keeps the title label in step with the window title."""
+        self.title_label.setText(title)
 
     def _sync_maximize_button(self) -> None:
         """Sets the maximize button's icon and tooltip to match the window."""
