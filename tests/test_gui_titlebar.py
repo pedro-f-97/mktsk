@@ -1,10 +1,36 @@
 """Tests for the TitleBar widget skeleton."""
 
-from PySide6.QtCore import QMargins
-from PySide6.QtGui import QIcon, QPixmap
+from unittest.mock import Mock
+
+from PySide6.QtCore import QMargins, QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap, QWindowStateChangeEvent
 from PySide6.QtWidgets import QLabel, QToolButton, QWidget
 
+from mktsk.gui.icons import (
+    _ICON_SIZE,
+    _draw_maximize,
+    _draw_restore,
+    _stroked_icon,
+)
 from mktsk.gui.titlebar import TITLEBAR_HEIGHT, TitleBar
+
+
+def _render(draw, color=None):
+    """Renders an icon drawer to an image, like the icon tests do."""
+    if color is None:
+        color = QColor("#000000")
+    icon = _stroked_icon(color, draw)
+    return icon.pixmap(QSize(_ICON_SIZE, _ICON_SIZE)).toImage()
+
+
+def _icon_image(button):
+    """The image currently shown by an icon button."""
+    return button.icon().pixmap(QSize(_ICON_SIZE, _ICON_SIZE)).toImage()
+
+
+def _text_color(button):
+    """The colour an icon button draws its icon in."""
+    return button.palette().color(QPalette.ColorRole.ButtonText)
 
 
 def test_titlebar_icon_label_exists(qapp, qtbot):
@@ -66,3 +92,114 @@ def test_titlebar_fixed_height(qapp, qtbot):
     qtbot.addWidget(bar)
 
     assert bar.height() == TITLEBAR_HEIGHT
+
+
+def test_minimize_button_calls_show_minimized(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    show_minimized = Mock()
+    monkeypatch.setattr(window, "showMinimized", show_minimized)
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    qtbot.mouseClick(bar.minimize_button, Qt.MouseButton.LeftButton)
+    show_minimized.assert_called_once()
+
+
+def test_maximize_button_calls_show_maximized_when_normal(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    show_maximized = Mock()
+    monkeypatch.setattr(window, "showMaximized", show_maximized)
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    qtbot.mouseClick(bar.maximize_button, Qt.MouseButton.LeftButton)
+    show_maximized.assert_called_once()
+
+
+def test_maximize_button_calls_show_normal_when_maximized(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+    window.setWindowState(Qt.WindowState.WindowMaximized)
+
+    show_normal = Mock()
+    monkeypatch.setattr(window, "showNormal", show_normal)
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    qtbot.mouseClick(bar.maximize_button, Qt.MouseButton.LeftButton)
+    show_normal.assert_called_once()
+
+
+def test_close_button_calls_close(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    close = Mock()
+    monkeypatch.setattr(window, "close", close)
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    qtbot.mouseClick(bar.close_button, Qt.MouseButton.LeftButton)
+    close.assert_called_once()
+
+
+def test_maximize_button_matches_window_state(qapp, qtbot):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    # normal: maximize icon and tooltip
+    assert bar.maximize_button.toolTip() == "Maximize"
+    normal_image = _icon_image(bar.maximize_button)
+    assert normal_image == _render(_draw_maximize, _text_color(bar.maximize_button))
+
+    # maximized: restore icon and tooltip, a different icon
+    window.setWindowState(Qt.WindowState.WindowMaximized)
+    qapp.sendEvent(window, QWindowStateChangeEvent(Qt.WindowState.WindowNoState))
+
+    assert bar.maximize_button.toolTip() == "Restore"
+    maximized_image = _icon_image(bar.maximize_button)
+    assert maximized_image == _render(_draw_restore, _text_color(bar.maximize_button))
+    assert maximized_image != normal_image
+
+
+def test_maximize_button_follows_outside_state_change(qapp, qtbot):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    assert bar.maximize_button.toolTip() == "Maximize"
+    normal_image = _icon_image(bar.maximize_button)
+
+    # maximized from outside: switches to restore without a click
+    window.setWindowState(Qt.WindowState.WindowMaximized)
+    qapp.sendEvent(window, QWindowStateChangeEvent(Qt.WindowState.WindowNoState))
+    assert bar.maximize_button.toolTip() == "Restore"
+    assert _icon_image(bar.maximize_button) == _render(
+        _draw_restore, _text_color(bar.maximize_button)
+    )
+    assert _icon_image(bar.maximize_button) != normal_image
+
+    # back to normal: switches back to maximize
+    window.setWindowState(Qt.WindowState.WindowNoState)
+    qapp.sendEvent(window, QWindowStateChangeEvent(Qt.WindowState.WindowMaximized))
+    assert bar.maximize_button.toolTip() == "Maximize"
+    assert _icon_image(bar.maximize_button) == normal_image

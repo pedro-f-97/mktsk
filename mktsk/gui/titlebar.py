@@ -4,12 +4,24 @@ This is the skeleton of the custom title bar. The three buttons are plain
 placeholders: they carry no icons and are not connected to anything yet.
 """
 
-from PySide6.QtCore import QSize
+from collections.abc import Callable
+from typing import cast
+
+from PySide6.QtCore import QEvent, QObject, QRectF, QSize
+from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QToolButton,
     QWidget,
+)
+
+from .icons import (
+    _draw_maximize,
+    _draw_minimize,
+    _draw_restore,
+    _draw_window_close,
+    _icon_button,
+    _IconButton,
 )
 
 TITLEBAR_HEIGHT = 32
@@ -47,17 +59,65 @@ class TitleBar(QWidget):
 
         layout.addStretch()
 
-        self.minimize_button = QToolButton(self)
+        self._window = window
+
+        self.minimize_button = _icon_button(
+            self, "Minimize", _draw_minimize, "titlebar-minimize"
+        )
         self.minimize_button.setObjectName("titlebar-minimize")
-        self.minimize_button.setToolTip("Minimize")
+        self.minimize_button.clicked.connect(window.showMinimized)
         layout.addWidget(self.minimize_button)
 
-        self.maximize_button = QToolButton(self)
+        self.maximize_button = cast(
+            _IconButton,
+            _icon_button(self, "Maximize", _draw_maximize, "titlebar-maximize"),
+        )
         self.maximize_button.setObjectName("titlebar-maximize")
-        self.maximize_button.setToolTip("Maximize")
+        self.maximize_button.clicked.connect(self._on_maximize_clicked)
         layout.addWidget(self.maximize_button)
 
-        self.close_button = QToolButton(self)
+        self.close_button = _icon_button(
+            self, "Close", _draw_window_close, "titlebar-close"
+        )
         self.close_button.setObjectName("titlebar-close")
-        self.close_button.setToolTip("Close")
+        self.close_button.clicked.connect(window.close)
         layout.addWidget(self.close_button)
+
+        self._sync_maximize_button()
+        window.installEventFilter(self)
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        """React to window state changes without swallowing any event."""
+        if event.type() == QEvent.Type.WindowStateChange:
+            self._sync_maximize_button()
+        return False
+
+    def _on_maximize_clicked(self) -> None:
+        """Toggles between maximized and normal, following the window state."""
+        if self._window.isMaximized():
+            self._window.showNormal()
+        else:
+            self._window.showMaximized()
+
+    def _sync_maximize_button(self) -> None:
+        """Sets the maximize button's icon and tooltip to match the window."""
+        if self._window.isMaximized():
+            self._set_maximize_button(_draw_restore, "Restore")
+        else:
+            self._set_maximize_button(_draw_maximize, "Maximize")
+
+    def _set_maximize_button(
+        self, draw: Callable[[QPainter, QRectF], None], tooltip: str
+    ) -> None:
+        """Swaps the maximize button's drawer and redraws it for the palette.
+
+        Updating the drawer and re-running :meth:`_IconButton._apply_icon`
+        keeps palette-change redraw working:
+        :meth:`_IconButton.changeEvent` re-uses the drawer whenever the theme
+        switches.
+        """
+        button = self.maximize_button
+        button._draw = draw
+        button._apply_icon()
+        button.setToolTip(tooltip)
+        button.setAccessibleName(tooltip)
