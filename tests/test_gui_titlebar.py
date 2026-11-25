@@ -2,9 +2,16 @@
 
 from unittest.mock import Mock
 
-from PySide6.QtCore import QMargins, QSize, Qt
-from PySide6.QtGui import QColor, QIcon, QPalette, QPixmap, QWindowStateChangeEvent
-from PySide6.QtWidgets import QLabel, QToolButton, QWidget
+from PySide6.QtCore import QEvent, QMargins, QPointF, QSize, Qt
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QMouseEvent,
+    QPalette,
+    QPixmap,
+    QWindowStateChangeEvent,
+)
+from PySide6.QtWidgets import QApplication, QLabel, QToolButton, QWidget
 
 from mktsk.gui.icons import (
     _ICON_SIZE,
@@ -13,6 +20,30 @@ from mktsk.gui.icons import (
     _stroked_icon,
 )
 from mktsk.gui.titlebar import TITLEBAR_HEIGHT, TitleBar
+
+
+def _mouse_event(event_type, button, buttons):
+    """Builds a mouse event with an explicit pressed-button state."""
+    return QMouseEvent(
+        event_type,
+        QPointF(),
+        QPointF(),
+        button,
+        buttons,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+
+def _send(bar, event_type, button, buttons):
+    """Builds a mouse event and sends it straight to the bar."""
+    QApplication.sendEvent(bar, _mouse_event(event_type, button, buttons))
+
+
+def _patch_window_handle(window, monkeypatch):
+    """Patches windowHandle to return a mock handle and returns it."""
+    handle = Mock()
+    monkeypatch.setattr(window, "windowHandle", lambda: handle)
+    return handle
 
 
 def _render(draw, color=None):
@@ -251,3 +282,198 @@ def test_titlebar_title_can_be_empty(qapp, qtbot):
 
     window.setWindowTitle("")
     assert title_label.text() == ""
+
+
+def test_drag_press_then_move_calls_start_system_move_once(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    handle = _patch_window_handle(window, monkeypatch)
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar,
+        QEvent.Type.MouseButtonPress,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+    )
+    assert bar._drag_pending is True
+
+    _send(
+        bar, QEvent.Type.MouseMove, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton
+    )
+    assert bar._drag_pending is False
+    handle.startSystemMove.assert_called_once()
+
+
+def test_move_without_press_does_not_call_start_system_move(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    handle = _patch_window_handle(window, monkeypatch)
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar, QEvent.Type.MouseMove, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton
+    )
+    handle.startSystemMove.assert_not_called()
+
+
+def test_two_moves_after_one_press_call_start_system_move_once(
+    qapp, qtbot, monkeypatch
+):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    handle = _patch_window_handle(window, monkeypatch)
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar,
+        QEvent.Type.MouseButtonPress,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+    )
+    _send(
+        bar, QEvent.Type.MouseMove, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton
+    )
+    _send(
+        bar, QEvent.Type.MouseMove, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton
+    )
+    handle.startSystemMove.assert_called_once()
+
+
+def test_press_release_then_move_does_not_call_start_system_move(
+    qapp, qtbot, monkeypatch
+):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    handle = _patch_window_handle(window, monkeypatch)
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar,
+        QEvent.Type.MouseButtonPress,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+    )
+    _send(
+        bar,
+        QEvent.Type.MouseButtonRelease,
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.NoButton,
+    )
+    _send(
+        bar, QEvent.Type.MouseMove, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton
+    )
+    assert bar._drag_pending is False
+    handle.startSystemMove.assert_not_called()
+
+
+def test_right_button_press_then_move_does_not_call_start_system_move(
+    qapp, qtbot, monkeypatch
+):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    handle = _patch_window_handle(window, monkeypatch)
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar,
+        QEvent.Type.MouseButtonPress,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+    )
+    _send(
+        bar, QEvent.Type.MouseMove, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton
+    )
+    handle.startSystemMove.assert_not_called()
+
+
+def test_drag_with_no_window_handle_does_not_raise(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    monkeypatch.setattr(window, "windowHandle", lambda: None)
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar,
+        QEvent.Type.MouseButtonPress,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+    )
+    _send(
+        bar, QEvent.Type.MouseMove, Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton
+    )
+    assert bar._drag_pending is False
+
+
+def test_double_click_toggles_maximized_and_normal(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    show_maximized = Mock()
+    show_normal = Mock()
+    monkeypatch.setattr(window, "showMaximized", show_maximized)
+    monkeypatch.setattr(window, "showNormal", show_normal)
+    monkeypatch.setattr(window, "isMaximized", Mock(return_value=False))
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar,
+        QEvent.Type.MouseButtonDblClick,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+    )
+    show_maximized.assert_called_once()
+    show_normal.assert_not_called()
+
+    monkeypatch.setattr(window, "isMaximized", Mock(return_value=True))
+    _send(
+        bar,
+        QEvent.Type.MouseButtonDblClick,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+    )
+    show_normal.assert_called_once()
+
+
+def test_double_click_right_button_does_nothing(qapp, qtbot, monkeypatch):
+    window = QWidget()
+    window.setWindowTitle("Example task")
+    window.setWindowIcon(QIcon(QPixmap(16, 16)))
+
+    show_maximized = Mock()
+    show_normal = Mock()
+    monkeypatch.setattr(window, "showMaximized", show_maximized)
+    monkeypatch.setattr(window, "showNormal", show_normal)
+
+    bar = TitleBar(window)
+    qtbot.addWidget(bar)
+
+    _send(
+        bar,
+        QEvent.Type.MouseButtonDblClick,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+    )
+    show_maximized.assert_not_called()
+    show_normal.assert_not_called()

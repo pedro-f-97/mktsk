@@ -7,8 +7,8 @@ placeholders: they carry no icons and are not connected to anything yet.
 from collections.abc import Callable
 from typing import cast
 
-from PySide6.QtCore import QEvent, QObject, QRectF, QSize
-from PySide6.QtGui import QPainter
+from PySide6.QtCore import QEvent, QObject, QRectF, QSize, Qt
+from PySide6.QtGui import QMouseEvent, QPainter
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -60,6 +60,7 @@ class TitleBar(QWidget):
         layout.addStretch()
 
         self._window = window
+        self._drag_pending = False
         window.windowTitleChanged.connect(self._on_window_title_changed)
         window.installEventFilter(self)
 
@@ -95,6 +96,10 @@ class TitleBar(QWidget):
 
     def _on_maximize_clicked(self) -> None:
         """Toggles between maximized and normal, following the window state."""
+        self._toggle_maximize()
+
+    def _toggle_maximize(self) -> None:
+        """Toggles between maximized and normal, following the window state."""
         if self._window.isMaximized():
             self._window.showNormal()
         else:
@@ -126,3 +131,34 @@ class TitleBar(QWidget):
         button._apply_icon()
         button.setToolTip(tooltip)
         button.setAccessibleName(tooltip)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Records a drag started with the left button and accepts it."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_pending = True
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """Delegates the move to the operating system, once per press."""
+        if self._drag_pending and event.buttons() & Qt.MouseButton.LeftButton:
+            self._drag_pending = False
+            handle = self._window.windowHandle()
+            if handle is not None:
+                handle.startSystemMove()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """Cancels a pending drag when the button is released."""
+        self._drag_pending = False
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        """Toggles maximized/normal on a left-button double click."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._toggle_maximize()
+            event.accept()
+        else:
+            super().mouseDoubleClickEvent(event)
