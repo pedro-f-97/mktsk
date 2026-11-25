@@ -154,6 +154,33 @@ def _draw_close(painter: QPainter, box: QRectF) -> None:
     painter.drawLine(QPointF(7.5, 5.5), QPointF(10.5, 5.5))
 
 
+def _draw_minimize(painter: QPainter, box: QRectF) -> None:
+    """Draws a horizontal line, for minimizing the window."""
+    painter.drawLine(QPointF(4, 9), QPointF(14, 9))
+
+
+def _draw_maximize(painter: QPainter, box: QRectF) -> None:
+    """Draws a square outline, for maximizing the window."""
+    painter.drawRect(QRectF(4, 4, 10, 10))
+
+
+def _draw_restore(painter: QPainter, box: QRectF) -> None:
+    """Draws two overlapping squares, for restoring the window.
+
+    The front square sits down-left and is drawn whole; the back square sits
+    up-right and only its top and right edges show.
+    """
+    painter.drawRect(QRectF(2, 6, 10, 10))
+    painter.drawLine(QPointF(6, 2), QPointF(16, 2))
+    painter.drawLine(QPointF(16, 2), QPointF(16, 10))
+
+
+def _draw_window_close(painter: QPainter, box: QRectF) -> None:
+    """Draws two crossing diagonals, for closing the window."""
+    painter.drawLine(QPointF(4, 4), QPointF(14, 14))
+    painter.drawLine(QPointF(14, 4), QPointF(4, 14))
+
+
 def _draw_reopen(painter: QPainter, box: QRectF) -> None:
     """Draws a circular arrow turning counter-clockwise, for restoring."""
     painter.drawArc(QRectF(4, 4, 10, 10), 1440, 4320)

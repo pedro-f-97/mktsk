@@ -3,6 +3,7 @@ import importlib.util
 import struct
 import sys
 from collections import Counter
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -26,11 +27,15 @@ from mktsk.gui.icons import (
     _draw_choose,
     _draw_close,
     _draw_folder,
+    _draw_maximize,
+    _draw_minimize,
     _draw_plus,
     _draw_refresh,
     _draw_reopen,
+    _draw_restore,
     _draw_state,
     _draw_up,
+    _draw_window_close,
     _icon_button,
     _stroked_icon,
 )
@@ -628,3 +633,43 @@ def test_the_drawn_icon_follows_the_palette(window, qapp):
     dark = QColor("#ffffff")
     assert after != before
     assert after == dark
+
+
+_WINDOW_CONTROL_ICONS = (
+    _draw_minimize,
+    _draw_maximize,
+    _draw_restore,
+    _draw_window_close,
+)
+
+
+def test_the_window_control_icons_build_non_null_icons(qapp):
+    for draw in _WINDOW_CONTROL_ICONS:
+        assert not _stroked_icon(QColor("#000000"), draw).isNull()
+
+
+def test_the_window_control_icons_draw_something(qapp):
+    for draw in _WINDOW_CONTROL_ICONS:
+        assert any(any(row) for row in _ink(draw))
+
+
+def test_the_window_control_icons_draw_pairwise_different_images(qapp):
+    inks = [_ink(draw) for draw in _WINDOW_CONTROL_ICONS]
+    for first, second in combinations(inks, 2):
+        assert first != second
+
+
+def test_the_window_control_icons_follow_the_palette(qapp):
+    light = QWidget()
+    dark = QWidget()
+    light_palette = light.palette()
+    light_palette.setColor(QPalette.ColorRole.ButtonText, QColor("#000000"))
+    light.setPalette(light_palette)
+    dark_palette = dark.palette()
+    dark_palette.setColor(QPalette.ColorRole.ButtonText, QColor("#ffffff"))
+    dark.setPalette(dark_palette)
+
+    for draw in _WINDOW_CONTROL_ICONS:
+        light_button = _icon_button(light, "Minimize", draw, "Minimize")
+        dark_button = _icon_button(dark, "Minimize", draw, "Minimize")
+        assert _leading_ink(light_button.icon()) != _leading_ink(dark_button.icon())
