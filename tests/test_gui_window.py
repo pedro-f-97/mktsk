@@ -1,7 +1,9 @@
 import shutil
+from unittest.mock import Mock
 
-from PySide6.QtCore import QMargins, Qt
-from PySide6.QtWidgets import QLabel
+from PySide6.QtCore import QEvent, QMargins, QPoint, QPointF, Qt
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtWidgets import QApplication, QLabel
 
 from mktsk.gui import main as gui_main
 from mktsk.gui.tray import TrayController
@@ -138,3 +140,74 @@ def test_title_bar_close_button_hides_window_to_tray(window, monkeypatch, qtbot)
     window.tray_controller = tray
     qtbot.mouseClick(window.title_bar.close_button, Qt.MouseButton.LeftButton)
     assert window.isHidden()
+
+
+def test_window_is_frameless(window):
+    assert window.windowFlags() & Qt.WindowType.FramelessWindowHint
+
+
+def test_resize_grips_are_children_of_the_central_widget(window):
+    grips = window.resize_grips.grips
+    assert len(grips) == 8
+    central = window.centralWidget()
+    assert central is not None
+    for grip in grips:
+        assert grip.parent() is central
+
+
+def test_corner_grips_sit_at_the_corners_of_the_central_widget(window):
+    central = window.centralWidget()
+    assert central is not None
+    size = central.size()
+    grips = window.resize_grips.grips
+    top_left = next(
+        grip for grip in grips if grip.edges == Qt.Edge.TopEdge | Qt.Edge.LeftEdge
+    )
+    bottom_right = next(
+        grip for grip in grips if grip.edges == Qt.Edge.BottomEdge | Qt.Edge.RightEdge
+    )
+    assert top_left.geometry().topLeft() == QPoint(0, 0)
+    assert bottom_right.geometry().bottomRight() == QPoint(
+        size.width() - 1, size.height() - 1
+    )
+
+
+def test_grips_are_hidden_when_maximized(window, monkeypatch):
+    grips = window.resize_grips.grips
+    assert all(not grip.isHidden() for grip in grips)
+
+    window.showMaximized()
+    if window.isMaximized():
+        assert all(grip.isHidden() for grip in grips)
+        window.showNormal()
+        assert all(not grip.isHidden() for grip in grips)
+        return
+
+    # offscreen platforms do not always deliver the state change, so drive the
+    # event filter the same way a real maximise or restore would
+    monkeypatch.setattr(window, "isMaximized", lambda: True)
+    QApplication.sendEvent(window, QEvent(QEvent.Type.WindowStateChange))
+    assert all(grip.isHidden() for grip in grips)
+
+    monkeypatch.setattr(window, "isMaximized", lambda: False)
+    QApplication.sendEvent(window, QEvent(QEvent.Type.WindowStateChange))
+    assert all(not grip.isHidden() for grip in grips)
+
+
+def test_left_edge_press_asks_the_system_to_resize(window, monkeypatch):
+    grips = window.resize_grips.grips
+    left = next(grip for grip in grips if grip.edges == Qt.Edge.LeftEdge)
+    handle = Mock()
+    monkeypatch.setattr(window, "windowHandle", lambda: handle)
+    QApplication.sendEvent(
+        left,
+        QMouseEvent(
+            QEvent.Type.MouseButtonPress,
+            QPointF(),
+            QPointF(),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+    handle.startSystemResize.assert_called_once_with(Qt.Edge.LeftEdge)

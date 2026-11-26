@@ -68,6 +68,7 @@ from .panetoggle import PaneToggle
 from .preview import PreviewPanel
 from .reminders_scheduler import ReminderScheduler
 from .reminders_ui import RemindersList
+from .resize_grips import ResizeGrips
 from .search import SearchPanel
 from .selection import _DirectorySelectionStyle, _UnifiedSelectionDelegate
 from .tasklist import TaskListing, TaskPanel
@@ -182,6 +183,8 @@ class MainWindow(QMainWindow):
         # the taskbar shows the application by the identity it sets here
         set_app_identity()
         self.setMinimumSize(640, 420)
+        # the native frame is replaced by the title bar and the edge grips
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         # the window takes in a drag of files, which lands in the folder of
         # the selected task
         self.setAcceptDrops(True)
@@ -385,6 +388,7 @@ class MainWindow(QMainWindow):
         container_layout.addWidget(self.title_bar)
         container_layout.addWidget(self.splitter, 1)
         self.setCentralWidget(container)
+        self.resize_grips = ResizeGrips(self, container)
 
         self.choose_button.clicked.connect(self.choose_directory)
         self.up_button.clicked.connect(self.go_up)
