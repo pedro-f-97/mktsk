@@ -80,6 +80,7 @@ from .taskrow import (
     _relative_age,
     _state_column_min_width,
 )
+from .titlebar import TitleBar
 from .tray import TrayController
 from .tree import (
     _HEADER_ICON_SIZE,
@@ -375,7 +376,15 @@ class MainWindow(QMainWindow):
         self.splitter.addWidget(self.left_container)
         self.splitter.addWidget(self.right_panel)
         self.splitter.setStretchFactor(1, 2)
-        self.setCentralWidget(self.splitter)
+
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+        self.title_bar = TitleBar(self)
+        container_layout.addWidget(self.title_bar)
+        container_layout.addWidget(self.splitter, 1)
+        self.setCentralWidget(container)
 
         self.choose_button.clicked.connect(self.choose_directory)
         self.up_button.clicked.connect(self.go_up)

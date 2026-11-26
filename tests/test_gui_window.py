@@ -1,8 +1,10 @@
 import shutil
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QMargins, Qt
+from PySide6.QtWidgets import QLabel
 
 from mktsk.gui import main as gui_main
+from mktsk.gui.tray import TrayController
 from tests.gui_helpers import select_tab, tab_labels, task_listing
 
 
@@ -98,3 +100,41 @@ def test_rows_are_tall_enough_for_the_action_bar(window, tmp_path, make_task):
     assert listing.visualItemRect(listing.item(0)).height() >= (
         listing.action_bar.sizeHint().height()
     )
+
+
+def test_central_widget_is_container_above_splitter(window):
+    central = window.centralWidget()
+    assert central is not window.splitter
+    assert window.splitter.parent() is central
+
+
+def test_central_layout_holds_title_bar_and_splitter(window):
+    container = window.centralWidget()
+    layout = container.layout()
+    assert layout is not None
+    first = layout.itemAt(0)
+    assert first is not None
+    assert first.widget() is window.title_bar
+    second = layout.itemAt(1)
+    assert second is not None
+    assert second.widget() is window.splitter
+    assert layout.contentsMargins() == QMargins(0, 0, 0, 0)
+    assert layout.spacing() == 0
+
+
+def test_title_bar_sits_right_above_splitter(window):
+    assert window.title_bar.geometry().bottom() + 1 == window.splitter.geometry().top()
+
+
+def test_title_bar_title_shows_window_title(window):
+    label = window.title_bar.findChild(QLabel, "titlebar-title")
+    assert label is not None
+    assert label.text() == window.windowTitle()
+
+
+def test_title_bar_close_button_hides_window_to_tray(window, monkeypatch, qtbot):
+    monkeypatch.setattr("mktsk.gui.tray.tray_available", lambda: True)
+    tray = TrayController(window)
+    window.tray_controller = tray
+    qtbot.mouseClick(window.title_bar.close_button, Qt.MouseButton.LeftButton)
+    assert window.isHidden()
