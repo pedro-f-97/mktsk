@@ -88,6 +88,7 @@ from .tree import (
     _PATH_ROLE,
     _CategoryTree,
 )
+from .windows_snap import enable_snap_styles, handle_native_event
 
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
@@ -168,6 +169,9 @@ class MainWindow(QMainWindow):
         # whether a real quit has been requested, so a close event that comes
         # after it is accepted instead of hiding the window to the tray
         self._quitting = False
+        # whether the Aero Snap window styles have been applied to the native
+        # window; only done once, after the first show
+        self._snap_styles_applied = False
         # the reminder scheduler, created with the tray; set from the entry
         # point once the window exists
         self.reminder_scheduler: ReminderScheduler | None = None
@@ -731,6 +735,13 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
+        # the frameless window keeps no native frame, so on Windows the
+        # thick-frame, caption, minimize and maximize styles needed for
+        # Aero Snap are applied once, after the first show; the helper is
+        # inert on other platforms
+        if not self._snap_styles_applied:
+            enable_snap_styles(int(self.winId()))
+            self._snap_styles_applied = True
         if self._initial_left_width is None:
             self._initial_left_width = self.splitter.sizes()[0]
         self._align_header()
@@ -744,6 +755,17 @@ class MainWindow(QMainWindow):
         if panel is not None:
             self._connect_state_filter_header(cast(TaskPanel, panel).listing.header)
         self._place_state_filter_button()
+
+    def nativeEvent(
+        self,
+        event_type: QByteArray | bytes | bytearray | memoryview,
+        message: int,
+        /,
+    ) -> object:
+        result = handle_native_event(bytes(cast(bytes, event_type)), int(message))
+        if result is not None:
+            return result
+        return super().nativeEvent(event_type, message)
 
     def navigate_to(self, directory: Path) -> None:
         directory = directory.resolve()

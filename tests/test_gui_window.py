@@ -1,10 +1,11 @@
 import shutil
 from unittest.mock import Mock
 
-from PySide6.QtCore import QEvent, QMargins, QPoint, QPointF, Qt
+from PySide6.QtCore import QEvent, QMargins, QPoint, QPointF, QSettings, Qt
 from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
 
+from mktsk.gui import MainWindow
 from mktsk.gui import main as gui_main
 from mktsk.gui.tray import TrayController
 from tests.gui_helpers import select_tab, tab_labels, task_listing
@@ -211,3 +212,62 @@ def test_left_edge_press_asks_the_system_to_resize(window, monkeypatch):
         ),
     )
     handle.startSystemResize.assert_called_once_with(Qt.Edge.LeftEdge)
+
+
+def _fresh_window(qtbot, tmp_path, monkeypatch):
+    monkeypatch.setattr("mktsk.gui.window.enable_snap_styles", lambda *args: None)
+    monkeypatch.setattr("mktsk.gui.window.handle_native_event", lambda *args: None)
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    window = MainWindow(settings=settings)
+    window.show()
+    qtbot.addWidget(window)
+    return window
+
+
+def test_first_show_applies_snap_styles_once(qtbot, tmp_path, monkeypatch):
+    applied = []
+    monkeypatch.setattr("mktsk.gui.window.enable_snap_styles", applied.append)
+    monkeypatch.setattr("mktsk.gui.window.handle_native_event", lambda *args: None)
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    window = MainWindow(settings=settings)
+    window.show()
+    qtbot.addWidget(window)
+    assert applied == [int(window.winId())]
+    window.close()
+
+
+def test_hiding_and_showing_again_does_not_reapply_snap_styles(
+    qtbot, tmp_path, monkeypatch
+):
+    applied = []
+    monkeypatch.setattr("mktsk.gui.window.enable_snap_styles", applied.append)
+    monkeypatch.setattr("mktsk.gui.window.handle_native_event", lambda *args: None)
+    settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    window = MainWindow(settings=settings)
+    window.show()
+    qtbot.addWidget(window)
+    window.hide()
+    window.show()
+    assert applied == [int(window.winId())]
+    window.close()
+
+
+def test_native_event_returns_the_helpers_result(qtbot, tmp_path, monkeypatch):
+    received = []
+    window = _fresh_window(qtbot, tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "mktsk.gui.window.handle_native_event",
+        lambda event_type, message: received.append((event_type, message)) or (True, 0),
+    )
+    assert window.nativeEvent(b"windows_generic_MSG", 12345) == (True, 0)
+    assert received == [(b"windows_generic_MSG", 12345)]
+    window.close()
+
+
+def test_native_event_falls_back_to_the_base(qtbot, tmp_path, monkeypatch):
+    base = Mock(return_value=(False, 0))
+    monkeypatch.setattr(QMainWindow, "nativeEvent", base)
+    window = _fresh_window(qtbot, tmp_path, monkeypatch)
+    assert window.nativeEvent(b"windows_generic_MSG", 12345) == (False, 0)
+    base.assert_called_once_with(b"windows_generic_MSG", 12345)
+    window.close()
