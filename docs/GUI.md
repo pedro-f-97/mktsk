@@ -456,6 +456,32 @@
   stays alive for the whole run and is released on a real quit. The guard
   applies to the GUI only, never to the CLI, and regardless of tray availability.
 
+## Window frame and title bar
+
+- The window has no native frame: `MainWindow` sets `FramelessWindowHint` on Windows and Linux alike, with no macOS support and no per-platform branch
+- The central widget is a container whose `QVBoxLayout` holds the title bar above the splitter: `TitleBar` (`mktsk/gui/titlebar.py`) first, then the `QSplitter` of the two panes, with no margins or spacing between them
+- `TitleBar` has a fixed height, the `TITLEBAR_HEIGHT` constant (32 pixels), not the platform title-bar height
+- On the left it shows the window icon, a 16×16 pixmap of the app icon, and a title label that follows the window title through `windowTitleChanged`
+- An expandable stretch pushes the three buttons to the right: minimize, maximize/restore and close
+- The buttons reuse the drawn icons of `mktsk/gui/icons.py` (`_draw_minimize`, `_draw_maximize`, `_draw_restore`, `_draw_window_close`) through `_icon_button`, so their colours come from the palette and follow light and dark mode; no colour is written down
+- The close button is not drawn red on hover: it stays palette-coloured in every state
+- Minimize calls `showMinimized`; maximize toggles between `showMaximized` and `showNormal`, and the button's icon and tooltip switch to match (`Restore` when maximized), re-synced on every window state change
+- Close calls `window.close()`, so close-to-tray still applies: with a tray the window hides to the tray and only a real quit exits
+- Dragging the bar with the left button held calls `startSystemMove` on the window handle once, on the first move after the press — not on the press itself, so a double click still works; releasing the button cancels a pending drag
+- A double click on the bar with the left button toggles maximized and normal
+- The eight edge and corner grips live in `mktsk/gui/resize_grips.py`: `GRIP_THICKNESS` is 5 and `GRIP_CORNER` is 10, each grip is an invisible widget showing the resize cursor of its edge, and a left-button press starts a system resize at once with `startSystemResize`
+- `ResizeGrips` places one grip on each of the four edges and four corners of the container, repositions them on resize and hides them all while the window is maximized
+- Move and resize are delegated to the operating system, so behaviour is the same on Windows and Linux; there is no macOS support
+
+### Known limitations
+
+- No Aero Snap: dragging the window to screen edges does not snap or tile it
+- No native shadow and no Windows 11 rounded corners
+- No Windows 11 snap layouts when hovering the maximize button
+- No system menu: not from a right click on the bar, not from a click on the icon, not from Alt+Space
+- No minimize or restore animation
+- On Linux, move and resize rely on the compositor
+
 ## Reminders and notifications
 
 - `TrayController.notify(title, message)` shows a notification through
