@@ -68,6 +68,7 @@ from .panetoggle import PaneToggle
 from .preview import PreviewPanel
 from .reminders_scheduler import ReminderScheduler
 from .reminders_ui import RemindersList
+from .resize_grips import ResizeGrips
 from .search import SearchPanel
 from .selection import _DirectorySelectionStyle, _UnifiedSelectionDelegate
 from .tasklist import TaskListing, TaskPanel
@@ -80,12 +81,14 @@ from .taskrow import (
     _relative_age,
     _state_column_min_width,
 )
+from .titlebar import TitleBar
 from .tray import TrayController
 from .tree import (
     _HEADER_ICON_SIZE,
     _PATH_ROLE,
     _CategoryTree,
 )
+from .windows_snap import enable_snap_styles, handle_native_event
 
 _ALL_TAB = "All"
 _CLOSED_TAB = "Closed"
@@ -166,6 +169,9 @@ class MainWindow(QMainWindow):
         # whether a real quit has been requested, so a close event that comes
         # after it is accepted instead of hiding the window to the tray
         self._quitting = False
+        # whether the Aero Snap window styles have been applied to the native
+        # window; only done once, after the first show
+        self._snap_styles_applied = False
         # the reminder scheduler, created with the tray; set from the entry
         # point once the window exists
         self.reminder_scheduler: ReminderScheduler | None = None
@@ -181,6 +187,8 @@ class MainWindow(QMainWindow):
         # the taskbar shows the application by the identity it sets here
         set_app_identity()
         self.setMinimumSize(640, 420)
+        # the native frame is replaced by the title bar and the edge grips
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         # the window takes in a drag of files, which lands in the folder of
         # the selected task
         self.setAcceptDrops(True)
@@ -375,7 +383,16 @@ class MainWindow(QMainWindow):
         self.splitter.addWidget(self.left_container)
         self.splitter.addWidget(self.right_panel)
         self.splitter.setStretchFactor(1, 2)
-        self.setCentralWidget(self.splitter)
+
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+        self.title_bar = TitleBar(self)
+        container_layout.addWidget(self.title_bar)
+        container_layout.addWidget(self.splitter, 1)
+        self.setCentralWidget(container)
+        self.resize_grips = ResizeGrips(self, container)
 
         self.choose_button.clicked.connect(self.choose_directory)
         self.up_button.clicked.connect(self.go_up)
@@ -718,6 +735,13 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
+        # the frameless window keeps no native frame, so on Windows the
+        # thick-frame, caption, minimize and maximize styles needed for
+        # Aero Snap are applied once, after the first show; the helper is
+        # inert on other platforms
+        if not self._snap_styles_applied:
+            enable_snap_styles(int(self.winId()))
+            self._snap_styles_applied = True
         if self._initial_left_width is None:
             self._initial_left_width = self.splitter.sizes()[0]
         self._align_header()
@@ -731,6 +755,17 @@ class MainWindow(QMainWindow):
         if panel is not None:
             self._connect_state_filter_header(cast(TaskPanel, panel).listing.header)
         self._place_state_filter_button()
+
+    def nativeEvent(
+        self,
+        event_type: QByteArray | bytes | bytearray | memoryview,
+        message: int,
+        /,
+    ) -> object:
+        result = handle_native_event(bytes(cast(bytes, event_type)), int(message))
+        if result is not None:
+            return result
+        return super().nativeEvent(event_type, message)
 
     def navigate_to(self, directory: Path) -> None:
         directory = directory.resolve()
