@@ -472,10 +472,11 @@
 - The eight edge and corner grips live in `mktsk/gui/resize_grips.py`: `GRIP_THICKNESS` is 5 and `GRIP_CORNER` is 10, each grip is an invisible widget showing the resize cursor of its edge, and a left-button press starts a system resize at once with `startSystemResize`
 - `ResizeGrips` places one grip on each of the four edges and four corners of the container, repositions them on resize and hides them all while the window is maximized
 - Move and resize are delegated to the operating system, so behaviour is the same on Windows and Linux; there is no macOS support
+- On Windows the main window gets the native thick-frame, caption, minimize and maximize styles once, after its first show, through `mktsk/gui/windows_snap.py`, which is what enables Aero Snap on the frameless window; `nativeEvent` answers `WM_NCCALCSIZE` there, including the size correction while maximized, so the native frame stays invisible
+- The helpers in `mktsk/gui/windows_snap.py` are inert on Linux, so behaviour there is unchanged
 
 ### Known limitations
 
-- No Aero Snap: dragging the window to screen edges does not snap or tile it
 - No native shadow and no Windows 11 rounded corners
 - No Windows 11 snap layouts when hovering the maximize button
 - No system menu: not from a right click on the bar, not from a click on the icon, not from Alt+Space
